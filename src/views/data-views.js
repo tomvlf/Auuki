@@ -1324,6 +1324,10 @@ class NavigationStack extends HTMLElement {
                     report: {
                         $view: document.querySelector(`#view--workouts-report`),
                         $link: document.querySelector(`#link--workouts-report`),
+                    },
+                    calendar: {
+                        $view: document.querySelector(`#view--workouts-calendar`),
+                        $link: document.querySelector(`#link--workouts-calendar`),
                     }
                 }
             },
@@ -1369,6 +1373,10 @@ class NavigationStack extends HTMLElement {
         }
         if(action === 'workouts:report') {
             this.switch('report', this.tabs.workouts.children);
+            return;
+        }
+        if(action === 'workouts:calendar') {
+            this.switch('calendar', this.tabs.workouts.children);
             return;
         }
     }

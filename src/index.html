@@ -407,6 +407,13 @@
                         topic=":nav"
                     >Ride report
                     </navigation-action>
+                    <navigation-action
+                        id="link--workouts-calendar"
+                        class="library--switch--heading"
+                        action="workouts:calendar"
+                        topic=":nav"
+                    >Calendar
+                    </navigation-action>
                 </div>
                 <workout-editor id="view--workouts-editor" class="sub-tab">
                     <div class="editor-cont">
@@ -544,6 +551,8 @@
                         <div class="laps--cont"></div>
                     </laps-list>
                 </div> <!-- end ride-report -->
+
+                <training-calendar id="view--workouts-calendar" class="training-calendar sub-tab"></training-calendar>
 
                 <!-- workout-list -->
                 <div id="view--workouts-workouts" class="workout-list sub-tab active">

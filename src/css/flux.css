@@ -1746,7 +1746,7 @@ auto-start-counter {
 
 .library--switch--group {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     justify-items: center;
     align-items: center;
 }
@@ -2554,6 +2554,163 @@ body.white-theme {
     font-size: var(--workout--name-font-size);
     padding: 1.5em 0;
     border-bottom: 1px solid var(--white-opacity-01);
+}
+
+.training-calendar {
+    padding: 1.5em;
+}
+
+.training-calendar--header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.training-calendar--navigation,
+.training-calendar--entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+}
+
+.training-calendar button,
+.training-calendar select {
+    color: var(--foreground-color);
+    background: var(--background-color-2);
+    border: 1px solid var(--white-opacity-01);
+    border-radius: 0.4em;
+    padding: 0.6em 0.9em;
+    font-size: 1.4em;
+}
+
+.training-calendar button {
+    cursor: pointer;
+}
+
+.training-calendar button:focus-visible,
+.training-calendar select:focus-visible {
+    outline: 2px solid var(--foreground-color);
+    outline-offset: 2px;
+}
+
+.training-calendar--grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    margin-top: 1em;
+    border-top: 1px solid var(--white-opacity-01);
+    border-left: 1px solid var(--white-opacity-01);
+}
+
+.calendar-weekday {
+    padding: 0.8em 0.2em;
+    color: var(--foreground-color-inactive);
+    font-size: 1.2em;
+    border-right: 1px solid var(--white-opacity-01);
+    border-bottom: 1px solid var(--white-opacity-01);
+}
+
+.training-calendar .calendar-day {
+    display: flex;
+    min-width: 0;
+    min-height: 8em;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25em;
+    padding: 0.5em;
+    text-align: left;
+    border-radius: 0;
+    border: 0;
+    border-right: 1px solid var(--white-opacity-01);
+    border-bottom: 1px solid var(--white-opacity-01);
+}
+
+.training-calendar .calendar-day.empty {
+    background: var(--background-color);
+}
+
+.training-calendar .calendar-day.selected {
+    box-shadow: inset 0 0 0 2px var(--foreground-color);
+}
+
+.training-calendar .calendar-day.today .calendar-day--number {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.calendar-day--number {
+    font-size: 1.3em;
+}
+
+.calendar-day--event,
+.calendar-day--more {
+    overflow: hidden;
+    font-size: 1.1em;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-day--event {
+    padding: 0.2em 0.35em;
+    border-radius: 0.25em;
+    background: var(--background-color);
+}
+
+.calendar-day--more,
+.training-calendar--source {
+    color: var(--foreground-color-inactive);
+}
+
+.training-calendar--day {
+    margin: 2em 0 4em;
+}
+
+.training-calendar--day h3 {
+    margin-bottom: 1em;
+    font-size: 1.6em;
+    text-align: left;
+}
+
+.training-calendar--form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8em;
+    margin-bottom: 1.2em;
+    text-align: left;
+}
+
+.training-calendar--form label {
+    font-size: 1.4em;
+}
+
+.training-calendar--entries {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.training-calendar--entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 1em 0;
+    font-size: 1.4em;
+    text-align: left;
+    border-bottom: 1px solid var(--white-opacity-01);
+}
+
+.training-calendar--empty,
+.training-calendar--error {
+    padding: 1em 0;
+    font-size: 1.4em;
+    text-align: left;
+}
+
+.training-calendar--error {
+    color: #ff6b6b;
 }
 
 planned-list {
@@ -3733,4 +3890,3 @@ and (min-width: 1900px) {
     }
 }
 /* END Media Queries */
-
