@@ -6,3 +6,7 @@ node_modules
 test
 doc
 notes.txt
+data
+.env
+.env.*
+dev_cert

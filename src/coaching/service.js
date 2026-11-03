@@ -4,6 +4,7 @@ import { estimateState } from './state.js';
 import { generatePlan } from './planner.js';
 import { matchWorkout, adaptPlan } from './adaptation.js';
 import { openCoachingStorage } from './storage.js';
+import { ServerCoachingService, SERVER_MODE_KEY, serverEnabled, serverAccount } from '../server/client.js';
 
 const KEY = 'auuki-coaching-v1';
 const empty = () => ({version: VERSION, profile: null, goal: null, activities: [],
@@ -180,8 +181,40 @@ export class CoachingService {
 }
 
 let instance;
+let localInstance;
+let modeRevision = 0;
 export async function initializeCoaching(indexedDB = window.indexedDB) {
-    if(!instance) instance = new CoachingService(await openCoachingStorage(indexedDB));
+    if(!instance) {
+        const revision = modeRevision;
+        let loaded;
+        if(serverEnabled()) loaded = await ServerCoachingService.open();
+        else {
+            localInstance = localInstance || new CoachingService(await openCoachingStorage(indexedDB));
+            loaded = localInstance;
+        }
+        // A slow startup request must not undo an explicit mode switch.
+        if(revision === modeRevision) {
+            instance = loaded;
+            serverAccount.email = loaded instanceof ServerCoachingService ? loaded.email : null;
+        }
+    }
+    return instance;
+}
+export async function useServerCoaching() {
+    const remote = await ServerCoachingService.open();
+    await remote.advance();
+    window.localStorage.setItem(SERVER_MODE_KEY, '1');
+    modeRevision++;
+    instance = remote;
+    serverAccount.email = remote.email;
+    return remote;
+}
+export async function useLocalCoaching() {
+    localInstance = localInstance || new CoachingService(await openCoachingStorage(window.indexedDB));
+    window.localStorage.removeItem(SERVER_MODE_KEY);
+    modeRevision++;
+    instance = localInstance;
+    serverAccount.email = null;
     return instance;
 }
 export function coachingService() {

@@ -13,4 +13,4 @@ env.js
 .env
 .env.*
 .parcel-cache/
-
+/data/
