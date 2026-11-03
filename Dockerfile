@@ -10,7 +10,10 @@ RUN npm run build
 
 FROM nginx:alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# The nginx entrypoint fills in NGINX_LOCAL_RESOLVERS from /etc/resolv.conf so
+# the backend name resolves under Docker, Podman and Kubernetes alike.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist/ /usr/share/nginx/html/
 
 EXPOSE 80
