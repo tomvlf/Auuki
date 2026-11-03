@@ -76,7 +76,11 @@ function validate(predicates = [], value, fallback = undefined) {
 
 // Collections
 function empty(x) {
+    if(isUndefined(x)) return true;
     if(isObject(x)) return (Object.keys(x).length === 0);
+    if(!isArray(x) && !isString(x) && !ArrayBuffer.isView(x)) {
+        throw new TypeError('empty expects a collection.');
+    }
     return x.length === 0;
 };
 
@@ -89,18 +93,22 @@ const nth = curry2(function(offset, xs) {
 });
 
 function first(xs) {
+    if(isUndefined(xs)) return undefined;
     return xs.at(0);
 }
 
 function second(xs) {
+    if(isUndefined(xs)) return undefined;
     return xs.at(1);
 }
 
 function third(xs) {
+    if(isUndefined(xs)) return undefined;
     return xs.at(2);
 }
 
 function last(xs) {
+    if(isUndefined(xs)) return undefined;
     return xs.at(-1);
 }
 
@@ -180,7 +188,7 @@ function max(xs, prop = false) {
     if(prop !== false) {
         return xs.reduce( (acc,v,i) => v[prop] > acc ? v[prop] : acc, 0);
     } else {
-        return Math.max(xs);
+        return Math.max(...xs);
     }
 };
 
@@ -782,4 +790,3 @@ export {
     setUint24LE,
     getUint24LE,
 };
-

@@ -82,7 +82,7 @@ function FITjs(args = {}) {
             headerSize: 14,
             protocolVersion: '2.0',
             profileVersion: '21.40',
-            dataSize: 376,
+            dataSize: 383,
             dataType: '.FIT',
             crc: headerCRC,
         },
@@ -94,6 +94,7 @@ function FITjs(args = {}) {
             local_number: 0,
             length: 21,
             data_record_length: 12,
+            dev_fields: [],
             fields: [
                 {number: 4, size: 4, base_type: 'uint32'},
                 {number: 1, size: 2, base_type: 'uint16'},
@@ -124,6 +125,7 @@ function FITjs(args = {}) {
             local_number: 3,
             length: 39,
             data_record_length: 28,
+            dev_fields: [],
             fields: [
                 {number: 253, size: 4, base_type: 'uint32'}, // timestamp
                 {number:   0, size: 4, base_type: 'sint32'}, // position_lat
@@ -223,6 +225,7 @@ function FITjs(args = {}) {
             local_number: 4,
             length: 27,
             data_record_length: 21,
+            dev_fields: [],
             fields: [
                 {number: 253, size: 4, base_type: 'uint32'}, // timestamp
                 {number: 2,   size: 4, base_type: 'uint32'}, // start_time
@@ -257,6 +260,7 @@ function FITjs(args = {}) {
             local_number: 5,
             length: 63,
             data_record_length: 43,
+            dev_fields: [],
             fields: [
                 {number: 253, size: 4, base_type: 'uint32'}, // timestamp
                 {number: 2,   size: 4, base_type: 'uint32'}, // start_time
@@ -315,6 +319,7 @@ function FITjs(args = {}) {
             local_number: 6,
             length: 24,
             data_record_length: 14,
+            dev_fields: [],
             fields: [
                 {number: 253, size: 4, base_type: 'uint32'}, // timestamp
                 {number: 0,   size: 4, base_type: 'uint32'}, // total_timer_time
@@ -581,4 +586,3 @@ export {
     fitBinary,
     flatFitBinary,
 };
-

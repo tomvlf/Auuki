@@ -282,7 +282,7 @@ describe('last element of Collection or String', () => {
 
     describe('last of undefined is undefined', () => {
         test('with undefined', () => {
-            expect(second(undefined)).toBe(undefined);
+            expect(last(undefined)).toBe(undefined);
         });
     });
 

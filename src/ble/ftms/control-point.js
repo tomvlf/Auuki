@@ -128,11 +128,18 @@ function PowerTarget() {
         return view.buffer;
     }
 
+    function decode(dataview) {
+        return {
+            power: spec.decodeField('power', dataview.getUint16(1, true)),
+        };
+    }
+
     return Object.freeze({
         opCode,
         length,
         definitions,
         encode,
+        decode,
     });
 }
 
@@ -318,4 +325,3 @@ const control = {
 export {
     control,
 };
-
