@@ -1,10 +1,11 @@
-import { xf, equals, exists, existance, empty, last, dataviewToArray, delay } from '../functions.js';
+import { xf, equals, exists, existance, dataviewToArray } from '../functions.js';
 import { time } from '../utils.js';
-import { ids, events, keys } from './constants.js';
+import { events, keys } from './constants.js';
 import { message } from './message.js';
 import { fec } from './fec.js';
 import { hr } from './hr.js';
 import { Q } from './q.js';
+import { driver } from './driver.js';
 
 function profileToDeviceType(profile) {
     if(equals(profile, 'hrm')) return 120;
@@ -29,41 +30,76 @@ function Device(args = {}) {
 
     let deviceNumber     = 0;
     let transmissionType = 0;
-    let _connected   = false;
+    let _connected = false;
+    let _searching = false;
+    let abortController;
 
     function start() {
-        const self = this;
+        if(abortController) return;
+        abortController = new AbortController();
+        const options = {signal: abortController.signal};
         console.log(`:ant :${profile} :start`);
-        xf.sub(`ui:${name}:switch`, onSwitch.bind(self));
-        xf.sub(`ant:search:pair`, onPair.bind(self));
-        xf.sub(`ant:driver:${channelNumber}:rx`, onRx.bind(self));
+        xf.sub(`ui:${name}:switch`, onSwitch, options);
+        xf.sub(`ant:search:pair`, onPair, options);
+        xf.sub('ant:search:cancel', onCancelSearch, options);
+        xf.sub(`ant:driver:${channelNumber}:rx`, onRx, options);
+        xf.sub('ant:driver:error', onDriverError, options);
+        xf.sub('ant:driver:closed', onDriverClosed, options);
     }
 
     function stop() {
-        const self = this;
         console.log(`:ant :${profile} :stop`);
-        xf.unsub(`ui:${name}:switch`, onSwitch.bind(self));
-        xf.unsub(`ant:driver:${channelNumber}:rx`, onRx.bind(self));
+        abortController?.abort();
+        abortController = undefined;
+        q.rejectAll();
+        _connected = false;
+        _searching = false;
     }
 
-    function onSwitch() {
-        if(isConnected()) {
-            disconnect();
-        } else {
-            connect();
+    async function onSwitch() {
+        try {
+            if(isConnected()) await disconnect();
+            else if(_searching) await onCancelSearch();
+            else await connect();
+        } catch(error) {
+            _connected = false;
+            _searching = false;
+            _searching = false;
+            xf.dispatch(`${name}:disconnected`);
+            xf.dispatch('ant:search:stopped');
+            xf.dispatch('ui:modal:error:open', `ANT+ connection failed: ${error.message}`);
+            console.error(`ANT+ ${profile} connection failed:`, error);
         }
     }
 
-    function onPair(channelId) {
-        if(equals(channelId.deviceType, deviceType)) {
-            pair(channelId);
+    async function onPair(channelId) {
+        if(channelId && equals(channelId.deviceType, deviceType)) {
+            try {
+                await pair(channelId);
+            } catch(error) {
+                _connected = false;
+                xf.dispatch(`${name}:disconnected`);
+                xf.dispatch('ui:modal:error:open', `ANT+ pairing failed: ${error.message}`);
+                console.error(`ANT+ ${profile} pairing failed:`, error);
+            }
         }
     }
 
-    function pair(channelId) {
+    async function onCancelSearch() {
+        if(_connected || !_searching) return;
+        _searching = false;
+        try {
+            await driver.runExclusive(() => write(message.closeChannel.encode({channelNumber})));
+        } catch(error) {
+            console.warn(`Unable to cancel ANT+ ${profile} search:`, error);
+        }
+        xf.dispatch('ant:search:stopped');
+    }
+
+    async function pair(channelId) {
         deviceNumber     = channelId.deviceNumber;
         transmissionType = channelId.transmissionType;
-        track();
+        await driver.runExclusive(track);
     }
 
     async function search() {
@@ -73,19 +109,25 @@ function Device(args = {}) {
 
         xf.dispatch('ant:search:start');
         xf.dispatch(`${name}:connecting`);
+        _searching = true;
         console.log(`:channel :${channelNumber} :search `, config);
 
-        write(message.unassignChannel.encode(config)); // 65
-        await write(message.setNetworkKey.encode(config)); // 70
-        await write(message.assignChannel.encode(config)); // 66
-        await write(message.setChannelId.encode(config));  // 81
-        await write(message.enableExtRxMessages.encode(config)); // 102
-        await write(message.lowPrioritySearchTimeout.encode(config)); // 99
-        await write(message.searchTimeout.encode(config)); // 68
-        await write(message.setChannelFrequency.encode(config)); // 69
-        await write(message.setChannelPeriod.encode(config)); // 67
-        await write(message.openChannel.encode(config)); // 75
-        // write(message.requestChannelStatus.encode(config)); // 77
+        const commands = [
+            message.unassignChannel.encode(config),
+            message.setNetworkKey.encode(config),
+            message.assignChannel.encode(config),
+            message.setChannelId.encode(config),
+            message.enableExtRxMessages.encode(config),
+            message.lowPrioritySearchTimeout.encode(config),
+            message.searchTimeout.encode(config),
+            message.setChannelFrequency.encode(config),
+            message.setChannelPeriod.encode(config),
+            message.openChannel.encode(config),
+        ];
+        for(const command of commands) {
+            if(!_searching) return;
+            await write(command);
+        }
     }
 
     async function track() {
@@ -99,9 +141,7 @@ function Device(args = {}) {
 
         console.log(`:channel :${channelNumber} :track `, config);
 
-        await write(message.enableExtRxMessages.encode(config)); // 102
         await write(message.closeChannel.encode(config)); // 76
-        await delay(2000); // ?? here should wait for something maybe channel event 7
         await write(message.unassignChannel.encode(config)); // 65
         await write(message.setNetworkKey.encode(config)); // 70
         await write(message.assignChannel.encode(config)); // 66
@@ -109,29 +149,37 @@ function Device(args = {}) {
         await write(message.setChannelFrequency.encode(config)); // 69
         await write(message.setChannelPeriod.encode(config)); // 67
         await write(message.openChannel.encode(config)); //75
+        _connected = true;
+        _searching = false;
+        xf.dispatch('ant:search:stopped');
         xf.dispatch(`${name}:connected`);
     }
 
     async function close() {
         await write(message.closeChannel.encode({channelNumber}));
+        _connected = false;
+        _searching = false;
         xf.dispatch(`${name}:disconnected`);
+        xf.dispatch('ant:search:stopped');
     }
 
     function isConnected() {
         return _connected;
     }
 
-    function connect() {
-        search();
-        _connected = true;
+    async function connect() {
+        await driver.open();
+        await driver.runExclusive(search);
     }
 
-    function disconnect() {
-        close();
+    async function disconnect() {
+        await driver.runExclusive(close);
         _connected = false;
     }
 
     function onRx(dataview) {
+        if(dataview.byteLength < 4 || dataview.getUint8(0) !== 0xA4 ||
+           dataview.byteLength !== dataview.getUint8(1) + 4) return;
         let decoded;
 
         if(message.isResponse(dataview)) {
@@ -144,6 +192,7 @@ function Device(args = {}) {
         }
         if(message.isBroadcast(dataview)) {
             decoded = message.broadcastData.decode(dataview);
+            if(!decoded.valid) return;
 
             if(exists(decoded.channelId)) {
                 xf.dispatch('ant:search:found', decoded.channelId);
@@ -155,16 +204,30 @@ function Device(args = {}) {
         q.pull(decoded);
     }
     function onEvent(decoded) {
+        q.pull(decoded);
         if(equals(decoded.eventCode, events.event_channel_closed)) {
+            _connected = false;
+            xf.dispatch(`${name}:disconnected`);
         }
     }
 
+    function onDriverError(error) {
+        q.rejectAll(error instanceof Error ? error : new Error(String(error)));
+    }
+
+    function onDriverClosed() {
+        q.rejectAll();
+        _connected = false;
+        _searching = false;
+        xf.dispatch(`${name}:disconnected`);
+        xf.dispatch('ant:search:stopped');
+    }
+
     async function write(dataview) {
-
         console.log(`[${time()}] :ant :tx ${dataviewToArray(dataview)}`);
-
+        const response = q.push(dataview);
         xf.dispatch('ant:driver:tx', dataview);
-        await q.push(dataview);
+        return response;
     }
 
     return {
@@ -245,23 +308,24 @@ function Controllable() {
 
     let _mode = 'erg';
 
+    let abortController;
+
     function start() {
-        const self = this;
+        if(abortController) return;
+        abortController = new AbortController();
+        const options = {signal: abortController.signal};
         device.start();
         console.log(':ant :controllable :start');
-        xf.sub(`db:mode`, onMode.bind(self));
-        xf.sub('db:powerTarget', onPowerTarget.bind(self));
-        xf.sub('db:resistanceTarget', onResistanceTarget.bind(self));
-        xf.sub('db:slopeTarget', onSlopeTarget.bind(self));
+        xf.sub('db:mode', onMode, options);
+        xf.sub('db:powerTarget', onPowerTarget, options);
+        xf.sub('db:resistanceTarget', onResistanceTarget, options);
+        xf.sub('db:slopeTarget', onSlopeTarget, options);
     }
 
     function stop() {
-        const self = this;
+        abortController?.abort();
+        abortController = undefined;
         device.stop();
-        xf.unsub(`db:mode`, onMode.bind(self));
-        xf.unsub('db:powerTarget', onPowerTarget.bind(self));
-        xf.unsub('db:resistanceTarget', onResistanceTarget.bind(self));
-        xf.unsub('db:slopeTarget', onSlopeTarget.bind(self));
     }
 
     function onMode(value) {
@@ -269,23 +333,31 @@ function Controllable() {
     }
 
     function onPowerTarget(power) {
-        console.log(power);
         if(device.isConnected() && (equals(_mode, 'erg'))) {
-            setPowerTarget(power);
+            sendControl(setPowerTarget, power);
         }
     }
 
     function onResistanceTarget(resistance) {
-        if(device.isConnected()) setResistanceTarget(resistance);
+        if(device.isConnected()) sendControl(setResistanceTarget, resistance);
     }
 
     function onSlopeTarget(power) {
-        if(device.isConnected()) setSlopeTarget(power);
+        if(device.isConnected()) sendControl(setSlopeTarget, power);
+    }
+
+    async function sendControl(setTarget, value) {
+        try {
+            await driver.runExclusive(() => setTarget(value));
+        } catch(error) {
+            xf.dispatch('ui:modal:error:open', `ANT+ control failed: ${error.message}`);
+            console.error('ANT+ control command failed:', error);
+        }
     }
 
     function control(dataPage) {
         const view = message.acknowledgedData.encode({channelNumber, payload: dataPage});
-        device.write(view);
+        return device.write(view);
     }
 
     function setPowerTarget(power) {

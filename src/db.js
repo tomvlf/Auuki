@@ -425,9 +425,10 @@ xf.reg('ui:ant:request:selected', (x, db) => {
     })[0];
 });
 function includesDevice(devices, id) {
-    return devices.filter(d => d.deviceNumber === id.deviceNumber).length > 0;
+    return devices.some(d => d.deviceNumber === id.deviceNumber);
 }
-xf.reg(`ant:search:device-found`, (x, db) => {
+xf.reg(`ant:search:found`, (x, db) => {
+    if(!x || x.deviceNumber === undefined) return;
     if(includesDevice(db.antSearchList, x)) return;
     db.antSearchList.push(x);
     db.antSearchList = db.antSearchList;

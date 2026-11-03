@@ -1,55 +1,74 @@
-import { xf, equals, exists, existance, dataviewToArray } from '../functions.js';
-import { message } from './message.js';
+import { events, ids } from './constants.js';
 
-//                             id  ch to  res
-// channel response   [164, 3, 64, 0, 81, 0, 182]
-//                             id  ch    res
-// channel event      [164, 3, 64, 0, 1, 0, x]
-//                             id  ch res
-// requested response [164, 3, 82, 0, 2, 246]
-
-// Case 1: write Config msg, and wait for channel response
-//         send:     [164, 5, 81, 0, 0, 0, 0, 0, 240]
-//         response: [164, 3, 64, 0, 81, 0, 182]
-//
-// Case 2: write Acknowledged Data with control data page, wait for channel event
-//         TRANSFER_TX_COMPLETED, success
-//         TX_TRANSFER_FAILED, fail and retry until success
-//
-//         send:       [164, 9, 79, 0,  49, 255,255,255,255,255, 75,0,  103]
-//         response 1: [164, 3, 64, 0, 1, 5, x] 'event_transfer_tx_completed'
-//         response 2: [164, 3, 64, 0, 1, 6, x] 'event_transfer_tx_failed'
-//
-// channel response decoded { id, channelNumber, initMsgId, responseCode, valid, }
-// channel event decoded    { id, channelNumber, eventCode, valid, }
-
-function Q(args = {}) {
-    let _q = new Map();
+function Q({timeout = 2000} = {}) {
+    const pending = new Map();
 
     function push(dataview) {
         const id = dataview.getUint8(2, true);
-
-        const promise = new Promise(function (resolve, reject) {
-            _q.set(id, {resolve: resolve});
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                remove(id, entry);
+                reject(new Error(`ANT+ message ${id} timed out.`));
+            }, timeout);
+            const entry = {resolve, reject, timer};
+            const queue = pending.get(id) ?? [];
+            queue.push(entry);
+            pending.set(id, queue);
         });
-
-        return promise;
     }
 
     function pull(decoded) {
-        const id = decoded.initMsgId;
-        const p = _q.get(id);
-        if(exists(p)) {
-            p.resolve(decoded);
-            _q.delete(id);
+        let id = decoded.initMsgId;
+        if(decoded.eventCode !== undefined) {
+            if(decoded.eventCode === events.event_channel_closed) {
+                id = ids.closeChannel;
+            } else if(decoded.eventCode === events.event_transfer_tx_completed ||
+                      decoded.eventCode === events.event_transfer_tx_failed) {
+                id = ids.acknowledgedData;
+            } else {
+                return;
+            }
+        }
+
+        const entry = pending.get(id)?.[0];
+        if(!entry) return;
+
+        if(decoded.valid === false ||
+           decoded.eventCode === events.event_transfer_tx_failed ||
+           (decoded.responseCode !== undefined &&
+            decoded.responseCode !== events.response_no_error)) {
+            finish(id, entry, new Error(`ANT+ message ${id} was rejected.`));
+            return;
+        }
+        if(decoded.eventCode === events.event_transfer_tx_completed ||
+           decoded.eventCode === events.event_channel_closed ||
+           decoded.responseCode === events.response_no_error) {
+            finish(id, entry, undefined, decoded);
         }
     }
 
-    return Object.freeze({
-        push,
-        pull,
-    });
+    function remove(id, entry) {
+        const queue = pending.get(id);
+        if(!queue) return;
+        const index = queue.indexOf(entry);
+        if(index !== -1) queue.splice(index, 1);
+        if(queue.length === 0) pending.delete(id);
+    }
+
+    function finish(id, entry, error, value) {
+        clearTimeout(entry.timer);
+        remove(id, entry);
+        if(error) entry.reject(error);
+        else entry.resolve(value);
+    }
+
+    function rejectAll(error = new Error('ANT+ driver closed.')) {
+        for(const [id, queue] of pending) {
+            for(const entry of queue) finish(id, entry, error);
+        }
+    }
+
+    return Object.freeze({push, pull, rejectAll});
 }
 
 export { Q };
-

@@ -1,161 +1,141 @@
-import { xf, equals, existance, isArray, dataviewToArray, delay } from '../functions.js';
-import { time } from '../utils.js';
+import { xf } from '../functions.js';
 import { SerialDriver, SerialPolyfillDriver } from './web-serial.js';
-import { ids } from './constants.js';
 
-function Driver(args = {}) {
-    let _driver;
-    let _numOfChannels = 8;
+let _driver;
+let _abortController;
+let _opening;
+let _operation = Promise.resolve();
+let _started = false;
 
-    let _abortController = new AbortController();
-    let _signal = { signal: _abortController.signal };
-
-    function getOS() {
-        if(!equals(navigator.appVersion.indexOf('Win'), -1)) return 'windows';
-        if(!equals(navigator.appVersion.indexOf('Mac'), -1)) return 'macos';
-        if(!equals(navigator.appVersion.indexOf('Android'), -1)) return 'android';
-        if(!equals(navigator.appVersion.indexOf('Linux'), -1)) return 'linux';
-        return 'unknown';
+function setup() {
+    if(navigator.serial?.requestPort) {
+        _driver = SerialDriver({
+            onData: onRx,
+            onClose: () => xf.dispatch('ant:driver:closed'),
+        });
+        return {available: true, driver: 'web-serial'};
     }
-
-    function setup(os) {
-        let result = ':error';
-        let driver = undefined;
-
-        console.log(os);
-
-        if(equals(os, 'windows')) {
-            // not supported
-            _driver = SerialPolyfillDriver({onData: onRx});
-            result = ':success';
-            driver = 'serial-polyfill';
-        }
-        if(equals(os, 'macos')) {
-            _driver = SerialPolyfillDriver({onData: onRx});
-            result = ':success';
-            driver = 'serial-polyfill';
-        }
-        if(equals(os, 'linux')) {
-            _driver = SerialDriver({onData: onRx});
-            result = ':success';
-            driver = 'web-serial';
-        }
-        if(equals(os, 'android')) {
-            _driver = SerialPolyfillDriver({onData: onRx});
-            result = ':success';
-            driver = 'serial-polyfill';
-        }
-
-        return {
-            result,
-            driver,
-            platform: os,
-        };
+    if(navigator.usb?.requestDevice) {
+        _driver = SerialPolyfillDriver({
+            onData: onRx,
+            onClose: () => xf.dispatch('ant:driver:closed'),
+        });
+        return {available: true, driver: 'web-usb'};
     }
-
-    function start() {
-        _abortController = new AbortController();
-        _signal = { signal: _abortController.signal };
-
-        xf.sub('ui:ant:driver:switch', onSwitch.bind(self), _signal);
-        xf.sub('ant:driver:tx', onTx, _signal);
-    }
-
-    function stop() {
-        _abortController.abort();
-    }
-
-    function init() {
-        const os = getOS();
-        const res = setup(os);
-
-        const antControllable = document.querySelector('#ant-controllable-settings');
-        const antHrm = document.querySelector('#ant-hrm-settings');
-
-        if(equals(res.result, ':success')) {
-            // Currently only Android has stable support for Web Serial API
-            if(equals(os, 'android')) {
-                console.log(`:ant :driver :enable '${res.driver}'`);
-                xf.dispatch(`ant:driver:enable`);
-                antControllable.classList.remove('ant-not-supported');
-                antHrm.classList.remove('ant-not-supported');
-                start();
-            } else {
-                xf.dispatch(`ant:driver:disable`);
-                console.warn(`:ant :driver :disable`);
-                console.warn(`The platform ${os} does NOT have stable support for serial driver! Expect updates!`);
-            }
-        } else {
-            xf.dispatch(`ant:driver:disable`);
-            console.log(`:ant :driver :disable`);
-            console.error(`The platform ${os} does not support serial driver!`);
-        }
-    }
-
-    async function open() {
-        xf.dispatch(`ant:driver:connecting`);
-        await _driver.open(onOpen);
-    }
-
-    function close() {
-        _driver.close();
-        xf.dispatch('ant:driver:closed');
-    }
-
-    function onSwitch() {
-        console.log(`onSwitch() _driver.isOpen(): ${_driver.isOpen()}`);
-        if(_driver.isOpen()) {
-            close();
-        } else {
-            open();
-        }
-    }
-
-    async function onOpen() {
-        await delay(1000);
-        xf.dispatch('ant:driver:ready');
-        xf.dispatch(`ant:driver:connected`);
-    }
-
-    function onRx(data) {
-        channelDispatch(getChannel(data), data);
-    }
-
-    function isGlobal(data) {
-    }
-
-    function getId(data) { return data[2]; }
-
-    function getChannel(data) { return data[3]; }
-
-    function channelDispatch(channel, data) {
-
-        console.log(`[${time()}] ant: rx: ${data}`);
-
-        if(equals(channel, 0)) {
-            for(let channel=0; channel<_numOfChannels; channel++) {
-                xf.dispatch(`ant:driver:${channel}:rx`,
-                            new DataView(new Uint8Array(data).buffer));
-            }
-        } else {
-            xf.dispatch(`ant:driver:${channel}:rx`,
-                        new DataView(new Uint8Array(data).buffer));
-        }
-    }
-
-    function onTx(dataview) {
-        _driver.write(dataview);
-    }
-
-    return Object.freeze({
-        init,
-        start,
-        stop,
-        open,
-        close,
-    });
+    _driver = undefined;
+    return {available: false};
 }
 
-const driver = Driver();
+function start() {
+    if(_started) return;
+    _abortController = new AbortController();
+    const options = {signal: _abortController.signal};
+    xf.sub('ui:ant:driver:switch', onSwitch, options);
+    xf.sub('ant:driver:tx', onTx, options);
+    _started = true;
+}
 
-export { driver };
+function stop() {
+    _abortController?.abort();
+    _started = false;
+    return close();
+}
+
+function runExclusive(operation) {
+    const result = _operation.then(operation);
+    _operation = result.catch(() => {});
+    return result;
+}
+
+function init() {
+    const result = setup();
+    const antControllable = document.querySelector('#ant-controllable-settings');
+    const antHrm = document.querySelector('#ant-hrm-settings');
+
+    [antControllable, antHrm].filter(Boolean).forEach(element => {
+        element.classList.toggle('ant-not-supported', !result.available);
+    });
+
+    if(result.available) {
+        start();
+        xf.dispatch('ant:driver:enable', result.driver);
+    } else {
+        xf.dispatch('ant:driver:disable');
+    }
+    return result;
+}
+
+async function open() {
+    if(!_driver) {
+        const result = setup();
+        if(!result.available) throw new Error('ANT+ is not supported by this browser.');
+    }
+    if(_driver.isOpen()) return;
+    if(_opening) return _opening;
+
+    xf.dispatch('ant:driver:connecting');
+    _opening = _driver.open(onOpen)
+        .catch(error => {
+            xf.dispatch('ant:driver:error', error);
+            xf.dispatch('ant:driver:closed');
+            throw error;
+        })
+        .finally(() => {
+            _opening = undefined;
+        });
+    return _opening;
+}
+
+async function close() {
+    if(_driver?.isOpen()) await _driver.close();
+    else xf.dispatch('ant:driver:closed');
+}
+
+async function onSwitch() {
+    try {
+        if(_driver?.isOpen()) await close();
+        else await open();
+    } catch(error) {
+        console.error('Unable to connect ANT+ adapter:', error);
+    }
+}
+
+function onOpen() {
+    xf.dispatch('ant:driver:ready');
+    xf.dispatch('ant:driver:connected');
+}
+
+function onRx(data) {
+    if(!data || data.length < 4 || data[0] !== 0xA4 ||
+       data.length !== data[1] + 4) {
+        console.warn('Ignoring malformed ANT+ message.', data);
+        return;
+    }
+    const channel = data[3] & 0x1F;
+    channelDispatch(channel, data);
+}
+
+function channelDispatch(channel, data) {
+    const bytes = Uint8Array.from(data);
+    if(channel === 0) {
+        for(let channelNumber = 0; channelNumber < 8; channelNumber++) {
+            xf.dispatch(`ant:driver:${channelNumber}:rx`, new DataView(bytes.slice().buffer));
+        }
+    } else {
+        xf.dispatch(`ant:driver:${channel}:rx`, new DataView(bytes.buffer));
+    }
+}
+
+async function onTx(dataview) {
+    try {
+        if(!_driver?.isOpen()) throw new Error('ANT+ adapter is not open.');
+        await _driver.write(dataview);
+    } catch(error) {
+        xf.dispatch('ant:driver:error', error);
+        console.error('Unable to write to ANT+ adapter:', error);
+    }
+}
+
+const driver = Object.freeze({init, start, stop, open, close, runExclusive});
+
+export {driver};
