@@ -74,7 +74,7 @@ function RevsOverTime(args = {}) {
         if(getRevs() < 0) setRevs(revs_2); // set initial revs
         if(getTime() < 0) setTime(time_2); // set initial time
 
-        if(underRate(time_2)) {
+        if(!isRolloverTime(time_2) && underRate(time_2)) {
             return value;
         }
 

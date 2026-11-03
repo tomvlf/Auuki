@@ -2,10 +2,20 @@
  * @jest-environment jsdom
  */
 
-import { JSDOM } from 'jsdom';
-
 import { first, last, xf } from '../../src/functions.js';
 import { MoxyGraph } from '../../src/views/moxy-graph.js';
+
+function mountGraph(graph) {
+    graph.innerHTML = `<svg id="moxy-svg">
+        <polyline id="moxy-path-smo2"></polyline>
+        <polyline id="moxy-path-thb"></polyline>
+        <polyline id="moxy-path-hr"></polyline>
+        <polyline id="moxy-path-power"></polyline>
+    </svg>`;
+    document.body.append(graph);
+}
+
+afterAll(() => document.body.replaceChildren());
 
 describe('Moxy Graph View', () => {
 });
@@ -19,6 +29,7 @@ describe('Fill - Shift - Enlarge - Fill - Shift', () => {
     };
 
     const moxy = new MoxyGraph();
+    mountGraph(moxy);
     moxy.width = 8;
 
     const power = [
@@ -227,6 +238,7 @@ describe('Fill - Shift - Enlarge - Fill - Shift', () => {
 describe('Fill - Shift - Shrink - Fill - Shift', () => {
 
     const moxy = new MoxyGraph();
+    mountGraph(moxy);
     moxy.width = 12;
 
     const power = [
@@ -442,4 +454,3 @@ describe('Fill - Shift - Shrink - Fill - Shift', () => {
     });
 
 });
-

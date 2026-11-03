@@ -1,4 +1,4 @@
-import { data } from './data.js';
+import { data } from './min-data.js';
 import { FITjs } from '../../src/fit/fitjs.js';
 import { dataviewToArray } from '../../src/functions.js';
 

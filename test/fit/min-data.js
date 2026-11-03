@@ -278,6 +278,7 @@ const minimalFITjs = [
         local_number: 0,
         length: 21,
         data_record_length: 12,
+        dev_fields: [],
         fields: [
             { number: 4, size: 4, base_type: 'uint32' },
             { number: 1, size: 2, base_type: 'uint16' },
@@ -310,6 +311,7 @@ const minimalFITjs = [
         local_number: 2,
         length: 24,
         data_record_length: 14,
+        dev_fields: [],
         fields: [
             { number: 253, size: 4, base_type: 'uint32' },
             { number: 3,   size: 4, base_type: 'uint32' },
@@ -344,6 +346,7 @@ const minimalFITjs = [
         local_number: 3,
         length: 24,
         data_record_length: 15,
+        dev_fields: [],
         fields: [
             { number: 253, size: 4, base_type: 'uint32' },
             { number: 7,   size: 2, base_type: 'uint16' },
@@ -436,6 +439,7 @@ const minimalFITjs = [
         local_number: 4,
         length: 33,
         data_record_length: 23,
+        dev_fields: [],
         fields: [
             { number: 253, size: 4, base_type: 'uint32' },
             { number: 2,   size: 4, base_type: 'uint32' },
@@ -476,6 +480,7 @@ const minimalFITjs = [
         local_number: 5,
         length: 60,
         data_record_length: 41,
+        dev_fields: [],
         fields: [
             { number: 253, size: 4, base_type: 'uint32' },
             { number: 2,   size: 4, base_type: 'uint32' },
@@ -534,6 +539,7 @@ const minimalFITjs = [
         local_number: 6,
         length: 27,
         data_record_length: 15,
+        dev_fields: [],
         fields: [
             { number: 253, size: 4, base_type: 'uint32' },
             { number: 5,   size: 4, base_type: 'uint32' },

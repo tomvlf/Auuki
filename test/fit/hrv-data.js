@@ -102,7 +102,7 @@ function FITjs(args = {}) {
             headerSize: 14,
             protocolVersion: '2.0',
             profileVersion: '21.40',
-            dataSize: 482, // 489,
+            dataSize: 487,
             dataType: '.FIT',
             crc: headerCRC,
         },
@@ -387,8 +387,8 @@ function FITjs(args = {}) {
             architecture: 0,
             name: 'session',
             local_number: 6,
-            length: 63,
-            data_record_length: 43,
+            length: 66,
+            data_record_length: 45,
             fields: [
                 {number: 253, size: 4, base_type: 'uint32'}, // timestamp
                 {number: 2,   size: 4, base_type: 'uint32'}, // start_time
@@ -409,6 +409,7 @@ function FITjs(args = {}) {
                 {number: 21,  size: 2, base_type: 'uint16'}, // max_power
                 {number: 25,  size: 2, base_type: 'uint16'}, // first_lap_index
                 {number: 26,  size: 2, base_type: 'uint16'}, // num_laps
+                {number: 45,  size: 2, base_type: 'uint16'}, // threshold_power
             ],
             dev_fields: [],
         },
@@ -417,7 +418,7 @@ function FITjs(args = {}) {
             type: 'data',
             name: 'session',
             local_number: 6,
-            length: 43,
+            length: 45,
             fields: {
                 timestamp:  1669140872000,
                 start_time: 1669140869000,
@@ -438,6 +439,7 @@ function FITjs(args = {}) {
                 max_power: 163,
                 first_lap_index: 0,
                 num_laps: 1,
+                threshold_power: 200,
             }
         },
         // definition activity

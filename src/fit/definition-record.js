@@ -65,9 +65,11 @@ function DefinitionRecord(args = {}) {
     // }
     // -> DataView
     function encode(definition, view, i = 0) {
+        const hasDeveloperFields = (definition.dev_fields?.length ?? 0) > 0;
         const header = recordHeader.encode({
             messageType:      _type,
             localMessageType: definition.local_number,
+            messageTypeSpecific: hasDeveloperFields ? 'developer' : 'reserved',
         });
         const numberOfFields = definition.fields.length;
         const globalNumber   = messageNameToNumber(definition.name);
@@ -86,11 +88,7 @@ function DefinitionRecord(args = {}) {
             i += fieldLength;
         });
 
-        // TODO:
-        // if developer fields are defined
-        // write # developer fields
-        // write developer fields definitions
-        if('dev_fields' in definition) {
+        if(hasDeveloperFields) {
 
             const numberOfDeveloperFields = definition.dev_fields.length;
 
@@ -220,4 +218,3 @@ export {
     DefinitionRecord,
     definitionRecord,
 };
-

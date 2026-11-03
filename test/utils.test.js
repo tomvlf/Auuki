@@ -18,8 +18,6 @@ import { isoDate, } from '../src/utils.js';
 // 25 01:00   25 06:00   25 08:00
 
 describe('isoDate', () => {
-    // TODO: make the test machine env timezone independent
-
     describe('hel', () => {
         describe('local = true', () => {
             test('utc 24 21:00 - hel 24 23:00 -> 24', () => {
@@ -50,25 +48,24 @@ describe('isoDate', () => {
 
         describe('local = false', () => {
             test('utc 24 21:00 - hel 24 23:00 -> 24', () => {
-                const localDate = new Date('2025-02-24T23:00:00');
+                const localDate = new Date('2025-02-24T23:00:00+02:00');
                 expect(isoDate(localDate, false)).toBe('2025-02-24');
             });
 
             test('utc 24 22:00 - hel 25 00:00 -> 24', () => {
-                const localDate = new Date('2025-02-25T00:00:00');
+                const localDate = new Date('2025-02-25T00:00:00+02:00');
                 expect(isoDate(localDate, false)).toBe('2025-02-24');
             });
 
             test('utc 25 00:00 - hel 25 02:00 -> 25', () => {
-                const localDate = new Date('2025-02-25T02:00:00');
+                const localDate = new Date('2025-02-25T02:00:00+02:00');
                 expect(isoDate(localDate, false)).toBe('2025-02-25');
             });
 
             test('utc 25 01:00 - hel 25 03:00 -> 25', () => {
-                const localDate = new Date('2025-02-25T02:00:00');
+                const localDate = new Date('2025-02-25T03:00:00+02:00');
                 expect(isoDate(localDate, false)).toBe('2025-02-25');
             });
         });
     });
 });
-

@@ -4,8 +4,12 @@
 
 import { idb } from '../../src/storage/idb.js';
 import indexedDB from 'fake-indexeddb';
+import { serialize, deserialize } from 'node:v8';
 
 window.indexedDB = indexedDB;
+if(!globalThis.structuredClone) {
+    globalThis.structuredClone = value => deserialize(serialize(value));
+}
 
 describe('IDB', () => {
 
@@ -26,11 +30,11 @@ describe('IDB', () => {
     ];
 
     test('open', async () => {
-        let resOpen = await idb.open('store', 1, 'numbers');
+        let resOpen = await idb.open('store', 1, ['numbers']);
 
         expect(resOpen.constructor.name).toBe('FDBDatabase'); // 'IDBDatabase'
         expect(resOpen.name).toBe('store');
-        expect(resOpen.objectStoreNames).toStrictEqual(['numbers']);
+        expect(Array.from(resOpen.objectStoreNames)).toStrictEqual(['numbers']);
     });
 
     test('add', async () => {

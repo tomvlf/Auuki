@@ -80,13 +80,13 @@ function RecordHeader() {
     }
 
     function isDefinition(header) {
-        if(isNumber(header)) return equals(nthBit(header, 6), 0) ? true : false;
+        if(isNumber(header)) return equals(nthBit(header, 6), 1) ? true : false;
         if(isObject(header)) return equals(header.messageType, RecordType.definition) ? true : false;
         return false;
     }
 
     function isData(header) {
-        if(isNumber(header)) return equals(nthBit(header, 6), 1) ? true : false;
+        if(isNumber(header)) return equals(nthBit(header, 6), 0) ? true : false;
         if(isObject(header)) return equals(header.messageType, RecordType.data) ? true : false;
         return false;
     }
@@ -120,4 +120,3 @@ export {
     RecordHeader,
     recordHeader,
 };
-
