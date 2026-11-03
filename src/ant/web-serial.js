@@ -1,8 +1,8 @@
 //
 // Web Serial
 //
-import { equals, exists, existance, empty, last, delay } from '../functions.js';
-import { serialPolyfill, SerialPort } from './web-serial-polyfill.js';
+import { existance } from '../functions.js';
+import { SerialPort } from './web-serial-polyfill.js';
 
 const values = {
     dynastreamId:       4047, // 0x0FCF
@@ -15,15 +15,12 @@ const filters = {
     dynastream: { filters: [{ usbVendorId: values.dynastreamId }] },
 };
 
-function USBDriver() {
-    throw new Error('not implemented!');
-}
-
 function SerialDriver(args = {}) {
     const defaults = {
         filter:   [{ usbVendorId: values.dynastreamId }],
         baudRate: 115200,
         onData:  defaultOnData,
+        onClose: () => {},
     };
 
     async function defaultRequest() {
@@ -33,14 +30,15 @@ function SerialDriver(args = {}) {
     }
 
     const onData  = existance(args.onData, defaults.onData);
+    const onClose = existance(args.onClose, defaults.onClose);
     const request = existance(args.request, defaultRequest);
 
-    let device;
     let port;
     let reader;
     let writer;
     let _reading = false;
     let _isOpen  = false;
+    let readTask;
 
     function isOpen() { return _isOpen; }
     function setIsOpen(value) { _isOpen = value; return _isOpen; }
@@ -49,66 +47,78 @@ function SerialDriver(args = {}) {
     function setReading(value) { _reading = value; return _reading; }
 
 
-    async function open(cb) {
-        port = await request();
+    async function open(cb = () => {}) {
+        if(isOpen()) return;
 
-        await port.open({baudRate: defaults.baudRate, flowControl: "hardware", bufferSize: 8192});
+        const requestedPort = await request();
+        await requestedPort.open({
+            baudRate: defaults.baudRate,
+            flowControl: 'hardware',
+            bufferSize: 8192,
+        });
 
-        setIsOpen(true);
-        setReading(true);
+        try {
+            if(!requestedPort.readable || !requestedPort.writable) {
+                throw new Error('The selected ANT+ adapter does not provide serial streams.');
+            }
 
-        writer = port.writable.getWriter();
-        // reader = port.readable.pipeThrough(
-        //     new TransformStream(new MessageTransformer())
-        // ).getReader();
-
-        cb();
-        read();
+            port = requestedPort;
+            writer = port.writable.getWriter();
+            setIsOpen(true);
+            setReading(true);
+            await cb();
+            readTask = read().catch(error => {
+                console.error(':ant :serial :reader-error', error);
+            });
+        } catch(error) {
+            setIsOpen(false);
+            setReading(false);
+            writer?.releaseLock();
+            writer = undefined;
+            await requestedPort.close();
+            port = undefined;
+            throw error;
+        }
     }
 
     async function close() {
+        if(!port) return;
         setIsOpen(false);
         setReading(false);
-        await reader.cancel();
+        await reader?.cancel().catch(() => {});
+        await readTask;
     }
 
     async function read() {
-        console.log(':ant :serial :reading');
-        while (port.readable && isReading()) {
+        try {
+            reader = port.readable
+                .pipeThrough(new TransformStream(new MessageTransformer()))
+                .getReader();
 
-            console.log(':serial :while :create :reader');
-
-            reader = port.readable.pipeThrough(
-                new TransformStream(new MessageTransformer())
-            ).getReader();
-
-            try {
-                console.log(':serial :try start-inner-loop');
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        console.log(':serial :done :inner-loop-break');
-                        break;
-                    }
-                    onData(value);
-                }
-            } catch (error) {
-                console.error(`:ant :serial :reader-error`, error);
-                console.log(error);
-                // read();
-                // break;
-            } finally {
-                console.log(':serial :finally :reader :release-lock');
-                reader.releaseLock();
-                // await delay(1000);
+            while(isReading()) {
+                const {value, done} = await reader.read();
+                if(done) break;
+                onData(value);
             }
+        } catch(error) {
+            if(isReading()) {
+                console.error(':ant :serial :reader-error', error);
+                throw error;
+            }
+        } finally {
+            reader?.releaseLock();
+            reader = undefined;
+            writer?.releaseLock();
+            writer = undefined;
+            const closingPort = port;
+            port = undefined;
+            setReading(false);
+            setIsOpen(false);
+            await closingPort?.close().catch(error => {
+                console.error(':ant :serial :close-error', error);
+            });
+            onClose();
         }
-        console.log(':serial :writer :release-lock');
-        writer.releaseLock();
-        console.log(':serial :port :close');
-        await port.close();
-        console.log(':ant :serial :closed');
     }
 
     function defaultOnData(data) {
@@ -116,7 +126,15 @@ function SerialDriver(args = {}) {
     }
 
     async function write(dataview) {
-        return await writer.write(dataview.buffer);
+        if(!isOpen() || !writer) {
+            throw new Error('ANT+ adapter is not open.');
+        }
+        const bytes = new Uint8Array(
+            dataview.buffer,
+            dataview.byteOffset,
+            dataview.byteLength
+        );
+        return writer.write(bytes);
     }
 
     return {
@@ -149,72 +167,28 @@ function SerialPolyfillDriver(args = {}) {
 // refactor
 class MessageTransformer {
     constructor() {
-        this.leftover = [];
-        this.sync = 164;
+        this.buffer = [];
+        this.sync = 0xA4;
     }
     transform(chunk, controller) {
-        const self = this;
-        let msgs = [];
-        let achunk = Array.from(chunk);
+        this.buffer.push(...chunk);
 
-        if(empty(this.leftover)) {
-            msgs = self.toANTMsg(achunk, [], 0);
-        } else {
-            msgs = self.toANTMsg(achunk, this.leftover, 0, true);
-        }
-
-        let lastMsg = last(msgs);
-
-        if(exists(lastMsg)) {
-            if(self.isFullMsg(lastMsg)) {
-                this.leftover = [];
-            } else {
-                this.leftover = [lastMsg];
-                msgs.pop();
+        while(this.buffer.length >= 2) {
+            const syncIndex = this.buffer.indexOf(this.sync);
+            if(syncIndex === -1) {
+                this.buffer.length = 0;
+                return;
             }
 
-            msgs.forEach(msg => controller.enqueue(msg));
+            if(syncIndex > 0) this.buffer.splice(0, syncIndex);
+
+            const messageLength = this.buffer[1] + 4;
+            if(this.buffer.length < messageLength) return;
+
+            controller.enqueue(Uint8Array.from(this.buffer.splice(0, messageLength)));
         }
-    }
-    flush(controller) {
-        const self = this;
-        controller.enqueue(self.container);
-    }
-    readLength(msg) {
-        const self = this;
-        return msg[1];
-    }
-    isFullMsg(msg) {
-        const self = this;
-        if(msg === undefined) return false;
-        if(msg.length > 1) {
-            return msg.length === (self.readLength(msg) + 4);
-        }
-        return false;
-    }
-    toANTMsg(chunk, msgs = [], i = 0, leftover = false) {
-        const self = this;
-        if(i >= chunk.length) return msgs;
-        if(chunk[i] === self.sync) {
-            if(chunk[i+1] === undefined) {
-                msgs.push([chunk[i]]);
-                return self.toANTMsg(chunk, msgs, i+1);
-            } else {
-                let len = chunk[i+1] + 4;
-                msgs.push(chunk.slice(i, i+len));
-                i += len;
-                return self.toANTMsg(chunk, msgs, i);
-            }
-        }
-        if(leftover) {
-            let nextSync = chunk.indexOf(self.sync);
-            let len = nextSync > -1 ? nextSync : chunk.length;
-            msgs[i] = msgs[i].concat(chunk.slice(i, len));
-            return self.toANTMsg(chunk, msgs, i+len);
-        }
-        return self.toANTMsg(chunk, msgs, i+1);
     }
 }
 // end refactor
 
-export { SerialDriver, SerialPolyfillDriver };
+export { SerialDriver, SerialPolyfillDriver, MessageTransformer };

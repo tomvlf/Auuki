@@ -117,11 +117,7 @@ The following table is copied from [DC Rainmaker Trainer Guide](https://www.dcra
 
 ### ANT+
 
-Support for ANT+ is experimental at the moment. It is being rewritten right now and the code is moved to [WebANT](https://github.com/dvmarinoff/WebANT), which has a separate demo. When it becomes stable enough will be merged here. It currently has support for Ubuntu(Linux), and partially for MacOS, and Android. Windows 10 may be possible in the future.
-
-
-The current development setup is using Suunto movestick mini, Garmin Fenix 5 watch broadcasting heart rate,
-Tacx Heart Rate monitor, Tacx Flux S trainer, and X240 laptop with Ubuntu 20.04.2 LTS, M1 Mac, and Samsung S9 Android phone.
+ANT+ FE-C smart trainers and ANT+ heart-rate monitors are supported through a compatible USB ANT+ adapter. The browser must expose Web Serial or WebUSB, and the app must be served from a secure context (HTTPS or localhost). Connecting prompts you to select the adapter; availability depends on the browser, operating system, and adapter.
 
 ## Manual
 - [How to create a Profile and Connect Intervals.icu](https://forum.intervals.icu/t/auuki-com-intervals-icu-integration/87105)

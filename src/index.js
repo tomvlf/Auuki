@@ -3,6 +3,7 @@ import './db.js';
 import './views/views.js';
 import './ble/devices.js';
 import './ble/obc/controls.js';
+import './ant/ant.js';
 import './watch.js';
 import './course.js';
 import './lock.js';
@@ -42,4 +43,3 @@ export {
     start,
     stop,
 };
-

@@ -246,13 +246,19 @@ class ANTDeviceRequest extends HTMLElement {
     }
     select(deviceNumber) {
         const channelId = this.devices.get(deviceNumber);
+        if(!channelId) return;
         this.selected = channelId;
-        console.log(`:device-selected ${channelId}`);
     }
     pair() {
+        if(!this.selected) {
+            xf.dispatch('ui:modal:error:open', 'Select an ANT+ device before pairing.');
+            return;
+        }
+        const selected = this.selected;
         this.status = 'pairing';
         this.close();
-        xf.dispatch('ant:search:pair', this.selected);
+        xf.dispatch('ant:search:stopped');
+        xf.dispatch('ant:search:pair', selected);
     }
     deviceItemTemplate(args = { deviceNumber: '--', deviceType: '--'}) {
         return `<div class="device-request--item" id="${args.deviceNumber}">
@@ -270,11 +276,12 @@ class ANTDeviceRequest extends HTMLElement {
     }
     remove(device) {
         const item = this.$list.querySelector(`#${device.deviceNumber}`);
-        this.$list.removeChild(item);
+        item?.remove();
     }
     clear() {
         this.$list.innerHTML = '';
         this.devices = new Map();
+        this.selected = undefined;
     }
 }
 

@@ -1588,8 +1588,8 @@ class ModalError extends HTMLElement {
         this.abortController.abort();
     }
     onOpen(msg) {
-        this.$dialog.showModal();
-        this.$message.innerHTML = this.message(msg);
+        if(!this.$dialog.open) this.$dialog.showModal();
+        this.$message.textContent = this.message(msg);
     }
     onClose(result) {
         this.$dialog.close();
@@ -1598,7 +1598,7 @@ class ModalError extends HTMLElement {
         if(msg === DialogMsg.noAuth) {
             return `Your session is over. You need to login again.`;
         };
-        return '';
+        return exists(msg) ? String(msg) : 'Something went wrong.';
     }
 }
 
