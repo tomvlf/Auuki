@@ -5,6 +5,10 @@ training decision support, not medical diagnosis or medical advice. No injury,
 medical condition, or biological readiness is inferred. No LLM, server, network
 API, or third-party account is required for planning.
 
+You can optionally run the same coach on a self-hosted server using
+**Settings > Profile > Optional server account**. Server coaching has separate
+history and requires a connection; see the [backend guide](backend.md).
+
 ## Using the coach
 
 1. Set FTP, body mass and units in the existing application profile.

@@ -6,6 +6,8 @@
     "source": "src/index.html",
     "scripts": {
         "test": "jest",
+        "test:server": "node --test server/test/*.test.mjs",
+        "server": "node server/index.mjs",
         "start": "parcel",
         "starttls": "parcel --cert ./dev_cert/cert.pem --key ./dev_cert/key.pem",
         "build": "parcel build"
