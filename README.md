@@ -11,6 +11,8 @@ Auuki is a powerful, no-nonsense app built for hammering out **structured workou
 * Record **.FIT activities** in a cross-industry standard
 * Recording of native **RR intervals** in the .FIT file
 * Built-in structured workouts to get you started
+* Schedule workouts from your library in a **monthly training calendar**, view workouts planned in Intervals.icu, and start a workout directly from the calendar
+* **OpenBikeControl** support for Bluetooth virtual gear shifting and handlebar controls
 * **Intervals.icu and Strava** integrations for seamless syncing and uploads
 
 Built as a **progressive web app (PWA)**, Auuki is fully browser-based and runs independently. It makes use of some of the most advanced Browser APIs like: Web Bluetooth, Web Serial, and Web Components. The web version is **free and open-source**, keeping everything on your device.
