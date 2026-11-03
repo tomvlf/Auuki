@@ -1486,6 +1486,11 @@ class NavigationAction extends ViewAction {
     }
     connectedCallback() {
         super.connectedCallback();
+        this.addEventListener('keydown', (event) => {
+            if(event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            xf.dispatch('action:nav', this.getAttribute('action'));
+        }, this.signal);
     }
     disconnectedCallback() {
         super.disconnectedCallback();
