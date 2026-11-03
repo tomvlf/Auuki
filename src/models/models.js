@@ -17,6 +17,7 @@ import { fit } from '../fit/fit.js';
 
 import { Device, Status, ControlMode, } from '../ble/enums.js';
 import { TimerStatus, EventType, } from '../activity/enums.js';
+import { fromRecordedRide } from '../coaching/normalizer.js';
 
 class Model {
     constructor(args = {}) {
@@ -568,7 +569,7 @@ class Activity extends Model {
         this.capacity = 7;
     }
     defaultValue() { return []; }
-    createFromCurrent(db) {
+    async createFromCurrent(db) {
         const id = uuid();
         const blob = fileHandler.toBlob(this.encode(db));
         const name = db.workout?.meta?.name ?? 'Powered by Auuki workout';
@@ -584,10 +585,13 @@ class Activity extends Model {
             id,
             blob,
             summary,
+            ride: fromRecordedRide(db, id, summary.timestamp),
+            coachingWorkoutId: db.workout?.coachingWorkoutId ?? null,
+            pendingSync: true,
         };
 
+        await idb.putChecked('activity', record);
         this.add(summary, db.activity);
-        idb.put('activity', record);
         xf.dispatch('activity:add', summary);
         return record;
     }
@@ -761,7 +765,7 @@ class Workouts extends Model {
     }
     defaultValue() {
         const self = this;
-        return workoutsFile.map((w) => Object.assign(self.workoutModel.parse(w), {id: uuid()}));
+        return workoutsFile.map((w, index) => Object.assign(self.workoutModel.parse(w), {id: `builtin-${index}`}));
     }
     defaultIsValid(value) {
         const self = this;
@@ -774,7 +778,8 @@ class Workouts extends Model {
         if(empty(workouts)) {
             return self.default;
         } else {
-            return self.default.concat(workouts);
+            const ids = new Set(workouts.map(workout => workout.id));
+            return self.default.filter(workout => !ids.has(workout.id)).concat(workouts);
         }
     }
     get(workouts, id) {
@@ -795,7 +800,7 @@ class Workouts extends Model {
     save(workout) {
         const self = this;
         console.log(`:models :workouts :save`);
-        idb.put(self.name, idb.setId(workout));
+        return idb.putChecked(self.name, idb.setId(workout));
     }
     remove(workouts, id) {
         const self = this;

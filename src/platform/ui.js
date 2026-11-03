@@ -1,0 +1,552 @@
+import { xf } from '../functions.js';
+import { serverRequest, serverAccount } from '../server/client.js';
+import { coachingData, coachingService } from '../coaching/service.js';
+import { toAppWorkout } from '../coaching/workouts.js';
+import { addDays } from '../coaching/domain.js';
+import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
+
+const routes = {
+    dashboard: ['Overview', 'Your training, in focus'],
+    calendar: ['Training calendar', 'Make room for progress'],
+    plan: ['Training plan', 'A purposeful path to your goal'],
+    coach: ['Coach', 'Guidance grounded in your training'],
+    library: ['Workout library', 'Find your next session'],
+    workout: ['Workout details', 'Know the work ahead'],
+    player: ['Ride', 'One interval at a time'],
+    activities: ['Activities', 'Every ride is part of the story'],
+    progress: ['Progress', 'Consistency, made visible'],
+    devices: ['Devices', 'Connected and ready to ride'],
+    settings: ['Settings', 'Your profile and integrations'],
+};
+const devices = {
+    controllable: 'Smart trainer', heartRateMonitor: 'Heart rate',
+    powerMeter: 'Power meter', speedCadenceSensor: 'Speed / cadence',
+};
+const card = (title, body, className = '') => `<section class="panel ${className}"><h2>${title}</h2>${body}</section>`;
+const link = (route, text, className = '') => `<a class="${className}" href="#/${route}">${text}</a>`;
+const empty = (text, route = 'library', action = 'Browse workouts') =>
+    `<div class="empty-state"><p>${text}</p>${link(route, action, 'button secondary')}</div>`;
+const stat = (label, value, unit = '') => `<div class="stat"><span>${label}</span><strong>${value}<small>${unit}</small></strong></div>`;
+
+export async function launchPlatform(root, account) {
+    root.removeAttribute('role');
+    const mobile = /^\/mobile\/?$/.test(window.location.pathname);
+    document.body.classList.add('platform-app', ...(mobile ? ['mobile-app'] : []));
+    root.innerHTML = `<a class="skip-link" href="#main-content">Skip to content</a>
+        <aside class="sidebar"><a class="brand" href="${mobile ? '/mobile' : '/'}">auuki<span> / training</span></a>
+            <nav aria-label="Main navigation">${(mobile
+                ? ['dashboard', 'player', 'devices', 'activities', 'settings']
+                : Object.keys(routes).filter(r => !['workout'].includes(r)))
+                .map(route => link(route, routes[route][0])).join('')}</nav>
+            <div class="sidebar-bottom"><span>Train with intention.</span>
+                <a href="${mobile ? '/' : '/mobile'}">${mobile ? 'Desktop platform' : 'Mobile ride companion'}</a></div>
+        </aside>
+        <main id="main-content" tabindex="-1"><header class="platform-header">
+            <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title"></h1></div>
+            <div class="account-menu"><span>${escape(account.email)}</span><button class="secondary" data-action="logout">Sign out</button></div>
+        </header><div id="platform-message" role="status" aria-live="polite"></div>
+        <div id="platform-content"><p role="status">Loading your training...</p></div>
+        <div id="legacy-slot"></div></main>`;
+    const legacy = document.querySelector('.wrapper');
+    root.querySelector('#legacy-slot').append(legacy);
+    const content = root.querySelector('#platform-content');
+    const message = root.querySelector('#platform-message');
+    let db;
+    let engineModels;
+    const targetPower = (value, ftp) => engineModels.ftp.toAbsolute(value, ftp);
+    let route = 'dashboard';
+    let selectedId = '';
+    let integration;
+    let integrationLoading = false;
+    let syncTimer;
+    let busy = false;
+    let ready = false;
+    let lastRide;
+    let savingRide = false;
+    let advancedPlayer = false;
+    let state;
+    const sensorStatus = {};
+    const report = (text, error = false) => {
+        message.textContent = text;
+        message.setAttribute('role', error ? 'alert' : 'status');
+        message.classList.toggle('error', error);
+    };
+    const run = async action => {
+        if(busy) return;
+        busy = true;
+        root.setAttribute('aria-busy', 'true');
+        try { await action(); }
+        catch(error) { report(error.message || 'This action could not be completed.', true); }
+        finally { busy = false; root.removeAttribute('aria-busy'); }
+    };
+    const refresh = async () => {
+        const result = await serverRequest('coaching');
+        const service = coachingService();
+        service.data = result.data;
+        service.revision = result.revision;
+        xf.dispatch('coaching:changed');
+    };
+    const deviceButtons = () => `<div class="device-buttons">${Object.entries(devices).map(([id, name]) =>
+        `<button class="secondary" data-device="${id}">${name}<span data-sensor="${id}">${escape(sensorStatus[id] || 'Not connected')}</span></button>`).join('')}</div>`;
+    const workoutRow = workout => `<li class="session-row"><div><span class="eyebrow">${escape(workout.date)} / ${escape(workout.family)}</span>
+        <strong>${escape(workout.title)}</strong><span>${minutes(workout.duration)} &middot; ${escape(workout.status)}</span></div>
+        ${link(`workout/${encodeURIComponent(workout.id)}`, 'View session', 'button secondary')}</li>`;
+    const recommendation = data => data?.plan?.adaptations?.at(-1)?.reasoning ||
+        state?.readiness?.reason || data?.plan?.rationale ||
+        'Set your availability and a dated goal to build a plan around your life.';
+
+    function dashboard(data) {
+        const summary = trainingSummary(data);
+        const calendar = legacy.querySelector('training-calendar');
+        const extras = calendar ? calendar.entriesForDate(today(data)).filter(entry => entry.source !== 'coaching' && entry.workout)
+            .map(entry => ({id: entry.workout.id, family: entry.source === 'planned' ? 'Intervals.icu' : 'Calendar',
+                title: entry.name, description: entry.workout.meta.description, duration: entry.workout.meta.duration,
+                date: entry.date, status: 'scheduled', appWorkout: entry.workout})) : [];
+        const sessions = [...summary.upcoming.filter(w => w.date === today(data)), ...extras];
+        const next = summary.upcoming.filter(w => w.date > today(data));
+        const todayBody = sessions.length ? sessions.map(workout => `<p class="eyebrow">${escape(workout.family)} / ${minutes(workout.duration)}</p>
+            <h2 class="hero-title">${escape(workout.title)}</h2><p>${escape(workout.description)}</p>
+            ${profileGraph(workout.appWorkout || toAppWorkout(workout))}${link(`workout/${encodeURIComponent(workout.id)}`, 'Prepare to ride', 'button')}`).join('')
+            : `<h2 class="hero-title">${data?.plan?.status === 'active' ? 'Space to recover.' : 'Your next ride starts here.'}</h2>
+                <p>${data?.plan?.status === 'active' ? 'No Coach session scheduled today. Follow your recovery guidance, or choose a ride.' : 'Build a training plan or choose a session from your library.'}</p>
+                ${link(data?.plan ? 'library' : 'coach', data?.plan ? 'Choose a workout' : 'Set up your Coach', 'button')}`;
+        if(mobile) return `<section class="mobile-today panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
+            ${db.elapsed > 0 ? card('Ride recovery', `<p>A ${time(db.elapsed)} ride is saved on this device. Reconnect your trainer before resuming.</p>${link('player', 'Return to ride', 'button')}`) : ''}
+            ${card('Connect & ride', `${deviceButtons()}${link('player', 'Open ride controls', 'button')}`)}
+            ${card('Up next', next.length ? `<ul class="session-list">${next.slice(0, 2).map(workoutRow).join('')}</ul>` : '<p>No upcoming sessions.</p>')}`;
+        return `<div class="dashboard-grid"><section class="panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
+            ${card('This week', `<div class="stats">${stat('Ride time', number(summary.seconds / 3600, 1), 'h')}${stat('Rides', summary.week.length)}
+                ${stat('Plan completed to date', summary.adherence == null ? '--' : `${Math.round(summary.adherence * 100)}%`)}</div>
+                <p class="muted">${summary.due ? `${summary.completed} of ${summary.due} scheduled sessions through today completed or substituted.` : 'No plan sessions due yet.'}</p>
+                ${weekChart(summary)}${link('progress', 'Explore your progress')}`)}
+            ${card('From your Coach', `<p class="coach-note">${escape(recommendation(data))}</p><p class="muted">Conservative, deterministic guidance. Not medical advice.</p>${link('coach', 'Review guidance')}`)}
+            ${card('Coming next', next.length ? `<ul class="session-list">${next.slice(0, 3).map(workoutRow).join('')}</ul>${link('calendar', 'Open calendar')}` :
+                empty('No future Coach sessions scheduled.', 'coach', 'Build a plan'))}</div>`;
+    }
+    function weekChart(summary) {
+        const maximum = Math.max(3600, ...summary.days.map(day => day.seconds));
+        return `<div class="week-chart" role="img" aria-label="Ride duration in minutes for the last seven days">${summary.days.map(day =>
+            `<div><span>${Math.round(day.seconds / 60)}</span><i style="height:${Math.max(2, day.seconds / maximum * 100)}px"></i>
+                <small>${escape(new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, {weekday: 'short'}))}</small></div>`).join('')}</div>`;
+    }
+    function library() {
+        return `<div class="toolbar"><label>Search workouts<input type="search" id="workout-search" placeholder="Name or category" value="${escape(search)}"></label>
+            <label class="button secondary">Import .ZWO / .FIT course<input type="file" id="platform-upload" accept=".zwo,.fit" multiple></label>
+            ${link('editor', 'Workout editor', 'button secondary')}</div><div class="workout-grid">${db.workouts.filter(workout =>
+                `${workout.meta.name} ${workout.meta.category}`.toLowerCase().includes(search.toLowerCase())).map(workout => `
+                <article class="panel workout-card"><p class="eyebrow">${escape(workout.meta.category || 'Structured session')}</p>
+                    <h2>${escape(workout.meta.name)}</h2>${profileGraph(workout)}
+                    <p class="muted">${workout.meta.duration ? minutes(workout.meta.duration) : `${number(workout.meta.distance / 1000, 1)} km course`}</p>
+                    ${link(`workout/${encodeURIComponent(workout.id)}`, 'View workout', 'button secondary')}</article>`).join('') || empty('No workouts match your search.')}</div>`;
+    }
+    function selectedWorkout(data) {
+        const planned = data?.plan?.workouts.find(workout => workout.id === selectedId);
+        const external = legacy.querySelector('training-calendar')?.plannedWorkouts.find(workout => workout.id === selectedId);
+        return planned ? toAppWorkout(planned) : db.workouts.find(workout => workout.id === selectedId) || external;
+    }
+    function details(data) {
+        const workout = selectedWorkout(data);
+        if(!workout) return empty('This workout is not available on this device.');
+        const planned = data?.plan?.workouts.find(w => w.id === selectedId);
+        const canPrepare = !planned || (data.plan.status === 'active' && planned.date === today(data) && planned.status === 'scheduled');
+        return card(escape(workout.meta.name), `<p class="eyebrow">${escape(workout.meta.category)} / ${minutes(workout.meta.duration || 0)}</p>
+            ${profileGraph(workout)}<p class="description">${escape(workout.meta.description || 'No description supplied.')}</p>
+            ${planned ? `<p>${escape(planned.date)} &middot; ${escape(planned.status)} &middot; Expected RPE ${planned.expectedRpe}/10</p>` : ''}
+            <div class="button-row">${canPrepare ? '<button data-action="prepare">Prepare workout</button>' :
+                '<p class="muted">Coach sessions can be ridden on their scheduled date while unresolved.</p>'}${link('devices', 'Connect devices', 'button secondary')}</div>
+            <ol class="interval-list">${(workout.intervals || []).flatMap(interval => interval.steps || []).map(step => `<li>
+                ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}</li>`).join('')}</ol>`);
+    }
+    function plan(data) {
+        const plan = data?.plan;
+        if(!plan) return empty('A plan built for your goal, availability and recent training.', 'coach', 'Create your training plan');
+        return `${card(escape(data.goal?.name || 'Your plan'), `<p class="eyebrow">${escape(plan.status)} / revision ${plan.revision}</p>
+            <p>${escape(plan.startDate)} - ${escape(plan.endDate)}</p><p>${escape(plan.rationale)}</p>
+            <div class="phase-track">${plan.phases.map(phase => `<div><strong>${escape(phase.type)}</strong>
+                <small>${escape(phase.startDate)} - ${escape(phase.endDate)}</small><p>${escape(phase.rationale)}</p></div>`).join('')}</div>`)}
+            ${card('Scheduled sessions', `<ul class="session-list">${plan.workouts.map(workoutRow).join('')}</ul>`)}
+            ${card('Plan changes', plan.adaptations.length ? plan.adaptations.slice(-10).reverse().map(adaptation =>
+                `<p><span class="eyebrow">${escape(adaptation.timestamp)}</span><br>${escape(adaptation.reasoning)}</p>`).join('') :
+                '<p>Adaptations will appear after recorded rides, feedback or missed-session reviews.</p>')}`;
+    }
+    function activities(data) {
+        const rides = [...(data?.activities || [])].sort((a, b) => b.start.localeCompare(a.start));
+        return `${lastRide ? card('Ride saved', `<div class="stats">${stat('Duration', time(lastRide.duration))}
+            ${stat('Average power', number(lastRide.averagePower), 'W')}${stat('Average HR', number(lastRide.averageHeartRate), 'bpm')}</div>
+            <p>Saved to this account's history. Add session feedback in Coach to inform your next session.</p>${link('coach', 'Add feedback', 'button secondary')}`) : ''}
+            ${card('Ride history', rides.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
+                <th>Avg power</th><th>Avg HR</th><th>Source</th><th>File</th></tr></thead><tbody>${rides.map(activity =>
+                `<tr><td><strong>${escape(activity.name || 'Cycling activity')}</strong><small>${escape(activity.day)}</small></td>
+                <td>${time(activity.duration)}</td><td>${activity.distance == null ? '--' : `${number(activity.distance / 1000, 1)} km`}</td>
+                <td>${number(activity.averagePower)} W</td><td>${number(activity.averageHeartRate)} bpm</td><td>${escape(activity.source)}
+                    <small>${escape(activity.externalId)}</small></td><td>${db.activity.some(a => a.id === activity.id)
+                    ? `<div class="button-row"><button class="secondary" data-download="${escape(activity.id)}">FIT</button>
+                        ${integration?.connected ? `<button class="secondary" data-upload-ride="${escape(activity.id)}">Send to Intervals.icu</button>` : ''}</div>` : '--'}</td></tr>`).join('')}</tbody></table></div>` :
+                empty('Your rides will appear here after you finish a workout or connect Intervals.icu.', 'settings', 'Connect an integration'))}
+            <p class="muted">Missing measurements are shown as --, not estimated. FIT downloads are retained locally for the most recent seven rides.</p>`;
+    }
+    function progress(data) {
+        const summary = trainingSummary(data);
+        return `${card('Last seven days', `<div class="stats">${stat('Ride time', number(summary.seconds / 3600, 1), 'h')}
+            ${stat('Cycling activities', summary.week.length)}${stat('Plan completion to date', summary.adherence == null ? '--' : `${Math.round(summary.adherence * 100)}%`)}</div>
+            ${weekChart(summary)}<p class="muted">Duration includes cycling activities in your normalized history. Plan completion is completed/substituted sessions divided by all sessions scheduled through today.</p>`)}
+            ${state ? `<div class="dashboard-grid">${card('Training load', `<p class="eyebrow">Scale: ${escape(state.loadSource)} / confidence: ${escape(state.loadConfidence)}</p>
+                <div class="stats">${stat('Weekly load', number(state.weeklyLoad, 1))}${stat('Chronic load', number(state.chronicLoad, 1))}
+                ${stat('Acute load', number(state.acuteLoad, 1))}</div><p class="muted">${escape(state.loadExplanation)}</p>`)}
+                ${card('Power profile', `<p class="muted">Best observed efforts, not necessarily maximal. Missing efforts are not evidence of decline.</p>
+                <div class="table-scroll"><table><thead><tr><th>Duration</th><th>Watts</th><th>W/kg</th></tr></thead><tbody>
+                ${state.powerDuration.map(effort => `<tr><td>${time(effort.seconds)}</td><td>${number(effort.watts)}</td><td>${number(effort.wKg, 2)}</td></tr>`).join('')}</tbody></table></div>`)}</div>` :
+                card('Training metrics', '<p>Configure your Coach profile to calculate training-load and power metrics from your history. No inferred fitness score is shown without sufficient data.</p>')}`;
+    }
+    function player() {
+        return `<section class="ride-panel"><div class="ride-heading"><div><p class="eyebrow">Workout player</p><h2>${escape(db.workout?.meta?.name || 'Free ride')}</h2></div>
+            <span id="ride-status" role="status"></span></div>
+            <div class="ride-sensors">${deviceButtons()}</div>
+            <div class="ride-metrics">${[['power', 'Power', 'W'], ['target', 'Target', 'W'], ['countdown', 'Interval left', ''],
+                ['cadence', 'Cadence', 'rpm'], ['hr', 'Heart rate', 'bpm'], ['elapsed', 'Elapsed', '']].map(([key, label, unit]) =>
+                `<div class="ride-metric ${key === 'power' ? 'primary' : ''}"><span>${label}</span><strong id="ride-${key}">--</strong><small>${unit}</small></div>`).join('')}</div>
+            <div class="interval-context"><span id="ride-interval"></span><span id="ride-next"></span><span id="ride-remaining"></span></div>
+            <progress id="ride-progress" max="1" value="0" aria-label="Workout progress"></progress>
+            <div class="ride-actions"><button data-action="ride-toggle" id="ride-toggle">Start workout</button>
+                <button class="secondary" data-action="ride-skip">Skip interval</button>
+                <button class="secondary" data-action="ride-finish">Finish & save</button></div>
+            <div class="ride-adjust"><label>Trainer mode<select id="ride-mode"><option value="erg">ERG</option>
+                <option value="resistance">Resistance</option><option value="sim">Slope</option></select></label>
+                <button class="secondary" data-action="target-down" aria-label="Decrease current target">-</button>
+                <span id="ride-adjust-value"></span><button class="secondary" data-action="target-up" aria-label="Increase current target">+</button></div>
+            <p class="muted" id="ride-recovery">${db.elapsed ? 'Ride recovered on this device. Reconnect sensors before resuming.' : 'Connect a trainer and sensors, then start. Your ride is recovered locally after an interruption.'}</p>
+            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Workout profile and original trainer controls</summary><p>The controls below use the original Auuki workout engine.</p></details>
+        </section>`;
+    }
+    function settings() {
+        return `<div class="dashboard-grid">${card('Rider profile', `<p>These settings are private to this account on this device. Coach configuration is stored on the server.</p>
+            <form id="profile-form"><label>FTP (W)<input name="ftp" type="number" min="1" max="1500" value="${db.ftp}" required></label>
+                <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required></label>
+                <button>Save profile</button></form>${integration?.connected ? '<button class="secondary" data-action="import-profile">Use Intervals.icu FTP / weight</button>' : ''}
+                <p class="muted">After changing FTP, archive and regenerate an active plan before riding it.</p>`)}
+            ${card('Intervals.icu', integrationView())}
+            ${card('Private device backup', `<p>Back up this account's workout files, recent FIT recordings, settings and manual calendar to the server.</p>
+                <div class="button-row"><button class="secondary" data-action="backup">Save backup</button>
+                <button class="secondary" data-action="restore">Restore backup</button></div>
+                <p class="muted">Restore merges workout/recording files and replaces device settings/calendar. It does not import another account's data.</p>`)}
+            ${card('Your account', `<p>${escape(account.email)}</p><p>Coach history and imports are automatically saved to this server. Bluetooth pairings and ride recovery stay on this device.</p>
+                <button class="secondary" data-action="export">Export training history</button>
+                <form id="delete-account"><label>Confirm email to permanently delete this account and all server data
+                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`)}</div>`;
+    }
+    function integrationView() {
+        if(!integration) return '<p role="status">Loading integration status...</p>';
+        if(!integration.configured) return '<p>The server operator must configure the encryption key before connections are available.</p>';
+        if(!integration.connected) return `<p>Import cycling history into your Activities, analytics and Coach. Use a personal API key from Intervals.icu Settings; it is encrypted on this server, never stored in the browser.</p>
+            <form id="intervals-connect"><label>Personal API key<input name="apiKey" type="password" required autocomplete="off" maxlength="1024"></label>
+                <label>Import from<input name="oldest" type="date" value="${addDays(today(), -365)}" max="${today()}" required></label>
+                <button>Test & connect</button></form><p class="muted">Personal/self-hosted connections only. Strava-origin data is not available through the Intervals.icu API.</p>`;
+        return `<p class="eyebrow">${escape(integration.status)}</p><p>Last successful sync: ${integration.lastSuccess ? escape(new Date(integration.lastSuccess).toLocaleString()) : 'Not yet synced'}</p>
+            ${integration.nextDate ? `<p>Importing ${escape(integration.nextDate)} through ${escape(integration.through)} in 31-day batches.</p>` : ''}
+            ${integration.error ? `<p role="alert">${escape(integration.error)}</p>` : ''}
+            ${integration.retryAt && integration.status === 'queued' ? `<p>Retry after ${escape(new Date(integration.retryAt).toLocaleString())}</p>` : ''}
+            <div class="button-row"><button data-action="sync" ${['running', 'queued'].includes(integration.status) ? 'disabled' : ''}>${integration.lastSuccess ? 'Sync now' : 'Import history'}</button>
+                <button class="secondary" data-action="test-connection">Test connection</button>
+                <button class="secondary" data-action="disconnect">Disconnect</button></div>
+            <p class="muted">Disconnect removes credentials and stops imports. Imported history is retained. Future syncs recheck the last seven days for updates.</p>`;
+    }
+    async function loadIntegration() {
+        if(integrationLoading) return;
+        integrationLoading = true;
+        try {
+            const previous = integration;
+            integration = await serverRequest('integrations/intervals');
+            xf.dispatch('services', {intervals: integration.connected});
+            if(route === 'settings' && !root.querySelector('#intervals-connect:focus-within')) render();
+            if(previous && ['queued', 'running'].includes(previous.status) && integration.status === 'connected') {
+                await refresh();
+                report('Activity sync completed.');
+            }
+            clearTimeout(syncTimer);
+            if(['queued', 'running'].includes(integration.status)) syncTimer = setTimeout(loadIntegration, 2500);
+        } catch(error) { report(error.message, true); }
+        finally { integrationLoading = false; }
+    }
+    let search = '';
+    function render() {
+        if(!ready) return;
+        const data = coachingData();
+        const [title, subtitle] = routes[route] || ['Workout editor', 'Build a session'];
+        root.querySelector('#route-title').textContent = mobile && route === 'dashboard' ? 'Ready to ride?' : title;
+        root.querySelector('#route-subtitle').textContent = subtitle;
+        root.querySelectorAll('nav a').forEach(a => a.setAttribute('aria-current',
+            a.getAttribute('href') === `#/${route}` ? 'page' : 'false'));
+        document.body.dataset.route = route;
+        legacy.hidden = !['calendar', 'coach', 'devices', 'editor', 'player'].includes(route) || (route === 'player' && !advancedPlayer);
+        root.querySelector('#legacy-slot').classList.toggle('legacy-player', route === 'player');
+        content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? library()
+            : route === 'workout' ? details(data) : route === 'plan' ? plan(data)
+                : route === 'activities' ? activities(data) : route === 'progress' ? progress(data)
+                    : route === 'player' ? player() : route === 'settings' ? settings()
+                        : route === 'devices' ? `<p class="muted">Select your trainer and sensors below, then choose which device supplies each measurement.
+                            Connections and controls use the existing BLE / ANT+ engine.</p>
+                            ${!navigator.bluetooth ? '<p role="alert">Web Bluetooth is unavailable in this browser. Use Chrome/Edge on a supported platform and HTTPS or localhost. ANT+ requires Web Serial or WebUSB.</p>' : ''}`
+                            : route === 'coach' ? '<p class="muted">Your private server Coach uses your normalized activity history. Configure your profile and dated goal below.</p>' : '';
+        if(route === 'player') updateRide();
+    }
+    function navigate() {
+        const [name, id] = window.location.hash.replace(/^#\/?/, '').split('/');
+        route = Object.hasOwn(routes, name) || name === 'editor' ? name : 'dashboard';
+        try { selectedId = decodeURIComponent(id || ''); }
+        catch { selectedId = ''; }
+        report('');
+        render();
+        if(route === 'settings') void loadIntegration();
+        if(route === 'calendar') void legacy.querySelector('training-calendar').loadPlannedMonth();
+        root.querySelector('#route-title').focus?.();
+    }
+    function updateRide() {
+        if(!ready || route !== 'player') return;
+        const intervals = db.workout?.intervals || [];
+        const current = intervals[db.intervalIndex];
+        const next = current?.steps?.[db.stepIndex + 1] || intervals[db.intervalIndex + 1]?.steps?.[0];
+        const duration = db.workout?.meta?.duration;
+        const values = {
+            power: sensorStatus.controllable === 'Connected' || sensorStatus.powerMeter === 'Connected' ||
+                db.power1s > 0 ? number(db.power1s) : '--',
+            target: number(db.powerTarget), countdown: time(db.lapTime), cadence: db.cadence > 0 ? number(db.cadence) : '--',
+            hr: db.heartRate > 0 ? number(db.heartRate) : '--', elapsed: time(db.elapsed),
+            interval: intervals.length ? `Interval ${Math.min(intervals.length, db.intervalIndex + 1)} / ${intervals.length}` : 'Free ride',
+            next: next ? `Next: ${time(next.duration)} / ${next.power == null ? 'slope target' : `${number(targetPower(next.power, db.ftp))} W`}` : 'No next interval',
+            remaining: duration ? `${time(Math.max(0, duration - db.elapsed))} remaining` : '',
+            status: db.workoutStatus === 'done' ? 'Workout complete - finish to save' : db.watchStatus,
+            toggle: db.watchStatus === 'started' ? 'Pause' : db.elapsed > 0 ? 'Resume' : 'Start workout',
+            'adjust-value': db.mode === 'erg' ? `${number(db.powerTarget)} W` : db.mode === 'resistance'
+                ? `${number(db.resistanceTarget)}% resistance` : `${number(db.slopeTarget, 1)}% slope`,
+        };
+        Object.entries(values).forEach(([key, value]) => {
+            const element = root.querySelector(`#ride-${key}`);
+            if(element) element.textContent = value;
+        });
+        const progress = root.querySelector('#ride-progress');
+        if(progress) progress.value = duration ? Math.min(1, db.elapsed / duration) : 0;
+        const mode = root.querySelector('#ride-mode');
+        if(mode && document.activeElement !== mode) mode.value = db.mode;
+        root.querySelector('[data-action="ride-skip"]').disabled = db.watchStatus !== 'started' || !intervals.length;
+        root.querySelector('[data-action="ride-finish"]').disabled = !db.elapsed;
+        root.querySelector('[data-action="ride-toggle"]').disabled = savingRide;
+    }
+
+    root.addEventListener('input', event => {
+        if(event.target.id !== 'workout-search') return;
+        search = event.target.value;
+        const position = event.target.selectionStart;
+        render();
+        const input = root.querySelector('#workout-search');
+        input.focus();
+        input.setSelectionRange(position, position);
+    });
+    root.addEventListener('toggle', event => {
+        if(event.target.id !== 'ride-advanced') return;
+        advancedPlayer = event.target.open;
+        legacy.hidden = !advancedPlayer;
+    }, true);
+    root.addEventListener('change', event => {
+        if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
+        if(event.target.id === 'platform-upload') void run(async () => {
+            const { models } = await import('../models/models.js');
+            for(const file of event.target.files) {
+                const {result, name} = await models.workout.readFromFile(file);
+                const workout = models.workout.parse(result, name);
+                await models.workouts.save(workout);
+                db.workouts.push(workout);
+            }
+            render();
+            report('Workout files imported.');
+        });
+    });
+    root.addEventListener('submit', event => {
+        if(!['profile-form', 'intervals-connect', 'delete-account'].includes(event.target.id)) return;
+        event.preventDefault();
+        const form = event.target;
+        const values = new FormData(form);
+        void run(async () => {
+            if(form.id === 'profile-form') {
+                xf.dispatch('ui:ftp-set', Number(values.get('ftp')));
+                xf.dispatch('ui:weight-set', Number(values.get('weight')));
+                report('Device profile saved.');
+            } else if(form.id === 'delete-account') {
+                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before deleting the account.');
+                if(!confirm('Permanently delete this account, all server training data and integrations?')) return;
+                await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
+                window.localStorage.setItem('auuki-session-change', crypto.randomUUID());
+                window.location.reload();
+            } else {
+                const apiKey = values.get('apiKey');
+                form.reset();
+                integration = await serverRequest('integrations/intervals', {method: 'PUT',
+                    body: {apiKey, oldest: values.get('oldest')}});
+                render();
+                report('Intervals.icu connected. Choose Import history to begin.');
+            }
+        });
+    });
+    root.addEventListener('click', event => {
+        const device = event.target.closest('[data-device]')?.dataset.device;
+        if(device) { xf.dispatch(`ui:ble:${device}:switch`); return; }
+        const download = event.target.closest('[data-download]')?.dataset.download;
+        if(download) {
+            void run(async () => { const {models} = await import('../models/models.js'); await models.activity.download(download); });
+            return;
+        }
+        const upload = event.target.closest('[data-upload-ride]')?.dataset.uploadRide;
+        if(upload) {
+            void run(async () => {
+                const {models} = await import('../models/models.js');
+                const {idb} = await import('../storage/idb.js');
+                const record = await idb.get('activity', upload);
+                const result = await models.api.intervals.uploadWorkout(record);
+                if(result !== ':success') throw new Error('Intervals.icu upload failed. Check the connection and retry.');
+                report('Recording sent to Intervals.icu. Run Sync to refresh provider metadata.');
+            });
+            return;
+        }
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if(!action) return;
+        void run(async () => {
+            if(action === 'logout') {
+                if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
+                await serverRequest('logout', {method: 'POST', body: {}});
+                window.localStorage.setItem('auuki-session-change', crypto.randomUUID());
+                serverAccount.email = null;
+                window.location.reload();
+            } else if(action === 'prepare') {
+                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before selecting another workout.');
+                const workout = selectedWorkout(coachingData());
+                if(workout.coachingWorkoutId) {
+                    if(coachingData().profile.ftp !== db.ftp) throw new Error('Update device FTP to match your Coach profile, or regenerate your plan.');
+                    xf.dispatch('ui:coaching:select', workout);
+                } else xf.dispatch('workout', workout);
+                window.location.hash = '/player';
+            } else if(action === 'ride-toggle') {
+                if(db.watchStatus === 'started') xf.dispatch('ui:watchPause');
+                else if(db.elapsed > 0) xf.dispatch('ui:watchResume');
+                else { xf.dispatch('ui:watchStart'); xf.dispatch('ui:workoutStart'); }
+            } else if(action === 'ride-skip') xf.dispatch('ui:watchLap');
+            else if(action === 'ride-finish') {
+                if(db.watchStatus === 'started') xf.dispatch('ui:watchPause');
+                xf.dispatch('ui:watchStop');
+            } else if(action === 'target-up' || action === 'target-down') {
+                const target = db.mode === 'erg' ? 'power' : db.mode === 'resistance' ? 'resistance' : 'slope';
+                xf.dispatch(`ui:${target}-target-${action === 'target-up' ? 'inc' : 'dec'}`);
+            } else if(action === 'sync') {
+                integration = await serverRequest('integrations/intervals/sync', {method: 'POST', body: {}});
+                render();
+                void loadIntegration();
+            } else if(action === 'test-connection') {
+                await serverRequest('integrations/intervals/test', {method: 'POST', body: {}});
+                report('Intervals.icu connection is working.');
+            } else if(action === 'disconnect') {
+                if(!confirm('Disconnect Intervals.icu? Imported activities will be kept.')) return;
+                integration = await serverRequest('integrations/intervals', {method: 'DELETE', body: {}});
+                clearTimeout(syncTimer);
+                render();
+            } else if(action === 'backup' || action === 'restore') {
+                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before changing device data.');
+                const {createBackup, restoreBackup} = await import('../server/backup.js');
+                const saved = await serverRequest('backup');
+                if(action === 'backup') {
+                    if(saved.data && !confirm('Replace the existing server backup with this device’s data?')) return;
+                    await serverRequest('backup', {method: 'PUT', body: {revision: saved.revision, data: await createBackup(db.workouts)}});
+                    report('Private device backup saved.');
+                } else {
+                    if(!saved.data) throw new Error('No server backup is available.');
+                    if(!confirm('Merge the backup and replace this device’s settings and manual calendar?')) return;
+                    await restoreBackup(saved.data);
+                    window.location.reload();
+                }
+            } else if(action === 'export') {
+                const {fileHandler} = await import('../file.js');
+                fileHandler.download()(JSON.stringify(coachingData(), null, 2), 'auuki-training-history.json', 'application/json');
+            } else if(action === 'import-profile') {
+                const {models} = await import('../models/models.js');
+                const settings = await models.api.intervals.getAthlete();
+                if(settings.ftp > 0) xf.dispatch('ui:ftp-set', settings.ftp);
+                if(settings.weight > 0) xf.dispatch('ui:weight-set', settings.weight);
+                render();
+                report('Available FTP and body mass imported. Regenerate an active plan if FTP changed.');
+            }
+        });
+    });
+    window.addEventListener('hashchange', navigate);
+    window.addEventListener('session:expired', () => { clearTimeout(syncTimer); ready = false; });
+    window.addEventListener('pwa:error', event => report(event.detail, true));
+    navigator.serviceWorker?.addEventListener('message', event => {
+        if(event.data?.type === 'CACHE_ERROR') report('Some app assets could not be cached for offline use. Your active ride is unaffected.', true);
+    });
+    Object.keys(devices).forEach(id => {
+        for(const [event, label] of [['connected', 'Connected'], ['connecting', 'Connecting...'], ['disconnected', 'Disconnected']]) {
+            xf.sub(`ble:${id}:${event}`, () => {
+                sensorStatus[id] = label;
+                root.querySelectorAll(`[data-sensor="${id}"]`).forEach(element => { element.textContent = label; });
+                if(label === 'Disconnected' && db?.watchStatus === 'started') {
+                    report(`${devices[id]} disconnected. Reconnect the device; workout recording is still active.`, true);
+                }
+            });
+        }
+    });
+    xf.sub('db:page', page => {
+        if(!ready) return;
+        if(page === 'home' && route !== 'player') window.location.hash = '/player';
+    });
+    xf.sub('coaching:error', error => report(error, true));
+    xf.sub('coaching:changed', () => {
+        if(!ready) return;
+        const data = coachingData();
+        if(data?.profile) {
+            import('../coaching/state.js').then(({estimateState}) => {
+                try { state = estimateState(data.activities, data.profile, today(data)); }
+                catch(error) { report(error.message, true); }
+                if(['dashboard', 'progress', 'plan'].includes(route)) render();
+            });
+        }
+        if(!['player', 'settings', 'coach'].includes(route)) render();
+    });
+    xf.sub('activity:saving', () => { savingRide = true; updateRide(); });
+    xf.sub('activity:save:success', ride => {
+        savingRide = false;
+        lastRide = ride;
+        if(route === 'player') window.location.hash = '/activities';
+    });
+    xf.sub('activity:save:fail', () => { savingRide = false; report('Ride could not be saved. Keep this page open and export your FIT recording.', true); });
+    xf.sub('action:planned', () => { if(ready && route === 'dashboard') render(); });
+    for(const key of ['elapsed', 'lapTime', 'power1s', 'powerTarget', 'cadence', 'heartRate', 'watchStatus',
+        'workoutStatus', 'intervalIndex', 'mode', 'resistanceTarget', 'slopeTarget']) xf.sub(`db:${key}`, updateRide);
+    const started = new Promise((resolve, reject) => {
+        window.addEventListener('app:ready', resolve, {once: true});
+        window.addEventListener('app:error', event => reject(new Error(event.detail.data)), {once: true});
+    });
+    await import('../index.js');
+    ({db} = await import('../db.js'));
+    ({models: engineModels} = await import('../models/models.js'));
+    await started;
+    ready = true;
+    legacy.querySelectorAll('connection-switch, protocol-switch, tab-btn, source-switch').forEach(element => {
+        element.setAttribute('role', 'button');
+        element.tabIndex = 0;
+        element.addEventListener('keydown', event => {
+            if(!['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            element.dispatchEvent(new Event('pointerup', {bubbles: true}));
+        });
+    });
+    if(coachingData()?.profile) {
+        const {estimateState} = await import('../coaching/state.js');
+        state = estimateState(coachingData().activities, coachingData().profile, today(coachingData()));
+    }
+    navigate();
+    void loadIntegration();
+    if(db.elapsed > 0) {
+        report('A previous ride was recovered. Reconnect your trainer and resume in Ride.');
+        window.location.hash = '/player';
+    }
+    // Keep multi-device edits explicit; never overwrite a dirty form on focus.
+    window.addEventListener('focus', () => {
+        if(ready && !busy && !['coach', 'settings', 'player'].includes(route)) void run(refresh);
+    });
+}

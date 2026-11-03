@@ -13,7 +13,14 @@ export async function serverRequest(path, {method = 'GET', body, account = serve
         throw new Error('The optional Auuki backend is unavailable on this host.');
     }
     const result = await response.json();
-    if(!response.ok) throw new Error(result.error || `Server request failed (${response.status}).`);
+    if(!response.ok) {
+        const error = new Error(result.error || `Server request failed (${response.status}).`);
+        error.status = response.status;
+        if(response.status === 401 && account && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('session:expired', {detail: error.message}));
+        }
+        throw error;
+    }
     return result;
 }
 

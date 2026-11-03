@@ -129,6 +129,16 @@ function IDB(args = {}) {
         return transaction(storeName, 'put', item, 'readwrite');
     }
 
+    function putChecked(storeName, item) {
+        return new Promise((resolve, reject) => {
+            const write = db.transaction(storeName, 'readwrite');
+            write.objectStore(storeName).put(item);
+            write.oncomplete = () => resolve(item);
+            write.onabort = () => reject(write.error || new Error('Unable to save device data.'));
+            write.onerror = () => reject(write.error || new Error('Unable to save device data.'));
+        });
+    }
+
     function get(storeName, key) {
         return transaction(storeName, 'get', key, 'readonly');
     }
@@ -163,6 +173,7 @@ function IDB(args = {}) {
         deleteStore,
         add,
         put,
+        putChecked,
         get,
         getAll,
         remove,

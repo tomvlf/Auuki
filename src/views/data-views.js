@@ -1759,7 +1759,8 @@ class Theme extends DataView {
     }
     render() {
         this.textContent = equals(this.state, 'DARK') ? 'DARK' : equals(this.state, 'WHITE') ? 'WHITE' : 'AUTO';
-        document.body.className =  equals(this.state, 'DARK') ? 'dark-theme' : equals(this.state, 'WHITE') ? 'white-theme' : 'auto-theme';
+        document.body.classList.remove('dark-theme', 'white-theme', 'auto-theme');
+        document.body.classList.add(equals(this.state, 'DARK') ? 'dark-theme' : equals(this.state, 'WHITE') ? 'white-theme' : 'auto-theme');
     }
 }
 

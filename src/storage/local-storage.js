@@ -3,6 +3,7 @@
 //
 
 import { equals, exists, existance } from '../functions.js';
+import { accountStorage } from './account.js';
 
 function LocalStorageItem(args = {}) {
     const defaults = {
@@ -31,7 +32,7 @@ function LocalStorageItem(args = {}) {
     }
 
     function get() {
-        const value = window.localStorage.getItem(`${key}`);
+        const value = accountStorage.getItem(`${key}`);
 
         if(!exists(value)) {
             console.warn(`Trying to get non-existing value from Local Storage at key ${key}!`);
@@ -43,17 +44,17 @@ function LocalStorageItem(args = {}) {
 
     function set(value) {
         if(isValid(value)) {
-            window.localStorage.setItem(`${key}`, encode(value));
+            accountStorage.setItem(`${key}`, encode(value));
             return value;
         } else {
             console.warn(`Trying to enter invalid ${key} value in Local Storage: ${typeof value}`, value);
-            window.localStorage.setItem(`${key}`, fallback);
+            accountStorage.setItem(`${key}`, fallback);
             return fallback;
         }
     }
 
     function remove() {
-        window.localStorage.removeItem(`${key}`);
+        accountStorage.removeItem(`${key}`);
     }
 
     return Object.freeze({
@@ -65,4 +66,3 @@ function LocalStorageItem(args = {}) {
 }
 
 export { LocalStorageItem };
-

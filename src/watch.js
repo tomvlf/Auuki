@@ -5,7 +5,7 @@ import { ControlMode, } from './ble/enums.js';
 import { TimerStatus, EventType, } from './activity/enums.js';
 
 // const timer = new Worker('./timer.js');
-const timer = new Worker(new URL('./timer.js', import.meta.url));
+const timer = new Worker(new URL('./timer.js', import.meta.url), {type: 'module'});
 
 class Watch {
     constructor(args) {
