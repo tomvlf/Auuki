@@ -4,6 +4,10 @@ import { Sound } from './sound.js';
 import { idb } from './storage/idb.js';
 import { ControlMode, } from './ble/enums.js';
 import { TimerStatus, } from './activity/enums.js';
+import { coachingService, initializeCoaching } from './coaching/service.js';
+import { fromRecordedRide } from './coaching/normalizer.js';
+import { localDay } from './coaching/domain.js';
+import { toAppWorkout } from './coaching/workouts.js';
 
 // import { trainerMock } from './simulation-scripts.js';
 
@@ -325,6 +329,27 @@ xf.reg(`ui:volume-up`, (_, db) => {
 xf.reg('workout', (workout, db) => {
     db.workout = models.workout.set(workout);
 });
+xf.reg('ui:coaching:select', (workout, db) => {
+    try {
+        const data = coachingService().data, profile = data.profile;
+        const current = data.plan?.workouts.find(w => w.id === workout.coachingWorkoutId);
+        if(data.plan?.status !== 'active' || !current || current.status !== 'scheduled' ||
+           current.date !== localDay(new Date().toISOString(), profile.timeZone)) {
+            throw new Error('Only unresolved workouts scheduled for today in the active coaching plan can be started.');
+        }
+        if(profile.ftp == null) {
+            throw new Error('FTP is unavailable. Use duration/RPE guidance, or set FTP and regenerate for power-based execution.');
+        }
+        if(profile.ftp !== db.ftp) {
+            throw new Error('FTP has changed since plan creation. Archive and regenerate the coaching plan before starting its workouts.');
+        }
+        db.workout = models.workout.set(toAppWorkout(current));
+        xf.dispatch('ui:page-set', 'home');
+    } catch(error) {
+        console.error('Unable to start coaching workout:', error);
+        xf.dispatch('coaching:error', error.message);
+    }
+});
 xf.reg('ui:workout:select', (id, db) => {
     db.workout = models.workouts.get(db.workouts, id);
 });
@@ -343,9 +368,19 @@ xf.reg('ui:workout:upload', async function(files, db) {
     }
 
 });
-xf.reg('watch:stopped', (_, db) => {
+xf.reg('watch:stopped', async (_, db) => {
     try {
-        models.activity.createFromCurrent(db);
+        const record = models.activity.createFromCurrent(db);
+        try {
+            const coach = coachingService();
+            await coach.recordRide(fromRecordedRide(db, record.id, record.summary.timestamp),
+                db.workout?.coachingWorkoutId);
+            await coach.advance();
+            xf.dispatch('coaching:changed');
+        } catch(error) {
+            console.error('Ride saved, but coaching could not be updated:', error);
+            xf.dispatch('coaching:error', `Ride saved, but coaching update failed: ${error.message}`);
+        }
         xf.dispatch('activity:save:success');
     } catch (err) {
         console.error(`Error on activity save: `, err);
@@ -429,6 +464,14 @@ xf.reg('app:start', async function(_, db) {
     await idb.start('store', 3, ['session', 'workouts', 'activity']);
     db.workouts = await models.workouts.restore();
     db.activity = await models.activity.restore();
+    try {
+        await initializeCoaching();
+        await coachingService().advance();
+        xf.dispatch('coaching:changed');
+    } catch(error) {
+        console.error('Unable to review coaching plan:', error);
+        xf.dispatch('coaching:error', error.message);
+    }
     db.workout = models.workout.restore(db);
     models.planned.restore();
 
@@ -476,4 +519,3 @@ function start () {
 start();
 
 export { db };
-

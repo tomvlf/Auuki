@@ -12,6 +12,13 @@ Auuki is a powerful, no-nonsense app built for hammering out **structured workou
 * Recording of native **RR intervals** in the .FIT file
 * Built-in structured workouts to get you started
 * **Intervals.icu and Strava** integrations for seamless syncing and uploads
+* On-device **adaptive cycling coaching** with dated goals, availability-aware
+  periodisation, structured workouts and deterministic post-ride adaptation
+
+The coach is available in **Workouts > Calendar** and works without an LLM.
+See the [coaching guide](doc/coaching.md) for setup, history import, calculation
+defaults, safety limits and known data limitations. It provides training decision
+support, not medical diagnosis or medical advice.
 
 Built as a **progressive web app (PWA)**, Auuki is fully browser-based and runs independently. It makes use of some of the most advanced Browser APIs like: Web Bluetooth, Web Serial, and Web Components. The web version is **free and open-source**, keeping everything on your device.
 Train anywhere, with full control directly in your browser.

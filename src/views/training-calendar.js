@@ -1,6 +1,10 @@
 import { xf } from '../functions.js';
 import { models } from '../models/models.js';
 import { isoDate } from '../utils.js';
+import { coachingService, coachingData } from '../coaching/service.js';
+import { toAppWorkout, exportZwo } from '../coaching/workouts.js';
+import { localDay } from '../coaching/domain.js';
+import { fileHandler } from '../file.js';
 
 const storageKey = 'training-calendar';
 const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -46,6 +50,7 @@ class TrainingCalendar extends HTMLElement {
             this.render();
         }, this.signal);
         xf.sub('action:planned', () => this.render(), this.signal);
+        xf.sub('coaching:changed', () => this.render(), this.signal);
         this.render();
     }
 
@@ -74,10 +79,25 @@ class TrainingCalendar extends HTMLElement {
             }));
     }
 
+    coachingEntries() {
+        try {
+            const plan = coachingData()?.plan;
+            return (plan && plan.status !== 'archived' ? plan.workouts : []).map(workout => ({
+                id: workout.id, date: workout.date, name: workout.title,
+                workout: toAppWorkout(workout), coaching: workout, source: 'coaching',
+            }));
+        } catch(error) {
+            console.error('Unable to load coaching sessions:', error);
+            this.storageError = error.message;
+            return [];
+        }
+    }
+
     entriesForDate(date) {
         return [
             ...this.entries.filter((entry) => entry.date === date),
             ...this.plannedEntries().filter((entry) => entry.date === date),
+            ...this.coachingEntries().filter(entry => entry.date === date),
         ];
     }
 
@@ -157,9 +177,10 @@ class TrainingCalendar extends HTMLElement {
                 <li class="training-calendar--entry">
                     <span>${escapeHTML(entry.name)}</span>
                     <div class="training-calendar--entry-actions">
-                        <button type="button" data-action="start"
-                                data-workout="${escapeHTML(entry.workout.id || '')}">Start</button>
-                        ${entry.source !== 'planned'
+                        ${entry.source !== 'coaching' || this.canStartCoaching(entry.coaching) ?
+                            `<button type="button" data-action="start"
+                                data-workout="${escapeHTML(entry.workout.id || '')}">Start</button>` : ''}
+                        ${entry.source === 'coaching' ? this.renderCoachingActions(entry) : entry.source !== 'planned'
                             ? `<button type="button" data-action="remove" data-entry="${escapeHTML(entry.id)}">Remove</button>`
                             : '<span class="training-calendar--source">Intervals.icu</span>'}
                     </div>
@@ -185,11 +206,36 @@ class TrainingCalendar extends HTMLElement {
             </section>`;
     }
 
+    renderCoachingActions(entry) {
+        const workout = entry.coaching;
+        const data = coachingService().data;
+        const today = localDay(new Date().toISOString(), data.profile.timeZone);
+        const activities = data.activities.filter(a => a.day === workout.date &&
+            !data.plan.workouts.some(w => w.matchedActivity === a.id));
+        return `<span>${escapeHTML(workout.status)}; ${Math.round(workout.targetLoad)} planned power-load points;
+            RPE ${workout.expectedRpe}. ${escapeHTML(workout.description)}</span>
+            <button type="button" data-action="coach-export" data-entry="${escapeHTML(entry.id)}">Export ZWO</button>
+            ${workout.status === 'scheduled' && workout.date <= today && data.plan.status === 'active' ? `
+                <button type="button" data-action="coach-missed" data-entry="${escapeHTML(entry.id)}">Missed</button>
+                <button type="button" data-action="coach-failed" data-entry="${escapeHTML(entry.id)}">Not completed</button>
+                ${activities.length ? `<select aria-label="Completed substitute ride" data-substitute="${escapeHTML(entry.id)}">
+                    ${activities.map(a => `<option value="${escapeHTML(a.id)}">${escapeHTML(a.day)}
+                        ${Math.round(a.duration / 60)} min</option>`).join('')}</select>
+                    <button type="button" data-action="coach-substitute" data-entry="${escapeHTML(entry.id)}">Use substitute</button>` : ''}
+            ` : ''}`;
+    }
+
+    canStartCoaching(workout) {
+        const data = coachingData();
+        return data.plan.status === 'active' && workout.status === 'scheduled' &&
+            workout.date === localDay(new Date().toISOString(), data.profile.timeZone);
+    }
+
     render() {
         this.innerHTML = `${this.renderMonth()}${this.renderSelectedDate()}`;
     }
 
-    onClick(event) {
+    async onClick(event) {
         const day = event.target.closest('[data-date]');
         if(day && this.contains(day)) {
             this.selectedDate = day.dataset.date;
@@ -200,7 +246,27 @@ class TrainingCalendar extends HTMLElement {
         const action = event.target.closest('[data-action]');
         if(!action || !this.contains(action)) return;
 
-        if(action.dataset.action === 'previous') {
+        if(action.dataset.action.startsWith('coach-')) {
+            try {
+                const service = coachingService();
+                const workout = service.data.plan.workouts.find(w => w.id === action.dataset.entry);
+                if(!workout) throw new Error('Coaching workout not found.');
+                if(action.dataset.action === 'coach-export') {
+                    fileHandler.download()(exportZwo(workout), `${workout.date}-${workout.family}.zwo`, 'application/xml');
+                } else {
+                    const select = [...this.querySelectorAll('[data-substitute]')]
+                        .find(el => el.dataset.substitute === workout.id);
+                    await service.resolve({workoutId: workout.id,
+                        trigger: action.dataset.action === 'coach-substitute' ? 'substituted' :
+                            action.dataset.action === 'coach-failed' ? 'failed' : 'missed',
+                        activityId: action.dataset.action === 'coach-substitute' ? select?.value : null});
+                    xf.dispatch('coaching:changed');
+                }
+            } catch(error) {
+                console.error('Coaching calendar action failed:', error);
+                this.storageError = error.message;
+            }
+        } else if(action.dataset.action === 'previous') {
             this.displayMonth = new Date(
                 this.displayMonth.getFullYear(),
                 this.displayMonth.getMonth() - 1,
@@ -232,8 +298,11 @@ class TrainingCalendar extends HTMLElement {
             const entry = this.entriesForDate(this.selectedDate)
                 .find((item) => String(item.workout.id || '') === action.dataset.workout);
             if(entry) {
-                xf.dispatch('workout', entry.workout);
-                xf.dispatch('ui:page-set', 'home');
+                if(entry.source === 'coaching') xf.dispatch('ui:coaching:select', entry.workout);
+                else {
+                    xf.dispatch('workout', entry.workout);
+                    xf.dispatch('ui:page-set', 'home');
+                }
             }
             return;
         } else {

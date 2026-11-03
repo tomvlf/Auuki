@@ -7,6 +7,7 @@ import './tabs.js';
 import './workout-list.js';
 import './planned-list.js';
 import './training-calendar.js';
+import './coaching-panel.js';
 import './active-list-item.js';
 import './activity-list.js';
 import './workout-graph.js';

@@ -589,6 +589,7 @@ class Activity extends Model {
         this.add(summary, db.activity);
         idb.put('activity', record);
         xf.dispatch('activity:add', summary);
+        return record;
     }
     add(activity, activityList) {
         activityList.unshift(activity);
