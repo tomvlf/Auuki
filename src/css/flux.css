@@ -1782,6 +1782,11 @@ navigation-action {
     color: var(--foreground-color-inactive);
     cursor: pointer;
 
+    &:focus-visible {
+        outline: 2px solid var(--foreground-color);
+        outline-offset: 2px;
+    }
+
     &.active {
         color: var(--foreground-color);
     }

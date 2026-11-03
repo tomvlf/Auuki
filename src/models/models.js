@@ -823,6 +823,7 @@ class Planned {
         const self = this;
         this.data = this.defaultValue();
         this.workoutModel = args.workoutModel;
+        this.api = args.api;
         this.athlete = {};
         this.storage = LocalStorageItem({
             key: 'planned',
@@ -896,6 +897,10 @@ class Planned {
                 }
             }
         }
+    }
+    async getIntervals(oldest, newest) {
+        const response = await this.api.intervals.wod(oldest, newest);
+        return this.workoutModel.fromIntervalsResponse(response);
     }
     async getAthlete(service) {
         const self = this;
