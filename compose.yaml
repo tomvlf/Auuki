@@ -1,6 +1,7 @@
 services:
   auuki:
-    build: .
+    image: ghcr.io/tomvlf/auuki:latest
     ports:
       - "8080:80"
     restart: unless-stopped
+    pull_policy: always
