@@ -2565,6 +2565,38 @@ body.white-theme {
     padding: 1.5em;
 }
 
+coaching-panel,
+training-calendar {
+    display: block;
+}
+
+coaching-panel {
+    text-align: left;
+    font-size: 1.4em;
+    line-height: 1.5;
+    margin-bottom: 2em;
+}
+
+coaching-panel form,
+coaching-panel label {
+    display: grid;
+    gap: 0.5em;
+    margin: 0.8em 0;
+}
+
+coaching-panel input,
+coaching-panel textarea {
+    color: var(--foreground-color);
+    background: var(--background-color-2);
+    border: 1px solid var(--white-opacity-01);
+    padding: 0.6em;
+    max-width: 100%;
+}
+
+.training-calendar--entry-actions {
+    flex-wrap: wrap;
+}
+
 .training-calendar--header {
     display: flex;
     align-items: center;
