@@ -10,7 +10,7 @@ function worker() {
         self: {location: {origin: 'https://cycling.example'}, clients: {claim: jest.fn().mockResolvedValue()},
             addEventListener: (event, handler) => { handlers[event] = handler; }},
         caches: {open: jest.fn().mockResolvedValue(cache), match: jest.fn().mockResolvedValue(null)},
-        fetch: jest.fn(), URL, Response,
+        fetch: jest.fn(), URL, Response, console: {warn: jest.fn()},
     };
     runInNewContext(readFileSync('src/sw.js', 'utf8'), context);
     return {handlers, cache, ...context};
@@ -71,4 +71,28 @@ test('PWA cache warming excludes API credentials, external URLs and invalid requ
     await work;
     expect(w.cache.add).toHaveBeenCalledTimes(1);
     expect(w.cache.add).toHaveBeenCalledWith('https://cycling.example/engine.hash.js');
+});
+
+test.each(['navigate', undefined])('cache quota failures do not break a valid network response (%s)', async mode => {
+    const w = worker();
+    const network = new Response('fresh app');
+    w.fetch.mockResolvedValue(network);
+    w.cache.put.mockRejectedValue(new Error('Quota exceeded'));
+    let response;
+    w.handlers.fetch({request: {method: 'GET', mode, url: 'https://cycling.example/app.js'},
+        respondWith: promise => { response = promise; }});
+    expect(await response).toBe(network);
+    expect(w.console.warn).toHaveBeenCalled();
+});
+
+test('unavailable cache reads fall back to the network for static assets', async () => {
+    const w = worker();
+    const network = new Response('fresh app');
+    w.caches.match.mockRejectedValue(new Error('Storage disabled'));
+    w.fetch.mockResolvedValue(network);
+    let response;
+    w.handlers.fetch({request: {method: 'GET', url: 'https://cycling.example/app.js'},
+        respondWith: promise => { response = promise; }});
+    expect(await response).toBe(network);
+    expect(w.console.warn).toHaveBeenCalled();
 });

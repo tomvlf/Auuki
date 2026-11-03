@@ -37,7 +37,11 @@ export class CoachingService {
         validateProfile(profile);
         if(this.data.plan?.status === 'active') throw new Error('Finish or archive the current plan before changing profile or goal.');
         if(this.data.activities.length && this.data.profile && this.data.profile.id !== profile.id) throw new Error('Existing coaching history belongs to a different athlete.');
-        return this.commit({...this.data, profile: JSON.parse(JSON.stringify(profile)),
+        const activities = this.data.activities.map(activity => normalizeActivity({
+            ...activity.original, providerIds: activity.providerIds,
+            rpe: activity.rpe, feedback: activity.feedback,
+        }, profile));
+        return this.commit({...this.data, activities, profile: JSON.parse(JSON.stringify(profile)),
             goal: JSON.parse(JSON.stringify(goal))});
     }
     snapshot(data, asOf, outcome = null) {

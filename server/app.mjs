@@ -150,6 +150,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
         }
         if(path === '/api/server/account' && request.method === 'DELETE') {
             if(body.confirm !== account.email) throw new HttpError(400, 'Confirm your account email to delete it.');
+            intervals.disconnect(account.id);
             db.prepare('DELETE FROM users WHERE id = ?').run(account.id);
             response.setHeader('Set-Cookie', cookie('', 0));
             return send(200, {success: true});

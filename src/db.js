@@ -20,6 +20,7 @@ let db = {
     cadence: models.cadence.default,
     speed: models.speed.default,
     sources: models.sources.default,
+    connectedDevices: {},
     smo2: models.smo2.default,
     thb: models.thb.default,
     coreBodyTemperature: 0,
@@ -117,6 +118,12 @@ let db = {
 
 
 xf.create(db);
+
+for(const source of ['ble:controllable', 'ble:powerMeter', 'ble:speedCadenceSensor',
+    'ble:heartRateMonitor', 'ant:controllable', 'ant:hrm']) {
+    xf.reg(`${source}:connected`, (_, state) => { state.connectedDevices[source] = true; });
+    xf.reg(`${source}:disconnected`, (_, state) => { state.connectedDevices[source] = false; });
+}
 
 // Data Screen
 xf.reg(models.heartRate.prop, (heartRate, db) => {
@@ -369,15 +376,16 @@ xf.reg('ui:workout:upload', async function(files, db) {
     }
 
 });
-xf.reg('watch:stopped', async (_, db) => {
+async function saveStoppedRide(_, db) {
     try {
         xf.dispatch('activity:saving');
-        const recording = models.activity.createFromCurrent(db);
+        const recording = models.activity.pendingRecording ? models.activity.retrySave(db)
+            : models.activity.createFromCurrent(db);
         const record = await recording;
-        await idb.putChecked('session', {id: 0, elapsed: 0});
         try {
             const coach = coachingService();
             await syncRecordedRides(coach);
+            db.activity = await models.activity.restore();
             await coach.advance();
             xf.dispatch('coaching:changed');
         } catch(error) {
@@ -390,7 +398,9 @@ xf.reg('watch:stopped', async (_, db) => {
         xf.dispatch('activity:save:fail');
     }
 
-});
+}
+xf.reg('watch:stopped', saveStoppedRide);
+xf.reg('ui:activity:retry-save', saveStoppedRide);
 xf.reg('activity:save:success', (e, db) => {
     models.session.reset(db);
 });

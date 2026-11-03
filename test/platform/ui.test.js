@@ -26,6 +26,7 @@ jest.mock('../../src/coaching/service.js', () => ({
 }));
 jest.mock('../../src/models/models.js', () => ({models: {
     ftp: {toAbsolute: (value, ftp) => value < 9 ? Math.round(value * ftp) : value},
+    activity: {},
     api: {intervals: {getAthlete: jest.fn()}},
 }}));
 jest.mock('../../src/functions.js', () => {
@@ -41,7 +42,7 @@ const go = async route => {
 };
 
 test('desktop shell wires every screen to real data, workout commands, accessible controls and integration settings', async () => {
-    document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar></div>';
+    document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar><connection-switch></connection-switch></div>';
     const calendar = document.querySelector('training-calendar');
     calendar.entriesForDate = () => [];
     calendar.plannedWorkouts = [];
@@ -54,6 +55,15 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(root.textContent).toContain('Your next ride starts here.');
     expect(root.querySelector('[aria-current="page"]').textContent).toBe('Overview');
     expect(root.querySelector('.skip-link')).not.toBeNull();
+    root.querySelector('.skip-link').click();
+    expect(document.activeElement.id).toBe('main-content');
+    const connection = document.querySelector('connection-switch');
+    const activate = jest.fn();
+    connection.addEventListener('pointerup', activate);
+    connection.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
+    expect(connection.getAttribute('role')).toBe('button');
+    expect(connection.tabIndex).toBe(0);
+    expect(activate).toHaveBeenCalledTimes(1);
 
     await go('plan');
     expect(root.textContent).toContain('Create your training plan');
@@ -92,6 +102,15 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
 
     await go('player');
     expect(root.querySelector('#ride-power').textContent).toBe('180');
+    db.connectedDevices = {};
+    db.sources = {power: 'ble:controllable'};
+    xf.dispatch('db:power1s', db);
+    expect(root.querySelector('#ride-power').textContent).toBe('--');
+    db.connectedDevices['ble:controllable'] = true;
+    xf.dispatch('db:power1s', db);
+    expect(root.querySelector('#ride-power').textContent).toBe('180');
+    delete db.connectedDevices;
+    delete db.sources;
     expect(root.querySelector('#ride-next').textContent).toContain('275 W');
     expect(root.querySelector('#ride-progress').value).toBe(0);
     root.querySelector('[data-action="ride-toggle"]').click();
@@ -99,7 +118,9 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(dispatch).toHaveBeenCalledWith('ui:watchStart');
     expect(dispatch).toHaveBeenCalledWith('ui:workoutStart');
     db.watchStatus = 'started';
+    db.workoutStatus = 'started';
     db.elapsed = 30;
+    db.lapTime = 30;
     xf.dispatch('db:elapsed', db);
     expect(root.querySelector('#ride-progress').value).toBe(.25);
     expect(root.querySelector('#ride-toggle').textContent).toBe('Pause');
@@ -114,6 +135,11 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     root.querySelector('[data-action="ride-skip"]').click();
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:watchLap');
+    db.intervalIndex = 1;
+    db.lapTime = 60;
+    xf.dispatch('db:intervalIndex', db);
+    expect(root.querySelector('#ride-progress').value).toBe(.5);
+    expect(root.querySelector('#ride-remaining').textContent).toBe('1:00 remaining');
     root.querySelector('[data-action="target-up"]').click();
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:power-target-inc');
@@ -123,6 +149,14 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(dispatch).toHaveBeenCalledWith('ui:resistance-target-dec');
     root.querySelector('[data-device="controllable"]').click();
     expect(dispatch).toHaveBeenCalledWith('ui:ble:controllable:switch');
+    xf.dispatch('ble:controllable:connected');
+    expect(dispatch).toHaveBeenCalledWith('sources', {
+        control: 'ble:controllable', power: 'ble:controllable',
+        cadence: 'ble:controllable', speed: 'ble:controllable',
+    });
+    dispatch.mockClear();
+    xf.dispatch('ble:controllable:connected');
+    expect(dispatch).not.toHaveBeenCalledWith('sources', expect.anything());
     db.watchStatus = 'started';
     xf.dispatch('ble:controllable:disconnected');
     expect(root.querySelector('#platform-message').textContent).toContain('disconnected');
@@ -130,6 +164,14 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     root.querySelector('[data-action="logout"]').click();
     await settle();
     expect(root.querySelector('#platform-message').textContent).toContain('Finish your current ride');
+    models.activity.pendingRecording = {id: 'failed'};
+    xf.dispatch('activity:save:fail');
+    expect(root.querySelector('#ride-unsaved').hidden).toBe(false);
+    expect(root.querySelector('#ride-toggle').disabled).toBe(true);
+    root.querySelector('[data-action="recover-save"]').click();
+    await settle();
+    expect(dispatch).toHaveBeenCalledWith('ui:activity:retry-save');
+    models.activity.pendingRecording = null;
 
     await go('settings');
     await settle();
@@ -156,4 +198,9 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:ftp-set', 280);
     expect(dispatch).toHaveBeenCalledWith('ui:weight-set', 73);
+    db.activity = [{id: 'pending', name: 'Local recording', duration: 60, pendingSync: true}];
+    await go('activities');
+    expect(root.textContent).toContain('Awaiting server synchronization');
+    expect(root.querySelector('[data-action="retry-rides"]')).not.toBeNull();
+    expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
 });

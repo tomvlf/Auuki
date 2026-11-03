@@ -10,7 +10,7 @@ export async function serverRequest(path, {method = 'GET', body, account = serve
         ...(body === undefined ? {} : {body: JSON.stringify(body)}),
     });
     if(!response.headers.get('content-type')?.includes('application/json')) {
-        throw new Error('The optional Auuki backend is unavailable on this host.');
+        throw new Error('The Auuki backend is unavailable on this host. Your loaded ride remains local; retry when the server is available.');
     }
     const result = await response.json();
     if(!response.ok) {

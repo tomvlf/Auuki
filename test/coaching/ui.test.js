@@ -35,7 +35,7 @@ test('coaching forms create a persistent plan that appears and adapts in the exi
         const start = localDay(new Date().toISOString(), form.elements.timeZone.value);
         form.elements.start.value = start;
         form.elements.date.value = addDays(start, 60);
-        form.elements.limits.value = JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map(d => [d, 60])));
+        for(let day = 0; day < 7; day++) form.elements[`day${day}`].value = '60';
         await panel.submit({target: form, preventDefault() {}, submitter: {value: 'configure'}});
         expect(panel.querySelector('[role=alert]')).toBeNull();
         const imports = panel.querySelector('[data-coach-form=import]');
@@ -48,6 +48,12 @@ test('coaching forms create a persistent plan that appears and adapts in the exi
         await panel.submit({target: generate, preventDefault() {}, submitter: {value: 'generate'}});
         expect(panel.querySelector('[role=alert]')).toBeNull();
         expect(service.data.plan.revision).toBe(1);
+        const sessions = service.data.plan.workouts;
+        service.data.plan.workouts = [];
+        panel.render();
+        expect(panel.textContent).toContain('No sessions fit the current training-load and availability limits');
+        service.data.plan.workouts = sessions;
+        panel.render();
         expect(calendar.coachingEntries()).toHaveLength(service.data.plan.workouts.length);
         const workout = service.data.plan.workouts[0];
         expect(calendar.entriesForDate(workout.date).some(e => e.id === workout.id)).toBe(true);

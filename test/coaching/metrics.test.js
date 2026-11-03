@@ -52,6 +52,36 @@ describe('activity normalization', () => {
             {timestamp: 5000, power: 200}]}, 'ride', Date.parse('2026-01-01T09:00:00Z'));
         expect(raw.streams.power).toBeUndefined();
     });
+    test('missing or disconnected sensors never become measured zero-power rides', () => {
+        const records = Array.from({length: 60}, (_, i) => ({
+            timestamp: Date.parse('2026-01-01T09:00:00Z') + i * 1000,
+            power: 0, heart_rate: 140, powerValid: false, heartRateValid: false,
+        }));
+        const raw = fromRecordedRide({elapsed: 60, records, powerAvg: 0, heartRateAvg: 140,
+            heartRateMax: 150, ftp: 250}, 'ride', records[0].timestamp);
+        const activity = normalizeActivity(raw, profile);
+        expect(activity.averagePower).toBeNull();
+        expect(activity.averageHeartRate).toBeNull();
+        expect(activity.maximumHeartRate).toBeNull();
+        expect(activity.hasPower).toBe(false);
+        expect(activity.hasHeartRate).toBe(false);
+        expect(activity.loadMetrics.power.value).toBeNull();
+    });
+    test('connected zero-watt samples remain valid, while a sensor interruption invalidates continuous streams', () => {
+        const records = Array.from({length: 60}, (_, i) => ({
+            timestamp: Date.parse('2026-01-01T09:00:00Z') + i * 1000,
+            power: 0, heart_rate: 140, powerValid: true, heartRateValid: true,
+        }));
+        const db = {elapsed: 60, records, powerAvg: 0, heartRateAvg: 140, ftp: 250};
+        const complete = normalizeActivity(fromRecordedRide(db, 'ride', records[0].timestamp), profile);
+        expect(complete.averagePower).toBe(0);
+        expect(complete.normalizedPower).toBe(0);
+        expect(complete.hasPower).toBe(true);
+        records[30].powerValid = false;
+        const interrupted = normalizeActivity(fromRecordedRide(db, 'ride', records[0].timestamp), profile);
+        expect(interrupted.hasPower).toBe(false);
+        expect(interrupted.hasHeartRate).toBe(true);
+    });
     test('uses the athlete time zone at midnight and DST boundaries', () => {
         expect(localDay('2026-01-01T23:30:00Z', 'Europe/Paris')).toBe('2026-01-02');
         expect(localDay('2026-03-29T22:30:00Z', 'Europe/Paris')).toBe('2026-03-30');

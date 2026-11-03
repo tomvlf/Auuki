@@ -16,16 +16,22 @@ Auuki is a powerful, no-nonsense app built for hammering out **structured workou
 * **Intervals.icu and Strava** integrations for seamless syncing and uploads
 * On-device **adaptive cycling coaching** with dated goals, availability-aware
   periodisation, structured workouts and deterministic post-ride adaptation
-* Optional self-hosted **server accounts**, private device backups and server-side
-  adaptive coaching, without requiring an account for local use
+* Private **server accounts**, account-scoped device backups and server-side
+  adaptive coaching
+* A desktop training platform and a dedicated **`/mobile` ride companion**,
+  built around the same browser-native workout and trainer engine
 
-The coach is available in **Workouts > Calendar** and works without an LLM.
+The coach is available in **Coach**, with sessions in **Training Calendar** and
+**Training Plan**, and works without an LLM.
 See the [coaching guide](doc/coaching.md) for setup, history import, calculation
 defaults, safety limits and known data limitations. It provides training decision
 support, not medical diagnosis or medical advice.
 
 Built as a **progressive web app (PWA)**, Auuki is fully browser-based and runs independently. It makes use of some of the most advanced Browser APIs like: Web Bluetooth, Web Serial, and Web Components. The web version is **free and open-source**, keeping everything on your device by default. Server storage and computation are opt-in.
-Train anywhere, with full control directly in your browser.
+Train with full control directly in your browser. The platform requires a server
+account to sign in; once loaded, workout execution and device recording remain
+local and continue if the server connection is interrupted. There is no runtime
+frontend framework or external CDN dependency.
 
 _Status_: Currently working on creating a full suite of Apple platform native apps (iOS, iPadOS, tvOS, watchOS).
 
@@ -40,7 +46,9 @@ Install [Node.js](https://nodejs.org/) 22.18.0 or later, then install the depend
 
 ```sh
 npm install
-npm run start
+AUUKI_INSECURE_COOKIES=1 npm run server
+# In a second terminal:
+npm start
 ```
 
 Parcel prints the local URL when it starts. To run the test suite or create a production build, use:
@@ -58,7 +66,7 @@ For HTTPS development, `npm run starttls` uses `dev_cert/cert.pem` and
 Build and start the production web app with:
 
 ```sh
-docker compose up --build -d
+AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
 Then open [http://localhost:8080](http://localhost:8080). To stop it, run
@@ -68,11 +76,12 @@ The app uses browser device APIs that require a secure context. `localhost`
 works for local use; deployments accessed from another host need HTTPS, typically
 provided by a reverse proxy.
 
-## Optional self-hosted backend
+## Self-hosted accounts and integrations
 
-The static app and the default Compose deployment still work without a backend.
-To run accounts, private data backups and the existing deterministic coach on
-your own server, see the [backend guide](doc/backend.md).
+The desktop platform and `/mobile` require the backend for account authentication.
+The workout engine, BLE/ANT+ controls, recording and recovery still run in the
+browser. See the [backend guide](doc/backend.md) for deployment, data storage,
+API-key encryption and Intervals.icu synchronization.
 
 For a local HTTP trial:
 
@@ -80,9 +89,11 @@ For a local HTTP trial:
 AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
-Open `http://localhost:8080`, then **Settings > Profile > Optional server account**.
+Open `http://localhost:8080` and create an account or sign in.
 For public deployments, set `AUUKI_ORIGIN=https://your-host` and use HTTPS; do not
 enable insecure cookies. Server data persists in the `auuki-server-data` volume.
+Use **Settings > Intervals.icu** to connect a personal API key. The previous
+Intervals.icu OAuth proxy has been replaced by this server-side connection.
 
 ## Sponsors 💖
 So, if you’re loving what Auuki’s bringing to the table, consider supporting the project on [GitHub Sponsors](https://github.com/sponsors/dvmarinoff)? Think of it as buying me a coffee or, heck, a whole power meter to keep this thing cranking. Hit that sponsor button and let’s keep the good times rolling!

@@ -579,6 +579,7 @@ class Activity extends Model {
             timestamp: Date.now(),
             name,
             duration: db.elapsed ?? 0,
+            pendingSync: true,
             status: {strava: 'none', intervals: 'none', trainingPeaks: 'none'},
         };
         const record = {
@@ -590,15 +591,25 @@ class Activity extends Model {
             pendingSync: true,
         };
 
-        await idb.putChecked('activity', record);
+        this.pendingRecording = record;
+        return this.retrySave(db);
+    }
+    async retrySave(db) {
+        const record = this.pendingRecording;
+        if(!record) throw new Error('No unsaved recording is available.');
+        await idb.putManyChecked([['activity', record], ['session', {id: 0, elapsed: 0}]]);
+        this.pendingRecording = null;
+        const summary = record.summary;
         this.add(summary, db.activity);
         xf.dispatch('activity:add', summary);
         return record;
     }
     add(activity, activityList) {
         activityList.unshift(activity);
-        if(activityList.length > this.capacity) {
-            const summary = activityList.pop();
+        const completed = activityList.filter(item => !item.pendingSync);
+        const capacity = Math.max(0, this.capacity - activityList.filter(item => item.pendingSync).length);
+        for(const summary of completed.slice(capacity)) {
+            activityList.splice(activityList.indexOf(summary), 1);
             idb.remove('activity', summary.id);
         }
         return activityList;
@@ -660,7 +671,7 @@ class Activity extends Model {
         });
 
         return records
-            .map((record) => record.summary)
+            .map((record) => ({...record.summary, pendingSync: record.pendingSync === true}))
             .sort((a, b) => b.timestamp - a.timestamp);
     }
 }
@@ -1074,6 +1085,8 @@ function Session(args = {}) {
             cadence:    db.cadence,
             speed:      speed,
             heart_rate: db.heartRate,
+            powerValid: db.connectedDevices ? db.connectedDevices[db.sources.power] === true : undefined,
+            heartRateValid: db.connectedDevices ? db.connectedDevices[db.sources.heartRate] === true : undefined,
             distance:   db.distance,
             grade:      db.slopeTarget,
             altitude:   db.altitude,

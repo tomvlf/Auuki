@@ -6,7 +6,8 @@ export async function syncRecordedRides(service) {
     for(const record of records) {
         if(!record.pendingSync || !record.ride) continue;
         await service.recordRide(record.ride, record.coachingWorkoutId);
-        await idb.putChecked('activity', {...record, pendingSync: false});
+        await idb.putChecked('activity', {...record, pendingSync: false,
+            summary: {...record.summary, pendingSync: false}});
         synced++;
     }
     return synced;

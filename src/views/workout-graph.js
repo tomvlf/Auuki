@@ -195,7 +195,7 @@ class WorkoutGraph extends HTMLElement {
         }
     }
     onMouseOut(e) {
-        this.dom.info.style.display = 'none';
+        if(this.dom.info) this.dom.info.style.display = 'none';
     }
     onWorkout(value) {
         this.workout = value; // this.workout = Object.assign({}, value);
@@ -221,7 +221,7 @@ class WorkoutGraph extends HTMLElement {
     }
     onDistance(distance) {
         const self = this;
-        if(exists(this.workout?.points)) {
+        if(exists(this.workout?.points) && this.dom.active) {
             const totalDistance = this.workout.meta.distance;
             const $dom = self.dom;
             const $parent = self;
@@ -246,7 +246,8 @@ class WorkoutGraph extends HTMLElement {
         }
     }
     progress(args = {}) {
-        if(this.workoutStatus === "done") {
+        if(this.workoutStatus === "done" || !args.dom?.intervals?.[args.index ?? 0] ||
+           !this.workout.intervals?.[args.index ?? 0]) {
             return;
         }
 
@@ -266,6 +267,7 @@ class WorkoutGraph extends HTMLElement {
     }
     render() {
         const self = this;
+        if(!this.workout.intervals && !this.workout.points) return;
         const progress = `<div id="progress" class="progress"></div><div id="progress-active"></div>`;
 
         if(equals(this.type, 'workout')) {
@@ -363,4 +365,3 @@ export {
     courseToGraph,
     renderInfo,
 };
-

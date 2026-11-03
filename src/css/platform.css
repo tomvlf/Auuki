@@ -111,6 +111,10 @@ body[data-route="coach"] training-calendar, body[data-route="calendar"] coaching
 #legacy-slot coaching-panel { display: block; padding: 28px; border: 1px solid var(--platform-border); border-radius: 16px; background: var(--platform-panel); }
 #legacy-slot coaching-panel input, #legacy-slot coaching-panel textarea { color: #eef4fa; }
 #legacy-slot coaching-panel form { max-width: 700px; }
+.availability { border: 1px solid var(--platform-border); border-radius: 12px; padding: 18px; margin: 20px 0; }
+.availability legend { color: var(--platform-accent); padding: 0 8px; }
+.availability-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; }
+#legacy-slot .availability input { width: 100%; }
 #legacy-slot details { margin: 16px 0; }
 #legacy-slot summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
 #legacy-slot button { min-height: 44px; }

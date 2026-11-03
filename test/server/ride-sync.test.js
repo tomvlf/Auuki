@@ -11,7 +11,7 @@ test('retries persisted pending recordings by stable identity and clears outbox 
     const service = {recordRide: jest.fn().mockResolvedValue(null)};
     expect(await syncRecordedRides(service)).toBe(1);
     expect(service.recordRide).toHaveBeenCalledWith(pending.ride, 'session');
-    expect(idb.putChecked).toHaveBeenCalledWith('activity', {...pending, pendingSync: false});
+    expect(idb.putChecked).toHaveBeenCalledWith('activity', {...pending, pendingSync: false, summary: {pendingSync: false}});
 });
 
 test('failed remote write leaves local outbox pending and surfaces the error', async () => {

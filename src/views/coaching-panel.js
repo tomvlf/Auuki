@@ -41,6 +41,7 @@ class CoachingPanel extends HTMLElement {
                     ${escape(plan.rationale)}</p>
                     <p>Data: ${escape(state?.sufficiency)}. ${escape(state?.readiness.reason)}
                     Load scale: ${escape(state?.loadSource)}.</p>
+                    ${!plan.workouts.length ? '<p role="status">No sessions fit the current training-load and availability limits. Review the warnings below and check your history and profile before archiving and regenerating.</p>' : ''}
                     <details><summary>Phases, targets and warnings</summary>
                         ${plan.phases.map(p => `<p>${escape(p.startDate)} - ${escape(p.endDate)}:
                             ${escape(p.type)}. ${escape(p.rationale)}</p>`).join('')}
@@ -61,8 +62,8 @@ class CoachingPanel extends HTMLElement {
                     <button type="button" data-coach="export">Export coaching history</button>
                     <details><summary>Import history or add a manual ride</summary>
                         <p>Import a JSON array in the documented normalized input format. Duration is
-                        seconds; streams must be contiguous one-second samples. Existing Auuki
-                        activity summaries are seeded when you create your first plan.</p>
+                        seconds; streams must be contiguous one-second samples. Your normalized
+                        account history informs plan generation and adaptation.</p>
                         <form data-coach-form="import"><label>Rides JSON
                             <textarea name="rides" required rows="5">[]</textarea></label>
                             <button type="submit">Import and adapt</button></form>
@@ -101,10 +102,14 @@ class CoachingPanel extends HTMLElement {
                 <label>Maximum hours/week<input type="number" name="maxHours" min="0.5" step="0.5"
                     value="${escape(profile?.maxWeeklyHours || 4)}" required></label>
                 <label>Time zone<input name="timeZone" value="${escape(timeZone)}" required></label>
-                <label>Available weekday limits in minutes (0=Sun ... 6=Sat)
-                    <textarea name="limits" required>${escape(JSON.stringify(profile?.maxSessionMinutes || {2: 60, 4: 60, 6: 120}))}</textarea></label>
-                <label>Long-ride weekday (0-6)<input name="longDay" type="number" min="0" max="6"
-                    value="${escape(profile?.longRideDay ?? 6)}" required></label>
+                <fieldset class="availability"><legend>Weekly availability</legend>
+                    <p>Set a session limit in minutes for each available day. Leave rest days at zero.</p>
+                    <div class="availability-days">${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                        .map((day, index) => `<label>${day}<input name="day${index}" type="number" min="0" max="1440"
+                            step="5" value="${escape((profile?.maxSessionMinutes || {2: 60, 4: 60, 6: 120})[index] || 0)}" required></label>`).join('')}</div>
+                </fieldset>
+                <label>Preferred long-ride day<select name="longDay">${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                    .map((day, index) => `<option value="${index}" ${index === (profile?.longRideDay ?? 6) ? 'selected' : ''}>${day}</option>`).join('')}</select></label>
                 <details><summary>Optional equipment and heart-rate settings</summary>
                     <p>Optional JSON: maxHeartRate, thresholdHeartRate, restingHeartRate,
                     powerMeter, heartRateMonitor, smartTrainer, dayPreferences (indoor/outdoor/either).</p>
@@ -141,7 +146,8 @@ class CoachingPanel extends HTMLElement {
         try {
             const service = coachingService(), values = new FormData(form);
             if(form.dataset.coachForm === 'setup') {
-                const limits = JSON.parse(values.get('limits'));
+                const limits = Object.fromEntries(Array.from({length: 7}, (_, day) =>
+                    [day, Number(values.get(`day${day}`))]).filter(([, limit]) => limit > 0));
                 const extras = JSON.parse(values.get('extras'));
                 const profile = {
                     ...extras, id: service.data.profile?.id || 'local-athlete',
