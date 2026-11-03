@@ -136,14 +136,17 @@ export function fromRecordedRide(db, id, timestamp) {
     // Recorded timestamps are milliseconds. Gaps invalidate a continuous stream.
     const contiguous = records.length > 1 && records.every((r, i) =>
         i === 0 || Math.abs(r.timestamp - records[i - 1].timestamp - 1000) <= 100);
-    const complete = key => contiguous && records.every(r => Number.isFinite(r[key]));
+    const valid = key => records.every(record =>
+        record[key === 'power' ? 'powerValid' : 'heartRateValid'] !== false);
+    const complete = key => contiguous && valid(key) && records.every(r => Number.isFinite(r[key]));
     return {
         id, source: 'auuki', name: db.workout?.meta?.name || 'Free ride',
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         start: new Date(start).toISOString(),
         duration: db.elapsed, ftp: db.ftp, indoor: true,
-        averagePower: db.powerAvg, averageHeartRate: db.heartRateAvg || null,
-        maximumHeartRate: db.heartRateMax || null,
+        averagePower: valid('power') ? db.powerAvg : null,
+        averageHeartRate: valid('heart_rate') ? db.heartRateAvg || null : null,
+        maximumHeartRate: valid('heart_rate') ? db.heartRateMax || null : null,
         averageCadence: db.cadenceAvg || null, distance: db.distance || null,
         streams: {
             power: complete('power') ? records.map(r => r.power) : undefined,

@@ -48,6 +48,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     const nowDay = () => new Date(clock()).toISOString().slice(0, 10);
     let active = false;
     let stopped = false;
+    const connecting = new Map();
 
     function encrypt(value, id) {
         const nonce = randomBytes(12);
@@ -57,11 +58,15 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         return Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString('base64');
     }
     function decrypt(value, id) {
-        const bytes = Buffer.from(value, 'base64');
-        const cipher = createDecipheriv('aes-256-gcm', key, bytes.subarray(0, 12));
-        cipher.setAAD(Buffer.from(String(id)));
-        cipher.setAuthTag(bytes.subarray(12, 28));
-        return Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString('utf8');
+        try {
+            const bytes = Buffer.from(value, 'base64');
+            const cipher = createDecipheriv('aes-256-gcm', key, bytes.subarray(0, 12));
+            cipher.setAAD(Buffer.from(String(id)));
+            cipher.setAuthTag(bytes.subarray(12, 28));
+            return Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString('utf8');
+        } catch {
+            throw new IntegrationError('Stored Intervals.icu credentials cannot be decrypted. Restore the server encryption key or reconnect in Settings.', 503);
+        }
     }
     function status(id) {
         const current = row(id);
@@ -145,14 +150,21 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             throw new IntegrationError('Choose an import date within the last ten years.');
         }
         if(['running', 'queued'].includes(row(id)?.status)) throw new IntegrationError('Wait for the current import before reconnecting.', 409);
-        await download(body.apiKey.trim(), nowDay(), nowDay());
-        if(['running', 'queued'].includes(row(id)?.status)) throw new IntegrationError('An import started while testing. Wait before reconnecting.', 409);
-        db.prepare(`INSERT INTO integrations (user_id, credential, oldest, status)
+        const operation = Symbol();
+        connecting.set(id, operation);
+        try {
+            await download(body.apiKey.trim(), nowDay(), nowDay());
+            if(stopped || connecting.get(id) !== operation) throw new IntegrationError('Connection changed while testing. Retry with your current settings.', 409);
+            if(['running', 'queued'].includes(row(id)?.status)) throw new IntegrationError('An import started while testing. Wait before reconnecting.', 409);
+            db.prepare(`INSERT INTO integrations (user_id, credential, oldest, status)
             VALUES (?, ?, ?, 'connected') ON CONFLICT(user_id) DO UPDATE SET
             credential=excluded.credential, oldest=excluded.oldest, cursor=NULL, newest=NULL,
             status='connected', error=NULL, attempts=0, retry_at=0, last_success=NULL`)
-            .run(id, encrypt(body.apiKey.trim(), id), oldest);
-        return status(id);
+                .run(id, encrypt(body.apiKey.trim(), id), oldest);
+            return status(id);
+        } finally {
+            if(connecting.get(id) === operation) connecting.delete(id);
+        }
     }
     async function test(id) {
         const current = row(id);
@@ -161,6 +173,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         return {success: true};
     }
     function disconnect(id) {
+        connecting.delete(id);
         db.prepare('DELETE FROM integrations WHERE user_id = ?').run(id);
         return status(id);
     }
@@ -205,7 +218,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
                 db.exec('COMMIT');
             } catch(error) { db.exec('ROLLBACK'); throw error; }
         } catch(error) {
-            if(stopped || !row(current.user_id)) return;
+            if(stopped || row(current.user_id)?.credential !== current.credential) return;
             const attempts = current.attempts + 1;
             const retry = attempts < 5 && [429, 502, 409].includes(error.status);
             const retryAt = Math.max(clock() + Math.min(3600000, 5000 * 2 ** attempts), error.retryAfter || 0);
@@ -218,5 +231,5 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     const timer = startWorker ? setInterval(() => { void tick(); }, 1000) : null;
     timer?.unref();
     return {status, connect, test, disconnect, sync, tick, athlete, events, upload,
-        close() { stopped = true; clearInterval(timer); }};
+        close() { stopped = true; connecting.clear(); clearInterval(timer); }};
 }

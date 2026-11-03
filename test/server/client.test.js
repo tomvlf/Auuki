@@ -57,7 +57,7 @@ test('overlapping remote writes are rejected', async () => {
 
 test('static hosts report unavailable backend rather than a JSON parsing error', async () => {
     fetch.mockResolvedValue({headers: {get: () => 'text/html'}});
-    await expect(serverRequest('session')).rejects.toThrow('optional Auuki backend is unavailable');
+    await expect(serverRequest('session')).rejects.toThrow('Auuki backend is unavailable');
 });
 
 test('authentication expiry triggers the protected shell without silently switching to local mode', async () => {

@@ -1,21 +1,22 @@
 # Adaptive cycling coaching
 
-The **Workouts > Calendar** view contains an opt-in, on-device coach. It is
+The **Coach** view contains the account's deterministic cycling coach. It is
 training decision support, not medical diagnosis or medical advice. No injury,
-medical condition, or biological readiness is inferred. No LLM, server, network
-API, or third-party account is required for planning.
+medical condition, or biological readiness is inferred. No LLM or third-party
+AI account is used for planning. Calculations reuse the same
+pure coaching modules as the original on-device implementation.
 
-You can optionally run the same coach on a self-hosted server using
-**Settings > Profile > Optional server account**. Server coaching has separate
-history and requires a connection; see the [backend guide](backend.md).
+The platform requires sign-in and stores Coach data on its self-hosted server.
+The workout player and trainer engine still run locally in the browser; see
+the [backend guide](backend.md) for storage, recovery and integration details.
 
 ## Using the coach
 
 1. Set FTP, body mass and units in the existing application profile.
-2. Save an athlete's availability and a dated goal in the calendar's coaching
-   form. Weekdays use JavaScript numbering: Sunday = 0, Saturday = 6. Available
-   days each need a maximum session duration in minutes.
-3. Import ride history using the JSON form, then generate a plan. The existing
+2. Save availability and a dated goal in **Coach**. Set a session limit in
+   minutes for each available weekday, and zero for rest days.
+3. Connect **Settings > Intervals.icu** or import ride history using the JSON
+   form, then generate a plan. The existing
    Auuki activity summaries seed the history automatically; they contain only
    duration, and the application's existing FIT cache retains only seven rides.
    Import a longer history for better-informed targets.
@@ -32,7 +33,7 @@ history and requires a connection; see the [backend guide](backend.md).
 6. Submit post-ride feedback, mark unsuccessful sessions **Not completed**, mark
    missed sessions, or request easier training. Overdue sessions are reviewed
    when the app opens, after a recording, or with **Review missed sessions**.
-   There is no background job while the browser is closed.
+   The server's Intervals.icu import worker can continue while the browser is closed.
 
 The first implementation supports one athlete and one active goal at a time,
 over a 1-366 day horizon. Archive a plan before reconfiguring or generating a
@@ -103,7 +104,10 @@ and W/kg targets inform threshold gaps. There is no fabricated conversion from
 terrain or finish time into predicted event power or physiological capacity.
 
 Normalized rides retain source summaries in `original`, an optional
-`rawReference`, stream availability, quality warnings and a calculation version.
+`rawReference`, `source`, `externalId`, `providerIds`, `syncedAt`, stream
+availability, quality warnings and a calculation version. Recorded rides are
+retained before a Coach profile exists; initial configuration recalculates
+history with the declared athlete time zone and FTP where source values are absent.
 Load metrics contain value, source, version, confidence, formula and inputs.
 Normalized power is either source-supplied/weighted power or explicitly derived
 from rolling 30-second averages' fourth powers. Average power is **never**

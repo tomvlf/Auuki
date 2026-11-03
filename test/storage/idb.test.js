@@ -90,6 +90,27 @@ describe('IDB', () => {
 
         expect(resGetAll).toEqual([]);
     });
+
+    test('checked writes commit recording and cleared checkpoint atomically', async () => {
+        await idb.open('recording-atomic', 1, ['activity', 'session']);
+        await idb.putChecked('session', {id: 0, elapsed: 60});
+        await idb.putManyChecked([
+            ['activity', {id: 'ride', pendingSync: true}],
+            ['session', {id: 0, elapsed: 0}],
+        ]);
+        expect(await idb.get('activity', 'ride')).toEqual({id: 'ride', pendingSync: true});
+        expect(await idb.get('session', 0)).toEqual({id: 0, elapsed: 0});
+    });
+
+    test('a failed checkpoint write rolls back the recording instead of leaving duplicate recovery state', async () => {
+        await idb.putChecked('session', {id: 0, elapsed: 90});
+        await expect(idb.putManyChecked([
+            ['activity', {id: 'not-committed'}],
+            ['session', {id: 0, unsupported: () => {}}],
+        ])).rejects.toThrow();
+        expect(await idb.get('activity', 'not-committed')).toBeUndefined();
+        expect(await idb.get('session', 0)).toEqual({id: 0, elapsed: 90});
+    });
 });
 
 

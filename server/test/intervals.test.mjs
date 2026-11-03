@@ -50,7 +50,7 @@ async function fixture(t, options = {}) {
         tick: () => app.intervals.tick(),
         advance: ms => { now += ms; },
         remote: fn => { remote = fn; },
-        restart: async () => { await close(); await start(); },
+        restart: async (overrides = {}) => { await close(); Object.assign(configuration, overrides); await start(); },
         connect: (cookie, oldest = '2026-03-01') => request(endpoint, {method: 'PUT', cookie, body: {apiKey, oldest}}),
         sync: cookie => request(`${endpoint}/sync`, {method: 'POST', cookie, body: {}}),
         status: cookie => request(endpoint, {cookie}),
@@ -125,6 +125,71 @@ test('bad credentials, future dates, malformed dates and remote errors are expli
     assert.equal((await f.connect(cookie)).status, 502);
     f.remote(async () => json({unexpected: true}));
     assert.equal((await f.connect(cookie)).status, 502);
+});
+
+test('disconnect cancels an in-flight connection test instead of silently reconnecting', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    let release, started;
+    const began = new Promise(resolve => { started = resolve; });
+    f.remote(() => { started(); return new Promise(resolve => { release = resolve; }); });
+    const pending = f.connect(cookie);
+    await began;
+    await f.request(endpoint, {method: 'DELETE', cookie, body: {}});
+    release(json([]));
+    assert.equal((await pending).status, 409);
+    assert.equal((await f.status(cookie)).data.connected, false);
+});
+
+test('a later connection wins over a slow earlier test', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    let release, started;
+    const began = new Promise(resolve => { started = resolve; });
+    f.remote(() => { started(); return new Promise(resolve => { release = resolve; }); });
+    const pending = f.connect(cookie);
+    await began;
+    f.remote(async () => json([]));
+    assert.equal((await f.connect(cookie, '2026-02-01')).status, 200);
+    release(json([]));
+    assert.equal((await pending).status, 409);
+    assert.equal((await f.status(cookie)).data.oldest, '2026-02-01');
+});
+
+test('a changed server encryption key produces an actionable reconnect error', async t => {
+    const directory = await mkdtemp(join(tmpdir(), 'auuki-key-change-'));
+    t.after(() => rm(directory, {recursive: true, force: true}));
+    const f = await fixture(t, {database: join(directory, 'server.sqlite')});
+    const cookie = await f.register();
+    await f.connect(cookie);
+    await f.restart({encryptionKey: Buffer.alloc(32, 8).toString('base64')});
+    const result = await f.request(`${endpoint}/test`, {method: 'POST', cookie, body: {}});
+    assert.equal(result.status, 503);
+    assert.match(result.data.error, /encryption key or reconnect/);
+    await f.sync(cookie);
+    await f.tick();
+    const state = (await f.status(cookie)).data;
+    assert.equal(state.status, 'error');
+    assert.match(state.error, /encryption key or reconnect/);
+});
+
+test('an old batch failure cannot overwrite a replacement connection after disconnect', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    await f.connect(cookie);
+    let release;
+    f.remote(() => new Promise(resolve => { release = resolve; }));
+    await f.sync(cookie);
+    const pending = f.tick();
+    await f.request(endpoint, {method: 'DELETE', cookie, body: {}});
+    f.remote(async () => json([]));
+    await f.connect(cookie, '2026-02-01');
+    release(json({}, 503));
+    await pending;
+    const state = (await f.status(cookie)).data;
+    assert.equal(state.status, 'connected');
+    assert.equal(state.error, null);
+    assert.equal(state.oldest, '2026-02-01');
 });
 
 test('historical imports run in bounded date ranges, persist progress, and normalize history without a Coach profile', async t => {

@@ -130,12 +130,21 @@ function IDB(args = {}) {
     }
 
     function putChecked(storeName, item) {
+        return putManyChecked([[storeName, item]]).then(() => item);
+    }
+
+    function putManyChecked(entries) {
         return new Promise((resolve, reject) => {
-            const write = db.transaction(storeName, 'readwrite');
-            write.objectStore(storeName).put(item);
-            write.oncomplete = () => resolve(item);
+            const write = db.transaction([...new Set(entries.map(([name]) => name))], 'readwrite');
+            write.oncomplete = () => resolve();
             write.onabort = () => reject(write.error || new Error('Unable to save device data.'));
             write.onerror = () => reject(write.error || new Error('Unable to save device data.'));
+            try {
+                for(const [name, item] of entries) write.objectStore(name).put(item);
+            } catch(error) {
+                write.abort();
+                reject(error);
+            }
         });
     }
 
@@ -173,6 +182,7 @@ function IDB(args = {}) {
         deleteStore,
         add,
         put,
+        putManyChecked,
         putChecked,
         get,
         getAll,

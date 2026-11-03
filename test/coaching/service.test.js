@@ -40,6 +40,23 @@ describe('persistent coaching loop', () => {
         expect(service.data.activities[0].source).toBe('auuki');
         expect(service.data.activities[0].providerIds.intervals).toBe('provider-id');
     });
+    test('first profile recalculates imported history using declared timezone and FTP without losing provenance or feedback', async () => {
+        const service = new CoachingService(memoryStorage(), () => timestamp);
+        await service.importActivities([{id: 'intervals:midnight', source: 'intervals',
+            start: '2026-01-01T23:30:00Z', duration: 3600, normalizedPower: 200,
+            providerIds: {intervals: 'midnight'}, syncedAt: timestamp}]);
+        await service.updateFeedback('intervals:midnight', {rpe: 6, sleepQuality: 3});
+        expect(service.data.activities[0].day).toBe('2026-01-01');
+        expect(service.data.activities[0].loadMetrics.power.value).toBeNull();
+        await service.configure(profile, goal);
+        const activity = service.data.activities[0];
+        expect(activity.day).toBe('2026-01-02');
+        expect(activity.loadMetrics.power.value).toBeCloseTo(64);
+        expect(activity.providerIds).toEqual({intervals: 'midnight'});
+        expect(activity.syncedAt).toBe(timestamp);
+        expect(activity.rpe).toBe(6);
+        expect(activity.feedback.sleepQuality).toBe(3);
+    });
     test('history -> snapshot -> plan is persistent and repeatable with an injected clock', async () => {
         const {service, storage, clock} = await setup();
         const restored = new CoachingService(storage, clock);
