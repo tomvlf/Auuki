@@ -10,17 +10,17 @@
         <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
         <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 
-        <title>Auuki indoor cycling app for workouts with structured training</title>
+        <title>Auuki | Cycling training</title>
         <meta name="description" content="indoor cycling app for workouts with smart trainers and power meters over bluetooth">
 
-        <link rel="preconnect" href="https://fonts.gstatic.com">
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
         <link href="css/flux.css" rel="stylesheet"/>
+        <link href="css/platform.css" rel="stylesheet"/>
         <link rel="manifest" href="./manifest.webmanifest">
     </head>
 
     <body id="theme" class="dark-theme">
-        <div class="wrapper">
+        <div id="platform" role="status">Restoring your training account...</div>
+        <div class="wrapper" hidden>
             <modal-error>
                 <dialog id="dialog--error" class="dialog error">
                     <p class="dialog--message"></p>
@@ -1813,5 +1813,5 @@
             </symbol>
         </svg>
     </body>
-    <script type="module" src="index.js"></script>
+    <script type="module" src="platform/start.js"></script>
 </html>

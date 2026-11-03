@@ -2,7 +2,7 @@ const SETTINGS = ['ftp', 'weight', 'theme', 'dockMode', 'measurement', 'volume',
 
 async function openDatabase() {
     return new Promise((resolve, reject) => {
-        const request = window.indexedDB.open('store', 3);
+        const request = window.indexedDB.open(accountDatabase(), 3);
         request.onsuccess = () => {
             const database = request.result;
             if(!['workouts', 'activity'].every(name => database.objectStoreNames.contains(name))) {
@@ -41,7 +41,7 @@ export async function createBackup(library = []) {
         const activities = await Promise.all(activityRecords.map(async record => ({
             ...record, blob: base64(new Uint8Array(await record.blob.arrayBuffer())),
         })));
-        const calendar = JSON.parse(window.localStorage.getItem('training-calendar') || '[]');
+        const calendar = JSON.parse(accountStorage.getItem('training-calendar') || '[]');
         if(!Array.isArray(calendar)) throw new Error('Stored training calendar must be an array.');
         // Built-in workout IDs are generated per browser load; retain scheduled copies.
         for(const entry of calendar) {
@@ -49,7 +49,7 @@ export async function createBackup(library = []) {
             if(workout && !workouts.some(w => w.id === workout.id)) workouts.push(workout);
         }
         return {version: 1, savedAt: new Date().toISOString(), workouts, activities,
-            settings: Object.fromEntries(SETTINGS.map(key => [key, window.localStorage.getItem(key)])),
+            settings: Object.fromEntries(SETTINGS.map(key => [key, accountStorage.getItem(key)])),
             calendar};
     } finally { database.close(); }
 }
@@ -85,9 +85,10 @@ export async function restoreBackup(backup) {
             }
         });
         for(const [key, value] of Object.entries(backup.settings)) {
-            if(value === null) window.localStorage.removeItem(key);
-            else window.localStorage.setItem(key, value);
+            if(value === null) accountStorage.removeItem(key);
+            else accountStorage.setItem(key, value);
         }
-        window.localStorage.setItem('training-calendar', JSON.stringify(backup.calendar));
+        accountStorage.setItem('training-calendar', JSON.stringify(backup.calendar));
     } finally { database.close(); }
 }
+import { accountDatabase, accountStorage } from '../storage/account.js';

@@ -38,7 +38,6 @@ function Router(args = {}) {
 
         const params = getParams();
         if(hasParams(params)) {
-            console.log(params);
             await onQueryParams(params);
         } else {
             // TODO: remove
@@ -83,7 +82,9 @@ function Router(args = {}) {
                 await strava.paramsHandler({state, code, scope});
             }
             if(service === OAuthService.intervals) {
-                await intervals.paramsHandler({state, code, scope});
+                window.history.replaceState({}, '', window.location.pathname);
+                intervals.connect();
+                xf.dispatch('ui:modal:error:open', 'Intervals.icu now uses a server-stored API key. Connect it in Settings > Integrations.');
             }
             if(service === OAuthService.trainingPeaks) {
                 await trainingPeaks.paramsHandler({state, code, scope});
@@ -113,4 +114,3 @@ function Router(args = {}) {
 
 
 export default API;
-

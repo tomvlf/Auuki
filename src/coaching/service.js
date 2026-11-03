@@ -36,7 +36,7 @@ export class CoachingService {
     async configure(profile, goal) {
         validateProfile(profile);
         if(this.data.plan?.status === 'active') throw new Error('Finish or archive the current plan before changing profile or goal.');
-        if(this.data.activities.length && this.data.profile.id !== profile.id) throw new Error('Existing coaching history belongs to a different athlete.');
+        if(this.data.activities.length && this.data.profile && this.data.profile.id !== profile.id) throw new Error('Existing coaching history belongs to a different athlete.');
         return this.commit({...this.data, profile: JSON.parse(JSON.stringify(profile)),
             goal: JSON.parse(JSON.stringify(goal))});
     }
@@ -67,14 +67,31 @@ export class CoachingService {
         return this.commit(next);
     }
     async importActivities(rawActivities) {
-        if(!this.data.profile) throw new Error('Configure a profile before importing rides.');
         if(!Array.isArray(rawActivities)) throw new Error('Activity import must be a JSON array.');
         // Validate the entire batch before committing any of it.
-        const normalized = rawActivities.map(raw => normalizeActivity(raw, this.data.profile));
+        const normalized = rawActivities.map(raw => normalizeActivity(raw, this.data.profile || undefined));
         const next = JSON.parse(JSON.stringify(this.data));
         const added = [];
         for(const activity of normalized) {
-            if(next.activities.some(a => a.id === activity.id)) continue;
+            const index = next.activities.findIndex(a => a.id === activity.id);
+            if(index !== -1) {
+                const previous = next.activities[index];
+                if(previous.source === 'auuki' && activity.source === 'intervals') {
+                    next.activities[index] = {...previous, providerIds: {...previous.providerIds, ...activity.providerIds},
+                        syncedAt: activity.syncedAt};
+                    continue;
+                }
+                // Provider refreshes must not erase the rider's subjective feedback or re-complete a session.
+                if(activity.source !== 'manual' && previous.source === activity.source &&
+                   previous.externalId === activity.externalId) {
+                    next.activities[index] = normalizeActivity({...activity.original,
+                        rpe: previous.rpe ?? activity.rpe,
+                        feedback: Object.fromEntries(Object.keys(previous.feedback).map(key =>
+                            [key, previous.feedback[key] ?? activity.feedback[key]]))},
+                    next.profile || undefined);
+                }
+                continue;
+            }
             next.activities.push(activity);
             added.push(activity);
         }
@@ -100,9 +117,17 @@ export class CoachingService {
         next.revisions.push(JSON.parse(JSON.stringify(next.plan)));
     }
     async recordRide(raw, explicitId = null) {
-        if(!this.data.profile) return null; // Coaching is opt-in.
-        if(this.data.activities.some(a => a.id === String(raw.id))) return this.data.plan;
-        const activity = normalizeActivity(raw, this.data.profile);
+        const existing = this.data.activities.find(a => a.id === String(raw.id));
+        if(existing) {
+            if(existing.source === 'intervals' && raw.source === 'auuki') {
+                const next = JSON.parse(JSON.stringify(this.data));
+                next.activities[next.activities.findIndex(a => a.id === existing.id)] =
+                    normalizeActivity({...raw, providerIds: existing.providerIds}, this.data.profile || undefined);
+                await this.commit(next);
+            }
+            return this.data.plan;
+        }
+        const activity = normalizeActivity(raw, this.data.profile || undefined);
         const next = JSON.parse(JSON.stringify(this.data));
         next.activities.push(activity);
         if(next.plan?.status === 'active') {

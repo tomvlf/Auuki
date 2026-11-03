@@ -5,6 +5,8 @@ import { coachingService, coachingData } from '../coaching/service.js';
 import { toAppWorkout, exportZwo } from '../coaching/workouts.js';
 import { localDay } from '../coaching/domain.js';
 import { fileHandler } from '../file.js';
+import { accountStorage, accountKey, hasAccountScope } from '../storage/account.js';
+import { serverRequest } from '../server/client.js';
 
 const storageKey = 'training-calendar';
 const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -77,7 +79,7 @@ class TrainingCalendar extends HTMLElement {
         this.actionMessage = '';
 
         try {
-            this.entries = parseEntries(window.localStorage.getItem(storageKey));
+            this.entries = parseEntries(accountStorage.getItem(storageKey));
         } catch(error) {
             console.error('Unable to load training calendar data:', error);
             this.entries = [];
@@ -117,7 +119,7 @@ class TrainingCalendar extends HTMLElement {
 
     getStoredEntries() {
         try {
-            return parseEntries(window.localStorage.getItem(storageKey));
+            return parseEntries(accountStorage.getItem(storageKey));
         } catch(error) {
             console.error('Unable to read training calendar data:', error);
             this.storageError = 'Calendar data could not be loaded from this browser.';
@@ -128,7 +130,7 @@ class TrainingCalendar extends HTMLElement {
 
     save(entries) {
         try {
-            window.localStorage.setItem(storageKey, JSON.stringify(entries));
+            accountStorage.setItem(storageKey, JSON.stringify(entries));
             this.entries = entries;
             this.storageError = '';
             return true;
@@ -140,7 +142,7 @@ class TrainingCalendar extends HTMLElement {
     }
 
     onStorage(event) {
-        if(event.key !== storageKey && event.key !== null) return;
+        if(event.key !== accountKey(storageKey) && event.key !== null) return;
         if(event.storageArea && event.storageArea !== window.localStorage) return;
 
         try {
@@ -165,7 +167,9 @@ class TrainingCalendar extends HTMLElement {
             if(this.intervalsConnected === null) {
                 this.checkingServices = true;
                 try {
-                    const status = await models.api.auth.status();
+                    const status = hasAccountScope()
+                        ? {intervals: (await serverRequest('integrations/intervals')).connected}
+                        : await models.api.auth.status();
                     this.intervalsConnected = Boolean(
                         status?.services?.intervals ?? status?.intervals,
                     );

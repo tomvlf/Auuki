@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scrypt as deriveKey, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { CoachingService } from '../src/coaching/service.js';
+import { createIntervals } from './intervals.mjs';
 
 const scrypt = promisify(deriveKey);
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -33,7 +34,7 @@ async function readJSON(request) {
 }
 
 export function createApp({database = 'auuki.sqlite', origin = 'http://localhost:3000',
-    secureCookies = true, clock = () => Date.now()} = {}) {
+    secureCookies = true, clock = () => Date.now(), encryptionKey, fetchImpl, startWorker} = {}) {
     const db = new DatabaseSync(database);
     db.exec(`
         PRAGMA journal_mode = WAL;
@@ -68,6 +69,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
         if(result.changes !== 1) throw new HttpError(409, 'Server data changed in another session. Reload before editing.');
         return document(id, kind);
     };
+    const intervals = createIntervals({db, document, save, clock, encryptionKey, fetchImpl, startWorker});
     function user(request) {
         const token = request.headers.cookie?.split(';').map(c => c.trim())
             .find(c => c.startsWith('auuki_session='))?.slice('auuki_session='.length);
@@ -152,6 +154,27 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
             response.setHeader('Set-Cookie', cookie('', 0));
             return send(200, {success: true});
         }
+        if(path === '/api/server/integrations/intervals') {
+            if(request.method === 'GET') return send(200, intervals.status(account.id));
+            if(request.method === 'PUT') return send(200, await intervals.connect(account.id, body));
+            if(request.method === 'DELETE') return send(200, intervals.disconnect(account.id));
+        }
+        if(path === '/api/server/integrations/intervals/test' && request.method === 'POST') {
+            return send(200, await intervals.test(account.id));
+        }
+        if(path === '/api/server/integrations/intervals/sync' && request.method === 'POST') {
+            return send(202, intervals.sync(account.id));
+        }
+        if(path === '/api/server/integrations/intervals/athlete' && request.method === 'GET') {
+            return send(200, await intervals.athlete(account.id));
+        }
+        if(path === '/api/server/integrations/intervals/events' && request.method === 'GET') {
+            const params = new URL(request.url, origin).searchParams;
+            return send(200, await intervals.events(account.id, params.get('oldest'), params.get('newest')));
+        }
+        if(path === '/api/server/integrations/intervals/upload' && request.method === 'POST') {
+            return send(200, await intervals.upload(account.id, body));
+        }
         if(path === '/api/server/backup') {
             if(request.method === 'GET') return send(200, document(account.id, 'backup'));
             if(request.method === 'PUT') {
@@ -206,5 +229,5 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
     });
     server.requestTimeout = 60000;
     server.headersTimeout = 15000;
-    return {server, close: () => db.close()};
+    return {server, intervals, close: () => { intervals.close(); db.close(); }};
 }

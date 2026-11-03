@@ -10,7 +10,8 @@ if(process.env.AUUKI_INSECURE_COOKIES === '1' &&
    !['localhost', '127.0.0.1'].includes(new URL(origin).hostname)) {
     throw new Error('Insecure cookies are only allowed for localhost development.');
 }
-const app = createApp({database, origin, secureCookies: process.env.AUUKI_INSECURE_COOKIES !== '1'});
+const app = createApp({database, origin, secureCookies: process.env.AUUKI_INSECURE_COOKIES !== '1',
+    encryptionKey: process.env.AUUKI_INTEGRATION_KEY});
 const port = Number(process.env.PORT || 3000);
 app.server.listen(port, '0.0.0.0', () => console.log(`Auuki backend listening on ${port}; browser origin ${origin}`));
 for(const signal of ['SIGINT', 'SIGTERM']) {

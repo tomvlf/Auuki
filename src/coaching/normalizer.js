@@ -10,7 +10,8 @@ function optional(value, name, warnings, min = 0, max = Infinity) {
     return value;
 }
 
-export function normalizeActivity(raw, profile) {
+export function normalizeActivity(raw, profile = {timeZone: 'UTC'}) {
+    profile = profile || {timeZone: 'UTC'};
     if(!raw.id || !positive(raw.duration) || raw.duration > 604800 || typeof raw.start !== 'string' ||
        !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(raw.start) || !Number.isFinite(Date.parse(raw.start))) {
         throw new Error('Activity requires a stable id, ISO start timestamp and positive duration in seconds.');
@@ -91,6 +92,7 @@ export function normalizeActivity(raw, profile) {
     if(bestEfforts.length !== (raw.bestEfforts || []).length) warnings.push('Invalid best-effort summaries excluded.');
     return {
         id: String(raw.id), externalId: raw.externalId ?? raw.id, source: raw.source || 'manual',
+        name: typeof raw.name === 'string' ? raw.name : 'Cycling activity',
         start: new Date(raw.start).toISOString(), day, timeZone,
         sport: raw.sport || 'cycling', indoor: raw.indoor ?? null,
         duration: raw.duration, movingTime: optional(raw.movingTime, 'moving time', warnings),
@@ -121,6 +123,8 @@ export function normalizeActivity(raw, profile) {
         hasIntervals: raw.hasIntervals === true,
         dataLevel: level, loadMetrics, warnings, version: VERSION,
         rawReference: raw.rawReference ?? null, original: {...raw},
+        syncedAt: raw.syncedAt ?? null,
+        providerIds: {...raw.providerIds},
         streamAveragePower: metric(streams.power ? mean(streams.power) : null, 'medium',
             'Mean of available one-second power samples; never substituted for normalized power.'),
     };
@@ -134,10 +138,13 @@ export function fromRecordedRide(db, id, timestamp) {
         i === 0 || Math.abs(r.timestamp - records[i - 1].timestamp - 1000) <= 100);
     const complete = key => contiguous && records.every(r => Number.isFinite(r[key]));
     return {
-        id, source: 'auuki', start: new Date(start).toISOString(),
+        id, source: 'auuki', name: db.workout?.meta?.name || 'Free ride',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        start: new Date(start).toISOString(),
         duration: db.elapsed, ftp: db.ftp, indoor: true,
         averagePower: db.powerAvg, averageHeartRate: db.heartRateAvg || null,
         maximumHeartRate: db.heartRateMax || null,
+        averageCadence: db.cadenceAvg || null, distance: db.distance || null,
         streams: {
             power: complete('power') ? records.map(r => r.power) : undefined,
             heartRate: complete('heart_rate') && records.every(r => r.heart_rate > 0)

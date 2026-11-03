@@ -5,9 +5,10 @@ import { idb } from './storage/idb.js';
 import { ControlMode, } from './ble/enums.js';
 import { TimerStatus, } from './activity/enums.js';
 import { coachingService, initializeCoaching } from './coaching/service.js';
-import { fromRecordedRide } from './coaching/normalizer.js';
 import { localDay } from './coaching/domain.js';
 import { toAppWorkout } from './coaching/workouts.js';
+import { accountDatabase, hasAccountScope } from './storage/account.js';
+import { syncRecordedRides } from './server/ride-sync.js';
 
 // import { trainerMock } from './simulation-scripts.js';
 
@@ -370,18 +371,20 @@ xf.reg('ui:workout:upload', async function(files, db) {
 });
 xf.reg('watch:stopped', async (_, db) => {
     try {
-        const record = models.activity.createFromCurrent(db);
+        xf.dispatch('activity:saving');
+        const recording = models.activity.createFromCurrent(db);
+        const record = await recording;
+        await idb.putChecked('session', {id: 0, elapsed: 0});
         try {
             const coach = coachingService();
-            await coach.recordRide(fromRecordedRide(db, record.id, record.summary.timestamp),
-                db.workout?.coachingWorkoutId);
+            await syncRecordedRides(coach);
             await coach.advance();
             xf.dispatch('coaching:changed');
         } catch(error) {
             console.error('Ride saved, but coaching could not be updated:', error);
-            xf.dispatch('coaching:error', `Ride saved, but coaching update failed: ${error.message}`);
+            xf.dispatch('coaching:error', `Ride saved on this device; server sync is pending and will retry on reload: ${error.message}`);
         }
-        xf.dispatch('activity:save:success');
+        xf.dispatch('activity:save:success', record.ride);
     } catch (err) {
         console.error(`Error on activity save: `, err);
         xf.dispatch('activity:save:fail');
@@ -448,6 +451,7 @@ xf.reg('services', (x, db) => {
 
 //
 xf.reg('app:start', async function(_, db) {
+    try {
 
     db.dockMode = models.dockMode.set(models.dockMode.restore());
     models.dockMode.apply(db.dockMode);
@@ -462,11 +466,12 @@ xf.reg('app:start', async function(_, db) {
     db.sources = models.sources.set(models.sources.restore());
 
     // IndexedDB Schema Version 3
-    await idb.start('store', 3, ['session', 'workouts', 'activity']);
+    await idb.start(accountDatabase(), 3, ['session', 'workouts', 'activity']);
     db.workouts = await models.workouts.restore();
     db.activity = await models.activity.restore();
     try {
         await initializeCoaching();
+        await syncRecordedRides(coachingService());
         await coachingService().advance();
         xf.dispatch('coaching:changed');
     } catch(error) {
@@ -474,7 +479,7 @@ xf.reg('app:start', async function(_, db) {
         xf.dispatch('coaching:error', error.message);
     }
     db.workout = models.workout.restore(db);
-    models.planned.restore();
+    if(!hasAccountScope()) models.planned.restore();
 
     await models.session.restore(db);
     xf.dispatch('workout:restore');
@@ -491,12 +496,17 @@ xf.reg('app:start', async function(_, db) {
     const sound = Sound({volume: db.volume});
     sound.start();
 
-    models.api.start();
+    if(!hasAccountScope()) models.api.start();
+    xf.dispatch('app:ready');
     // TODO: remove
     // xf.dispatch(`ui:page-set`, 'workouts');
 
     // TRAINER MOCK
     // trainerMock.init();
+    } catch(error) {
+        console.error('Application startup failed:', error);
+        xf.dispatch('app:error', error.message);
+    }
 });
 
 function start () {

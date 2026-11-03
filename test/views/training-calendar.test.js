@@ -181,11 +181,12 @@ describe('training calendar', () => {
                 };
             }
 
-            const query = new URL(url).searchParams;
+            const query = new URL(url, 'http://localhost').searchParams;
             requests.push([query.get('oldest'), query.get('newest')]);
             return {
                 ok: true,
                 status: 200,
+                headers: {get: () => 'application/json'},
                 json: async () => [{
                     id: 123,
                     start_date_local: `${futureDate}T09:00:00`,

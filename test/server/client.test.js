@@ -59,3 +59,15 @@ test('static hosts report unavailable backend rather than a JSON parsing error',
     fetch.mockResolvedValue({headers: {get: () => 'text/html'}});
     await expect(serverRequest('session')).rejects.toThrow('optional Auuki backend is unavailable');
 });
+
+test('authentication expiry triggers the protected shell without silently switching to local mode', async () => {
+    const expired = jest.fn();
+    window.addEventListener('session:expired', expired);
+    serverAccount.email = 'rider@example.com';
+    fetch.mockResolvedValue({ok: false, status: 401, headers: {get: () => 'application/json'},
+        json: async () => ({error: 'Your session expired'})});
+    await expect(serverRequest('coaching')).rejects.toMatchObject({status: 401});
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(expired.mock.calls[0][0].detail).toBe('Your session expired');
+    window.removeEventListener('session:expired', expired);
+});

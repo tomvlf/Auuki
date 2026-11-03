@@ -15,6 +15,31 @@ async function setup() {
 }
 
 describe('persistent coaching loop', () => {
+    test('ride history is persisted before opting into Coach and provider refreshes retain rider feedback', async () => {
+        const service = new CoachingService(memoryStorage(), () => timestamp);
+        const raw = {id: 'intervals:one', source: 'intervals', externalId: 'one',
+            start: timestamp, duration: 1800, averagePower: 150};
+        await service.importActivities([raw]);
+        expect(service.data.profile).toBeNull();
+        await service.updateFeedback(raw.id, {rpe: 5});
+        await service.importActivities([{...raw, duration: 1900, averagePower: 155}]);
+        expect(service.data.activities).toHaveLength(1);
+        expect(service.data.activities[0].duration).toBe(1900);
+        expect(service.data.activities[0].rpe).toBe(5);
+        await service.configure(profile, goal);
+        expect(service.data.activities).toHaveLength(1);
+    });
+    test('uploaded app recordings and later provider imports share one identity without losing streams', async () => {
+        const service = new CoachingService(memoryStorage(), () => timestamp);
+        await service.recordRide({id: 'app-ride', source: 'auuki', start: timestamp,
+            duration: 60, streams: {power: Array(60).fill(150)}});
+        await service.importActivities([{id: 'app-ride', source: 'intervals', externalId: 'provider-id',
+            providerIds: {intervals: 'provider-id'}, start: timestamp, duration: 60}]);
+        expect(service.data.activities).toHaveLength(1);
+        expect(service.data.activities[0].streams.power).toHaveLength(60);
+        expect(service.data.activities[0].source).toBe('auuki');
+        expect(service.data.activities[0].providerIds.intervals).toBe('provider-id');
+    });
     test('history -> snapshot -> plan is persistent and repeatable with an injected clock', async () => {
         const {service, storage, clock} = await setup();
         const restored = new CoachingService(storage, clock);
