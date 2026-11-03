@@ -67,14 +67,10 @@ function IndoorBikeData(args = {}) {
         return dataview[`get${field.type}`](i, architecture) * field.resolution;
     }
 
-    // Dataview -> {'<field-name>': {value: Number, unit: String}}
+    // Truncated fields raise RangeError rather than shifting subsequent measurements.
     function decode(dataview) {
-        const byteLength = dataview.byteLength;
-
         return order.reduce(function(acc, fieldName) {
             const field = fields[fieldName];
-
-            if((acc.i + field.size) > byteLength) return acc;
 
             if(field.present(acc.flags)) {
                 const value = getField(field, dataview, acc.i);
@@ -106,4 +102,3 @@ export {
     IndoorBikeData,
     indoorBikeData,
 };
-
