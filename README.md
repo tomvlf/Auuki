@@ -63,18 +63,28 @@ For HTTPS development, `npm run starttls` uses `dev_cert/cert.pem` and
 
 ## Run with Docker Compose
 
-Build and start the production web app with:
+The default Compose stack runs the frontend and backend images published to
+GitHub Container Registry. For a local HTTP trial, start both services with:
+
+```sh
+AUUKI_INSECURE_COOKIES=1 docker compose up -d
+```
+
+Then open [http://localhost:8080](http://localhost:8080). To stop it, run
+`docker compose down`. The backend stores its data in the persistent
+`auuki-server-data` volume. The images must first be published by the GitHub
+Actions workflow; if a package is private, authenticate to GHCR before pulling.
+
+To build both images from a local checkout instead, use:
 
 ```sh
 AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
-Then open [http://localhost:8080](http://localhost:8080). To stop it, run
-`docker compose down`.
-
 The app uses browser device APIs that require a secure context. `localhost`
 works for local use; deployments accessed from another host need HTTPS, typically
-provided by a reverse proxy.
+provided by a reverse proxy. For HTTPS deployments, set `AUUKI_ORIGIN` to the
+exact public origin, without a trailing slash, and leave insecure cookies disabled.
 
 ## Self-hosted accounts and integrations
 
@@ -83,16 +93,9 @@ The workout engine, BLE/ANT+ controls, recording and recovery still run in the
 browser. See the [backend guide](doc/backend.md) for deployment, data storage,
 API-key encryption and Intervals.icu synchronization.
 
-For a local HTTP trial:
-
-```sh
-AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
-```
-
-Open `http://localhost:8080` and create an account or sign in.
-For public deployments, set `AUUKI_ORIGIN=https://your-host` and use HTTPS; do not
-enable insecure cookies. Server data persists in the `auuki-server-data` volume.
-Use **Settings > Intervals.icu** to connect a personal API key. The previous
+Create an account or sign in after starting the stack. Use **Settings >
+Intervals.icu** to connect a personal API key. This requires a persistent
+`AUUKI_INTEGRATION_KEY`; see the backend guide for configuration. The previous
 Intervals.icu OAuth proxy has been replaced by this server-side connection.
 
 ## Sponsors 💖

@@ -35,3 +35,21 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Backend image metadata
+        id: backend_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/tomvlf/auuki-backend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./server/Dockerfile
+          push: true
+          tags: ${{ steps.backend_meta.outputs.tags }}
+          labels: ${{ steps.backend_meta.outputs.labels }}

@@ -2,8 +2,8 @@
 
 The desktop platform and `/mobile` require a server account. They restore the
 HttpOnly session before starting the workout engine or opening account-specific
-browser data. The static-only Compose file is an image deployment definition;
-include `compose.server.yaml` for the working account-backed platform.
+browser data. The default Compose stack runs both the frontend and backend;
+include `compose.server.yaml` when building the images from source.
 
 ## Accounts and browser-native workouts
 
@@ -132,8 +132,17 @@ npm test -- --runInBand test/server test/coaching test/views/training-calendar.t
 
 ## Deployment
 
-The default `compose.yaml` still deploys only the static website. Add the
-backend override to build both services:
+The default `compose.yaml` pulls the frontend and backend images from GitHub
+Container Registry:
+
+```sh
+AUUKI_ORIGIN=https://cycling.example.com \
+  docker compose up -d
+```
+
+The GitHub Actions workflow publishes both images on pushes to `master` and
+version tags. Make the packages public or authenticate to GHCR before pulling
+private images. To build both images from a local checkout instead, use:
 
 ```sh
 AUUKI_ORIGIN=https://cycling.example.com \
