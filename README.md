@@ -23,6 +23,25 @@ _Status_: Currently working on creating a full suite of Apple platform native ap
 - There is also a special development version which has the latest features available for preview: [dev.auuki.com](https://dev.auuki.com)
 - [How to create a Profile and Connect Intervals.icu](https://forum.intervals.icu/t/auuki-com-intervals-icu-integration/87105)
 
+## Development
+
+Install [Node.js](https://nodejs.org/) 22.18.0 or later, then install the dependencies and start Parcel:
+
+```sh
+npm install
+npm run start
+```
+
+Parcel prints the local URL when it starts. To run the test suite or create a production build, use:
+
+```sh
+npm test
+npm run build
+```
+
+For HTTPS development, `npm run starttls` uses `dev_cert/cert.pem` and
+`dev_cert/key.pem`; provide those local certificate files first.
+
 ## Run with Docker Compose
 
 Build and start the production web app with:
