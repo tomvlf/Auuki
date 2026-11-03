@@ -89,9 +89,17 @@ So, if you’re loving what Auuki’s bringing to the table, consider supporting
 
 ## Supported Browsers and Platforms
 
-### MacOS, Windows, Andorid 
+### MacOS, Windows, Android
 
 Please use either Chrome, Edge, Opera, Samsung Internet, or Brave. These browsers include built-in bluetooth.
+
+Web Bluetooth also requires a **secure context**: HTTPS with a trusted
+certificate, or `http://localhost` on the device running the browser. Chrome
+does not expose Bluetooth on an HTTP LAN address such as `http://192.168.1.10:8080`.
+This includes Android accessing a self-hosted server: use HTTPS, not the server's
+HTTP LAN URL. On Android, open the URL directly in Chrome rather than an in-app
+browser. If Bluetooth is still unavailable over HTTPS, check browser Bluetooth
+permissions and the Linux setup below.
 
 | Chrome | Edge | Opera | Chrome Android | Samsung Internet | Brave | Firefox | Safari | Safari iOS | Chrome iOS |
 |--------|------|-------|----------------|------------------|-------|---------|--------|------------|------------|
@@ -107,6 +115,9 @@ On Linux you might need to turn on the experimental platforms feature flag in yo
 - Edge: `edge://flags/#enable-experimental-web-platform-features`
 
 - Opera: `opera://flags/#enable-experimental-web-platform-features`
+
+Relaunch the browser after changing the flag. The HTTPS/localhost requirement
+still applies; enabling the flag does not enable Bluetooth on insecure pages.
 
 ### iOS
 Not Supported by the Web version

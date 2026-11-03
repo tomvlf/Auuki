@@ -1,4 +1,4 @@
-import { exists, empty, } from '../functions.js';
+import { empty, } from '../functions.js';
 
 const services = {
     fitnessMachine:      '00001826-0000-1000-8000-00805f9b34fb',
@@ -196,10 +196,8 @@ function WebBLE() {
         //     return false;
         // }
         // END comment
-        if(exists(navigator)) {
-            return 'bluetooth' in navigator;
-        }
-        return false;
+        return typeof navigator !== 'undefined' &&
+            typeof navigator.bluetooth?.requestDevice === 'function';
     }
 
     function uuidToName(uuid) {
@@ -219,4 +217,3 @@ export {
     webBle,
     uuids,
 };
-
