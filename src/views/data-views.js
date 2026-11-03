@@ -2,6 +2,7 @@ import { xf, exists, existance, validate, equals, isNumber, last, empty, avg, to
 import { formatTime } from '../utils.js';
 import { models } from '../models/models.js';
 import { DialogMsg } from '../models/enums.js';
+import { webBle } from '../ble/web-ble.js';
 
 
 //
@@ -1864,23 +1865,40 @@ class CompatibilityCheck extends HTMLElement {
 
         if(!self.compatible()) {
             self.show();
+        } else {
+            self.hide();
         }
     }
     disconnectedCallback() {
         this.abortController.abort();
     }
     compatible() {
-        return 'bluetooth' in navigator;
+        return window.isSecureContext !== false && webBle.isAvailable();
     }
     show() {
-        const self = this;
+        let guidance;
+        if(window.isSecureContext === false) {
+            guidance = `<p>Bluetooth requires a secure connection. Open this app over <b>HTTPS</b>,
+                or use <b>http://localhost</b> on the same device as the browser.</p>
+                <p>An HTTP LAN address (such as http://192.168.x.x) will not work,
+                including when opening a self-hosted app from Android. Serve the app
+                over HTTPS with a certificate trusted by your device.</p>`;
+        } else {
+            guidance = `<p>Web Bluetooth is not available on this page. Use a browser with
+                Web Bluetooth support, such as
+                <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or
+                <a href="https://www.microsoft.com/edge" target="_blank">Edge</a>,
+                and check that Bluetooth access is allowed in browser settings.</p>
+                <p>On Android, open the app directly in Chrome, not an in-app browser.</p>
+                <p>On Linux Chrome, you may need to enable
+                <b>chrome://flags/#enable-experimental-web-platform-features</b>
+                and relaunch Chrome.</p>
+                <p>On iOS, Chrome and other browsers may not provide Web Bluetooth.</p>`;
+        }
         this.innerHTML =
         `<div id="compatibility--cont">
-             <p>This browser is NOT supported. Please open the app with </p>
-             <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or
-             <a href="https://www.microsoft.com/edge" target="_blank">Edge</a>
-             <p>Please note that <b>iOS</b> is NOT supported at all, regardless of browser.</p>
-             <p>For more information visit the project <a href="https://github.com/dvmarinoff/Flux" target="_blank">Page.</a></p>
+             <p><b>Bluetooth unavailable</b></p>
+             ${guidance}
          </div>`;
     }
     hide() {
