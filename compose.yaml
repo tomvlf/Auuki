@@ -13,6 +13,7 @@ services:
     pull_policy: always
     environment:
       AUUKI_ORIGIN: ${AUUKI_ORIGIN:-http://localhost:8080}
+      AUUKI_ADDITIONAL_ORIGINS: ${AUUKI_ADDITIONAL_ORIGINS:-}
       AUUKI_INSECURE_COOKIES: ${AUUKI_INSECURE_COOKIES:-0}
       AUUKI_DATABASE: /app/data/auuki.sqlite
       AUUKI_INTEGRATION_KEY: ${AUUKI_INTEGRATION_KEY:-}

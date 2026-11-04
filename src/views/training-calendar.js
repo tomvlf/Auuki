@@ -169,7 +169,7 @@ class TrainingCalendar extends HTMLElement {
                 try {
                     const status = hasAccountScope()
                         ? {intervals: (await serverRequest('integrations/intervals')).connected}
-                        : await models.api.auth.status();
+                        : {intervals: false};
                     this.intervalsConnected = Boolean(
                         status?.services?.intervals ?? status?.intervals,
                     );

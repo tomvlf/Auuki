@@ -1,7 +1,6 @@
 import { xf } from '../functions.js';
 import { db } from '../db.js';
-import { useServerCoaching, useLocalCoaching } from '../coaching/service.js';
-import { serverAccount, serverEnabled, serverRequest, SERVER_MODE_KEY } from '../server/client.js';
+import { authenticate, serverAccount, serverEnabled, serverRequest, SERVER_MODE_KEY } from '../server/client.js';
 import { createBackup, restoreBackup } from '../server/backup.js';
 import { fileHandler } from '../file.js';
 
@@ -14,9 +13,6 @@ class ServerAccount extends HTMLElement {
         const options = {signal: this.controller.signal};
         this.addEventListener('submit', event => this.submit(event), options);
         this.addEventListener('click', event => this.click(event), options);
-        window.addEventListener('storage', event => {
-            if(event.key === SERVER_MODE_KEY || event.key === null) window.location.reload();
-        }, options);
         xf.sub('coaching:changed', () => this.render(), options);
         this.render();
     }
@@ -89,13 +85,8 @@ class ServerAccount extends HTMLElement {
         await this.run(async () => {
             if(form.dataset.serverForm === 'auth') {
                 if(!['register', 'login'].includes(operation)) throw new Error('Choose sign in or create account.');
-                await serverRequest(operation, {method: 'POST',
-                    body: {email: values.get('email'), password: values.get('password')}});
-                await useServerCoaching();
-                const backup = await serverRequest('backup');
-                this.backupRevision = backup.revision;
-                xf.dispatch('coaching:changed');
-                this.message = 'Server coaching enabled. Open Workouts > Calendar to configure or review your plan.';
+                await authenticate(operation, {email: values.get('email'), password: values.get('password')});
+                window.location.reload();
             } else if(form.dataset.serverForm === 'restore') {
                 if(!values.get('confirm')) throw new Error('Confirm the restore first.');
                 const backup = await serverRequest('backup');
@@ -104,9 +95,9 @@ class ServerAccount extends HTMLElement {
                 window.location.reload();
             } else if(form.dataset.serverForm === 'delete') {
                 await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
-                await useLocalCoaching();
-                xf.dispatch('coaching:changed');
-                this.message = 'Server account and its data deleted. Local data was kept.';
+                window.localStorage.removeItem(SERVER_MODE_KEY);
+                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.location.reload();
             }
         });
     }
@@ -116,10 +107,9 @@ class ServerAccount extends HTMLElement {
         await this.run(async () => {
             if(action === 'local' || action === 'logout') {
                 if(action === 'logout') await serverRequest('logout', {method: 'POST', body: {}});
-                await useLocalCoaching();
-                this.backupRevision = undefined;
-                xf.dispatch('coaching:changed');
-                this.message = 'Local-only coaching restored. Server data has not been copied to this device.';
+                window.localStorage.removeItem(SERVER_MODE_KEY);
+                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.location.reload();
             } else if(action === 'save') {
                 // First save after reload must not overwrite an existing backup without reviewing it.
                 if(this.backupRevision === undefined) {

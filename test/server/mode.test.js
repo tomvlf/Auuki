@@ -37,7 +37,7 @@ test('startup in server mode never silently falls back to local coaching on fail
     window.localStorage.setItem('auuki-server-mode', '1');
     fetch.mockRejectedValue(new Error('Server unreachable'));
     const service = require('../../src/coaching/service.js');
-    await expect(service.initializeCoaching()).rejects.toThrow('Server unreachable');
+    await expect(service.initializeCoaching()).rejects.toThrow('Cannot reach the Auuki server');
     expect(service.coachingData()).toBeNull();
     expect(() => service.coachingService()).toThrow('not loaded');
     expect(window.localStorage.getItem('auuki-server-mode')).toBe('1');

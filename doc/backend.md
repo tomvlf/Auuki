@@ -1,13 +1,22 @@
 # Platform backend
 
-The desktop platform and `/mobile` require a server account. They restore the
-HttpOnly session before starting the workout engine or opening account-specific
-browser data. The default Compose stack runs both the frontend and backend;
+The desktop platform and `/mobile` support guest use without a backend.
+Guest workouts, Bluetooth/ANT+ controls, FIT recording/downloads, recovery,
+profile settings, the manual calendar and on-device coaching remain available
+anonymously. Server coaching/history, private server backups and Intervals.icu
+API-key connections require an account. There is no automatic upload of guest data.
+
+After choosing **Sign in / Create account**, the app verifies the HttpOnly
+session before opening account-specific browser data or starting the engine.
+Subsequent visits restore that account mode. An expired session or unavailable
+server shows a visible error/login screen with **Continue without an account**;
+it never silently opens protected account data as a guest.
+The default Compose stack runs both the frontend and backend;
 include `compose.server.yaml` when building the images from source.
 
 ## Accounts and browser-native workouts
 
-On the login screen, create an account with an email and a password of at least
+Choose **Sign in / Create account**, then create an account with an email and a password of at least
 12 characters, or sign into an existing account. In **Coach**, configure a
 profile and goal. Plans, activity
 imports, post-ride feedback and adaptations are calculated by the server using
@@ -36,10 +45,11 @@ device loss cannot be made equivalent to uninterrupted recording.
 
 The PWA caches only its public shell and static assets, never account API
 responses or credentials. Updates wait for existing ride windows to close.
-A fresh page load still verifies the server session: fully offline login or
-offline reopening of the protected account is not supported.
+A fresh account-mode page load still verifies the server session: fully offline
+login or offline reopening of the protected account is not supported. Guest
+mode can open the cached public shell and its separate on-device data.
 
-Use **Settings > Save backup** to explicitly back up imported workout
+When signed in, use **Settings > Save backup** to explicitly back up imported workout
 files, recent cached FIT recordings (normally the last seven), profile settings
 and the manual calendar. Referenced built-in workouts are saved as copies so
 calendar entries retain their workout IDs on another device. Other built-in workouts remain supplied by the app. These
@@ -56,10 +66,12 @@ the IndexedDB merge, retry the restore. Stop recording before account actions or
 restoring. Server coaching is already available after signing in without restore;
 restore the profile FTP too before executing a server plan created with another FTP.
 
-There is no silent local-coaching fallback. If the server is unavailable,
+There is no silent local-coaching fallback for an account. If the server is unavailable,
 changes fail visibly; FIT recording remains local. **Sign out** revokes the
 session and is blocked during a ride. Expiry pauses and checkpoints a ride
-before showing login. Signing in again or reloading retrieves the latest state
+before showing login. Switching to guest mode reloads into separate guest
+storage; account ride recovery remains in that account's storage. Signing in
+again or reloading retrieves the latest state
 after a conflicting edit from another browser/tab.
 
 ## Intervals.icu API-key connection
@@ -122,7 +134,8 @@ npm start
 ```
 
 Parcel proxies `/api/server` to port 3000. Use the `http://localhost:1234` Parcel
-URL (if it selects another port, set `AUUKI_ORIGIN` accordingly). For HTTPS
+URL or `http://127.0.0.1:1234` (both are trusted by the CLI development defaults).
+If Parcel selects another port, set `AUUKI_ORIGIN` to the URL it prints. For HTTPS
 development set the matching `AUUKI_ORIGIN` and leave secure cookies enabled.
 
 ```sh
@@ -149,20 +162,45 @@ AUUKI_ORIGIN=https://cycling.example.com \
   docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
-Terminate TLS at a trusted reverse proxy in front of port 8080. Forward the
+Terminate TLS at a trusted reverse proxy in front of port 8080. Set
+`AUUKI_ORIGIN` to the URL in the browser's address bar, **not** the backend's
+`http://backend:3000` address or the proxy's internal address. Forward the
 browser's `Origin` header unchanged. The backend is accessible only on the
 Compose network, not a published host port. Nginx forwards `/api/server/` to it.
 Without that service, login is unavailable. The included nginx resolver uses Docker's internal DNS; non-Docker nginx
 deployments must configure their own backend address and resolver.
 
+If multiple URLs legitimately serve the app, list their exact origins in
+`AUUKI_ADDITIONAL_ORIGINS`, for example `https://mobile.example.com,https://cycling.example.com:8443`.
+Only explicitly configured origins are trusted; forwarded host/protocol headers
+do not grant trust. A trailing slash in configuration is normalized; paths,
+credentials, query strings and fragments are rejected. Scheme and port matter.
+Never add an untrusted site or a wildcard.
+
 For an HTTP trial on localhost only, set `AUUKI_INSECURE_COOKIES=1`. This setting
-is rejected for non-localhost origins. Keep Secure cookies enabled on real
-deployments. An origin is an exact scheme/host/port, with no trailing slash.
+is rejected if any configured origin is non-loopback. Keep Secure cookies enabled
+on real deployments. HTTP LAN addresses cannot support secure authentication or
+Web Bluetooth: use HTTPS. A missing cookie after successful registration/login
+is reported explicitly instead of returning to login without an explanation.
+
+The browser always calls relative `/api/server/` URLs through Parcel/nginx on
+the same origin. This is intentionally not a cross-origin API: no permissive
+CORS headers or separate browser API URL are needed. Backend port `PORT`
+defaults to 3000; if changed, update both the proxy target and health check.
+Email/password authentication has no OAuth callback/redirect URL; the session
+cookie is scoped to `/api/server`. Intervals.icu uses the signed-in account's
+server-stored API key, not the former OAuth proxy.
+
+If login reports an origin rejection, compare the browser URL with the backend
+startup log, correct the origin variables and recreate/restart the backend
+(`docker compose up -d` after changing Compose's environment or `.env`).
+Rebuilding static frontend assets does not change the backend's trusted origins.
 
 | Environment | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | Backend listening port |
 | `AUUKI_ORIGIN` | `http://localhost:1234` (CLI), `http://localhost:8080` (Compose) | Exact allowed browser origin |
+| `AUUKI_ADDITIONAL_ORIGINS` | `http://127.0.0.1:1234` (CLI only when `AUUKI_ORIGIN` is unset), otherwise empty | Comma-separated additional trusted browser origins |
 | `AUUKI_DATABASE` | `./data/auuki.sqlite` | Persistent SQLite path |
 | `AUUKI_INSECURE_COOKIES` | `0` | Set to `1` only for local HTTP |
 | `AUUKI_INTEGRATION_KEY` | unset | Base64-encoded 32-byte server-only encryption key |
@@ -179,7 +217,7 @@ provided. Each backup/coaching document and incoming JSON request is capped at
 
 Passwords use salted scrypt. Session cookies are HttpOnly, SameSite=Strict and
 Secure by default, expire after seven days and are stored hashed on the server.
-Writes require the configured Origin, JSON content type and client header.
+Writes require an explicitly configured Origin, JSON content type and client header.
 Authentication attempts are limited per socket IP; behind nginx this is shared
 by its clients, conservatively limiting all of them to 20 attempts per 15 minutes.
 Configure additional public-edge rate limiting and registration access controls

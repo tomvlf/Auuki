@@ -3,18 +3,25 @@ export const serverAccount = {email: null};
 export const serverEnabled = () => window.localStorage.getItem(SERVER_MODE_KEY) === '1';
 
 export async function serverRequest(path, {method = 'GET', body, account = serverAccount.email} = {}) {
-    const response = await fetch(`/api/server/${path}`, {
+    let response;
+    try { response = await fetch(`/api/server/${path}`, {
         method, credentials: 'same-origin', cache: 'no-store',
         headers: {'Content-Type': 'application/json', 'X-Auuki-Client': '1',
             ...(account ? {'X-Auuki-Account': account} : {})},
         ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-    });
+    }); } catch(error) {
+        throw new Error('Cannot reach the Auuki server. Check your connection and try again.', {cause: error});
+    }
     if(!response.headers.get('content-type')?.includes('application/json')) {
         throw new Error('The Auuki backend is unavailable on this host. Your loaded ride remains local; retry when the server is available.');
     }
-    const result = await response.json();
+    let result;
+    try { result = await response.json(); }
+    catch(error) {
+        throw new Error('The Auuki backend returned an invalid response. Try again or contact the server operator.', {cause: error});
+    }
     if(!response.ok) {
-        const error = new Error(result.error || `Server request failed (${response.status}).`);
+        const error = new Error(result?.error || `Server request failed (${response.status}).`);
         error.status = response.status;
         if(response.status === 401 && account && typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('session:expired', {detail: error.message}));
@@ -22,6 +29,23 @@ export async function serverRequest(path, {method = 'GET', body, account = serve
         throw error;
     }
     return result;
+}
+
+export async function authenticate(operation, credentials) {
+    if(!['login', 'register'].includes(operation)) throw new Error('Choose sign in or create account.');
+    const signedIn = await serverRequest(operation, {method: 'POST', account: null, body: credentials});
+    let account;
+    try { account = await serverRequest('session', {account: null}); }
+    catch(error) {
+        if(error.status !== 401) throw error;
+        throw new Error(`${operation === 'register' ? 'Your account was created, but' : 'Your credentials were accepted, but'} the session cookie was not saved. Enable cookies and use HTTPS, or ask the operator to enable AUUKI_INSECURE_COOKIES for localhost HTTP.`);
+    }
+    if(typeof signedIn?.email !== 'string' || account?.email !== signedIn.email) {
+        throw new Error('The signed-in account changed. Please sign in again before opening account data.');
+    }
+    window.localStorage.setItem(SERVER_MODE_KEY, '1');
+    window.localStorage.setItem('auuki-session-change', String(Date.now()));
+    return account;
 }
 
 export class ServerCoachingService {

@@ -2,6 +2,7 @@
 
 import { localDate, TrainingCalendar } from '../../src/views/training-calendar.js';
 import { xf } from '../../src/functions.js';
+import { setAccountScope } from '../../src/storage/account.js';
 
 describe('training calendar', () => {
     function createCalendar(workouts = []) {
@@ -29,6 +30,7 @@ describe('training calendar', () => {
 
     beforeEach(() => {
         window.localStorage.clear();
+        setAccountScope(null);
     });
 
     test('formats local dates without shifting to the previous day', () => {
@@ -173,11 +175,12 @@ describe('training calendar', () => {
         ).toString('base64');
         const requests = [];
         global.fetch = jest.fn(async (url, options) => {
-            if(options.body && JSON.parse(options.body).method === 'status_handler') {
+            if(url.endsWith('/integrations/intervals')) {
                 return {
                     ok: true,
                     status: 200,
-                    json: async () => ({result: {services: {intervals: true}}}),
+                    headers: {get: () => 'application/json'},
+                    json: async () => ({connected: true}),
                 };
             }
 
@@ -196,6 +199,7 @@ describe('training calendar', () => {
         });
 
         try {
+            setAccountScope('rider@example.com');
             const calendar = createCalendar();
             calendar.displayMonth = new Date(2026, 11, 1);
             calendar.signal = {signal: new AbortController().signal};
@@ -217,6 +221,7 @@ describe('training calendar', () => {
             expect(startedWorkouts).toHaveLength(1);
             expect(startedWorkouts[0].intervals).toHaveLength(1);
         } finally {
+            setAccountScope(null);
             global.fetch = originalFetch;
         }
     });

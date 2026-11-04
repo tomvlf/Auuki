@@ -19,7 +19,7 @@
     </head>
 
     <body id="theme" class="dark-theme">
-        <div id="platform" role="status">Restoring your training account...</div>
+        <div id="platform" role="status">Opening your training...</div>
         <div class="wrapper" hidden>
             <modal-error>
                 <dialog id="dialog--error" class="dialog error">
@@ -680,6 +680,8 @@
                                             class="input"
                                             name="email"
                                             type="email"
+                                            maxlength="254"
+                                            autocomplete="username"
                                             placeholder="Email"
                                             value=""
                                             required
@@ -690,8 +692,10 @@
                                             class="input"
                                             name="password"
                                             type="password"
-                                            pattern=".{8,64}"
-                                            title="8 characters minimum"
+                                            minlength="12"
+                                            maxlength="1024"
+                                            autocomplete="new-password"
+                                            title="12 characters minimum"
                                             placeholder="Password"
                                             value=""
                                             required
@@ -701,8 +705,10 @@
                                         <input id="register--password-confirmation--input"
                                             class="input"
                                             name="password_confirmation"
-                                            pattern=".{8,64}"
-                                            title="8 characters minimum"
+                                            minlength="12"
+                                            maxlength="1024"
+                                            autocomplete="new-password"
+                                            title="12 characters minimum"
                                             placeholder="Confirm Password"
                                             type="password"
                                             value=""
@@ -730,6 +736,8 @@
                                             class="input"
                                             name="email"
                                             type="email"
+                                            maxlength="254"
+                                            autocomplete="username"
                                             placeholder="Email"
                                             value=""
                                             required
@@ -739,9 +747,11 @@
                                         <input id="login--password--input"
                                             class="input"
                                             name="password"
-                                            type="Password"
-                                            pattern=".{8,64}"
-                                            title="8 characters minimum"
+                                            type="password"
+                                            minlength="12"
+                                            maxlength="1024"
+                                            autocomplete="current-password"
+                                            title="12 characters minimum"
                                             placeholder="Password"
                                             value=""
                                             required

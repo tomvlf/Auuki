@@ -506,7 +506,6 @@ xf.reg('app:start', async function(_, db) {
     const sound = Sound({volume: db.volume});
     sound.start();
 
-    if(!hasAccountScope()) models.api.start();
     xf.dispatch('app:ready');
     // TODO: remove
     // xf.dispatch(`ui:page-set`, 'workouts');

@@ -5,6 +5,7 @@ import config from './config.js';
 import strava from './strava.js';
 import intervals from './intervals.js';
 import trainingPeaks from './training-peaks.js';
+import { authenticate, serverRequest, SERVER_MODE_KEY } from '../server/client.js';
 
 function Auth(args = {}) {
     const api_uri = config.get().API_URI;
@@ -80,115 +81,31 @@ function Auth(args = {}) {
 
     // {data: {FormData}} -> Void
     async function register(args = {}) {
-        const url = `${api_uri}/api/register`;
-        const data = args.data;
-
-        if(data.email.trim() === '' ||
-            data.password.trim() === '' ||
-            data.password_confirmation.trim() === '' ||
-            !isBrowser()
-            ) {
-            console.log(`:register :blocked :is-browser ${isBrowser()}`);
-            return;
-        }
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json',},
-                body: JSON.stringify(data),
-            });
-
-            const status = response.status;
-            const json = await response.json();
-
-            if(json.error) {
-                console.log(':api :register :error');
-                xf.dispatch('action:auth', ':error');
-                return;
-            }
-            if(json?.result?.success) {
-                console.log(':api :register :success');
-                xf.dispatch('action:nav', 'settings:profile');
-                xf.dispatch('action:auth', ':password:login');
-                return;
-            }
-
-            console.log(`register: :none`);
-        } catch(error) {
-            console.log(error);
-        }
+        return signIn('register', args.data);
     }
 
     // {data: {FormData}} -> Void
     async function login(args = {}) {
-        const url = `${api_uri}/api/login`;
-        const data = args.data;
+        return signIn('login', args.data);
+    }
 
-        if(data.email.trim() === '' ||
-           data.password.trim() === '' ||
-           !isBrowser()) {
-            console.log(`:login :blocked :is-browser ${isBrowser()}`);
-            return;
+    async function signIn(operation, data = {}) {
+        if(operation === 'register' && data.password !== data.password_confirmation) {
+            throw new Error('Passwords do not match.');
         }
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json',},
-                credentials: 'include',
-                body: JSON.stringify(data),
-            });
-
-            const json = await response.json();
-
-            if(json.error) {
-                console.log(`:api :login :error`);
-                xf.dispatch('action:auth', ':error');
-                return;
-            }
-
-            if(json?.result?.success) {
-                console.log(`:api :login :success`);
-                xf.dispatch('action:auth', ':password:profile');
-                status();
-                return;
-            }
-
-            console.log(`:api :login :none`);
-        } catch(error) {
-            console.log(error);
-        }
+        const { db } = await import('../db.js');
+        if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before changing accounts.');
+        await authenticate(operation, {email: data.email, password: data.password});
+        window.location.reload();
     }
 
     async function logout() {
-        const url = `${api_uri}/api/logout`;
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json',},
-                credentials: 'include',
-                body: JSON.stringify({logout: true}),
-            });
-
-            const result = await response.json();
-
-            console.log(`:api :logout :success`);
-            xf.dispatch('action:auth', ':password:logout');
-
-            _loggedIn = false;
-
-            if(_turnstileLoaded) {
-                renderTurnstile();
-            } else {
-                loadTurnstile();
-            }
-
-            status();
-        } catch(error) {
-            console.log(error);
-        }
+        const { db } = await import('../db.js');
+        if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
+        await serverRequest('logout', {method: 'POST', body: {}});
+        window.localStorage.removeItem(SERVER_MODE_KEY);
+        window.localStorage.setItem('auuki-session-change', String(Date.now()));
+        window.location.reload();
     }
 
     // {data: {FormData}} -> Void
@@ -354,4 +271,3 @@ function Auth(args = {}) {
 const auth = Auth();
 
 export default auth;
-

@@ -23,4 +23,7 @@ test('account-scoped settings and databases cannot bleed between signed-in accou
     expect(localStorage.getItem('ftp')).toBe('999');
     accountStorage.removeItem('ftp');
     expect(ftp.get()).toBe('200');
+    setAccountScope(null);
+    expect(accountDatabase()).toBe('store');
+    expect(ftp.get()).toBe('999');
 });

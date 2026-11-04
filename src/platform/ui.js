@@ -1,5 +1,5 @@
 import { xf } from '../functions.js';
-import { serverRequest, serverAccount } from '../server/client.js';
+import { serverRequest, serverAccount, SERVER_MODE_KEY } from '../server/client.js';
 import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
@@ -30,6 +30,7 @@ const stat = (label, value, unit = '') => `<div class="stat"><span>${label}</spa
 
 export async function launchPlatform(root, account) {
     root.removeAttribute('role');
+    const authenticated = Boolean(account?.email);
     const mobile = /^\/mobile\/?$/.test(window.location.pathname);
     document.body.classList.add('platform-app', ...(mobile ? ['mobile-app'] : []));
     root.innerHTML = `<a class="skip-link" href="#main-content">Skip to content</a>
@@ -43,7 +44,7 @@ export async function launchPlatform(root, account) {
         </aside>
         <main id="main-content" tabindex="-1"><header class="platform-header">
             <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title" tabindex="-1"></h1></div>
-            <div class="account-menu"><span>${escape(account.email)}</span><button class="secondary" data-action="logout">Sign out</button></div>
+            <div class="account-menu"><span>${escape(account?.email || 'Guest / on-device only')}</span><button class="secondary" data-action="${authenticated ? 'logout' : 'signin'}">${authenticated ? 'Sign out' : 'Sign in / Create account'}</button></div>
         </header><div id="platform-message" role="status" aria-live="polite"></div>
         <div id="platform-content"><p role="status">Loading your training...</p></div>
         <div id="legacy-slot"></div></main>`;
@@ -82,6 +83,11 @@ export async function launchPlatform(root, account) {
         finally { busy = false; root.removeAttribute('aria-busy'); }
     };
     const refresh = async () => {
+        if(!authenticated) {
+            await coachingService().advance();
+            xf.dispatch('coaching:changed');
+            return;
+        }
         const result = await serverRequest('coaching');
         const service = coachingService();
         service.data = result.data;
@@ -126,7 +132,7 @@ export async function launchPlatform(root, account) {
                 ${link(data?.plan ? 'library' : 'coach', data?.plan ? 'Choose a workout' : 'Set up your Coach', 'button')}`;
         if(mobile) return `<section class="mobile-today panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
             ${db.elapsed > 0 ? card('Ride recovery', `<p>A ${time(db.elapsed)} ride is saved on this device. Reconnect your trainer before resuming.</p>${link('player', 'Return to ride', 'button')}`) : ''}
-            ${card('Connect & ride', `${deviceButtons()}${link('player', 'Open ride controls', 'button')}`)}
+            ${card('Connect & ride', `${deviceButtons()}<div class="button-row">${link('player', 'Open ride controls', 'button')}${link('library', 'Choose a workout', 'button secondary')}</div>`)}
             ${card('Up next', next.length ? `<ul class="session-list">${next.slice(0, 2).map(workoutRow).join('')}</ul>` : '<p>No upcoming sessions.</p>')}`;
         return `<div class="dashboard-grid"><section class="panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
             ${card('This week', `<div class="stats">${stat('Ride time', number(summary.seconds / 3600, 1), 'h')}${stat('Rides', summary.week.length)}
@@ -187,14 +193,19 @@ export async function launchPlatform(root, account) {
     }
     function activities(data) {
         const localPending = db.activity.filter(activity => activity.pendingSync && !data?.activities.some(a => a.id === activity.id));
+        const cached = authenticated ? [] : db.activity.filter(activity =>
+            !activity.pendingSync && !data?.activities.some(a => a.id === activity.id));
         const rides = [...(data?.activities || [])].sort((a, b) => b.start.localeCompare(a.start));
         return `${lastRide ? card('Ride saved', `<div class="stats">${stat('Duration', time(lastRide.duration))}
             ${stat('Average power', number(lastRide.averagePower), 'W')}${stat('Average HR', number(lastRide.averageHeartRate), 'bpm')}</div>
-            <p>${data?.activities.some(activity => activity.id === lastRide.id) ? "Saved to this account's server history." : 'Saved on this device. Server synchronization is pending.'}
+            <p>${!authenticated ? 'Saved on this device. No account or upload is required.' : data?.activities.some(activity => activity.id === lastRide.id) ? "Saved to this account's server history." : 'Saved on this device. Server synchronization is pending.'}
             Add session feedback in Coach to inform your next session.</p>${link('coach', 'Add feedback', 'button secondary')}`) : ''}
-            ${localPending.length ? card('Awaiting server synchronization', `<p>Your recordings are safely stored on this device. Retry when the server is available.</p>
+            ${localPending.length ? card(authenticated ? 'Awaiting server synchronization' : 'Awaiting local coaching update', `<p>Your recordings are safely stored on this device.</p>
                 <ul class="session-list">${localPending.map(activity => `<li class="session-row"><span>${escape(activity.name)} / ${minutes(activity.duration)}</span>
                 <button class="secondary" data-download="${escape(activity.id)}">Download FIT</button></li>`).join('')}</ul><button data-action="retry-rides">Retry synchronization</button>`) : ''}
+            ${cached.length ? card('Device recordings', `<p>Recordings from earlier guest rides are still available on this device.</p>
+                <ul class="session-list">${cached.map(activity => `<li class="session-row"><span>${escape(activity.name)} / ${minutes(activity.duration)}</span>
+                <button class="secondary" data-download="${escape(activity.id)}">Download FIT</button></li>`).join('')}</ul>`) : ''}
             ${card('Ride history', rides.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
                 <th>Avg power</th><th>Avg HR</th><th>Source</th><th>File</th></tr></thead><tbody>${rides.map(activity =>
                 `<tr><td><strong>${escape(activity.name || 'Cycling activity')}</strong><small>${escape(activity.day)}</small></td>
@@ -203,7 +214,7 @@ export async function launchPlatform(root, account) {
                     <small>${escape(activity.externalId)}</small></td><td>${db.activity.some(a => a.id === activity.id)
                     ? `<div class="button-row"><button class="secondary" data-download="${escape(activity.id)}">FIT</button>
                         ${integration?.connected ? `<button class="secondary" data-upload-ride="${escape(activity.id)}">Send to Intervals.icu</button>` : ''}</div>` : '--'}</td></tr>`).join('')}</tbody></table></div>` :
-                empty('Your rides will appear here after you finish a workout or connect Intervals.icu.', 'settings', 'Connect an integration'))}
+                empty(authenticated ? 'Your rides will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'))}
             <p class="muted">Missing measurements are shown as --, not estimated. FIT downloads are retained locally for the most recent seven rides.</p>`;
     }
     function progress(data) {
@@ -244,12 +255,12 @@ export async function launchPlatform(root, account) {
         </section>`;
     }
     function settings() {
-        return `<div class="dashboard-grid">${card('Rider profile', `<p>These settings are private to this account on this device. Coach configuration is stored on the server.</p>
+        return `<div class="dashboard-grid">${card('Rider profile', `<p>${authenticated ? 'These settings are private to this account on this device. Coach configuration is stored on the server.' : 'Guest settings, workouts, recordings, calendar and coaching are stored only on this device.'}</p>
             <form id="profile-form"><label>FTP (W)<input name="ftp" type="number" min="1" max="1500" value="${db.ftp}" required></label>
                 <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required></label>
                 <button>Save profile</button></form>${integration?.connected ? '<button class="secondary" data-action="import-profile">Use Intervals.icu FTP / weight</button>' : ''}
                 <p class="muted">After changing FTP, archive and regenerate an active plan before riding it.</p>`)}
-            ${card('Intervals.icu', integrationView())}
+            ${authenticated ? `${card('Intervals.icu', integrationView())}
             ${card('Private device backup', `<p>Back up this account's workout files, recent FIT recordings, settings and manual calendar to the server.</p>
                 <div class="button-row"><button class="secondary" data-action="backup">Save backup</button>
                 <button class="secondary" data-action="restore">Restore backup</button></div>
@@ -257,7 +268,10 @@ export async function launchPlatform(root, account) {
             ${card('Your account', `<p>${escape(account.email)}</p><p>Coach history and imports are automatically saved to this server. Bluetooth pairings and ride recovery stay on this device.</p>
                 <button class="secondary" data-action="export">Export training history</button>
                 <form id="delete-account"><label>Confirm email to permanently delete this account and all server data
-                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`)}</div>`;
+                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`)}` :
+                card('Optional server account', `<p>Ride, connect devices, import workouts, download FIT recordings, use the calendar and run local coaching without an account.
+                    Sign in for account-scoped server coaching, private backups and Intervals.icu integrations. Guest data is kept separately and is never automatically uploaded.</p>
+                    <button data-action="signin">Sign in / Create account</button><button class="secondary" data-action="export">Export local training history</button>`)}</div>`;
     }
     function integrationView() {
         if(!integration) return '<p role="status">Loading integration status...</p>';
@@ -276,6 +290,7 @@ export async function launchPlatform(root, account) {
             <p class="muted">Disconnect removes credentials and stops imports. Imported history is retained. Future syncs recheck the last seven days for updates.</p>`;
     }
     async function loadIntegration() {
+        if(!authenticated) return;
         if(integrationLoading) return;
         integrationLoading = true;
         try {
@@ -311,7 +326,7 @@ export async function launchPlatform(root, account) {
                         : route === 'devices' ? `<p class="muted">Select your trainer and sensors below, then choose which device supplies each measurement.
                             Connections and controls use the existing BLE / ANT+ engine.</p>
                             ${!navigator.bluetooth ? '<p role="alert">Web Bluetooth is unavailable in this browser. Use Chrome/Edge on a supported platform and HTTPS or localhost. ANT+ requires Web Serial or WebUSB.</p>' : ''}`
-                            : route === 'coach' ? '<p class="muted">Your private server Coach uses your normalized activity history. Configure your profile and dated goal below.</p>' : '';
+                            : route === 'coach' ? `<p class="muted">Your ${authenticated ? 'private server' : 'on-device'} Coach uses your normalized activity history. Configure your profile and dated goal below.</p>` : '';
         if(route === 'player') updateRide();
     }
     function navigate() {
@@ -405,7 +420,8 @@ export async function launchPlatform(root, account) {
                 if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before deleting the account.');
                 if(!confirm('Permanently delete this account, all server training data and integrations?')) return;
                 await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
-                window.localStorage.setItem('auuki-session-change', crypto.randomUUID());
+                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.removeItem(SERVER_MODE_KEY);
                 window.location.reload();
             } else {
                 const apiKey = values.get('apiKey');
@@ -448,10 +464,15 @@ export async function launchPlatform(root, account) {
             if(engineModels.activity?.pendingRecording && !['recover-download', 'recover-save'].includes(action)) {
                 throw new Error('Save or download the unsaved FIT recording before continuing.');
             }
-            if(action === 'logout') {
+            if(action === 'signin') {
+                if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing in.');
+                window.location.hash = '/account';
+                window.location.reload();
+            } else if(action === 'logout') {
                 if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
                 await serverRequest('logout', {method: 'POST', body: {}});
-                window.localStorage.setItem('auuki-session-change', crypto.randomUUID());
+                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.removeItem(SERVER_MODE_KEY);
                 serverAccount.email = null;
                 window.location.reload();
             } else if(action === 'prepare') {
@@ -523,7 +544,7 @@ export async function launchPlatform(root, account) {
                 await refresh();
                 db.activity = await engineModels.activity.restore();
                 render();
-                report('Recorded rides synchronized.');
+                report(authenticated ? 'Recorded rides synchronized.' : 'Local coaching history updated.');
             }
         });
     });
