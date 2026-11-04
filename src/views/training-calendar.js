@@ -22,6 +22,7 @@ import { localDay } from '../coaching/domain.js';
 import { fileHandler } from '../file.js';
 import { accountStorage, accountKey, hasAccountScope } from '../storage/account.js';
 import { serverRequest } from '../server/client.js';
+import { renderPowerProfile } from './power-profile.js';
 
 const storageKey = 'training-calendar';
 const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -86,9 +87,12 @@ class TrainingCalendar extends HTMLElement {
         this.entries = [];
         this.workouts = [];
         this.plannedWorkouts = [];
-        this.plannedByMonth = new Map();
+        this.plannedByRange = new Map();
+        this.localActivities = [];
         this.intervalsConnected = null;
         this.checkingServices = false;
+        this.ftp = 200;
+        this.view = 'week';
     }
 
     /**
@@ -101,10 +105,11 @@ class TrainingCalendar extends HTMLElement {
         this.displayMonth = new Date();
         this.workouts = [];
         this.plannedWorkouts = [];
-        this.plannedByMonth = new Map();
+        this.plannedByRange = new Map();
         this.watchStatus = 'stopped';
         this.storageError = '';
         this.actionMessage = '';
+        this.view = 'week';
 
         try {
             this.entries = parseEntries(accountStorage.getItem(storageKey));
@@ -117,9 +122,20 @@ class TrainingCalendar extends HTMLElement {
         this.addEventListener('click', this.onClick.bind(this), this.signal);
         this.addEventListener('submit', this.onSubmit.bind(this), this.signal);
         window.addEventListener('storage', this.onStorage.bind(this), this.signal);
+        xf.sub('activity:restore', () => this.loadRecordedActivities(), this.signal);
+        xf.sub('activity:add', (activity) => {
+            this.localActivities = [activity, ...this.localActivities.filter(item => item.id !== activity.id)];
+            this.render();
+        }, this.signal);
         xf.sub('db:workouts', (workouts) => {
             this.workouts = workouts;
             this.render();
+        }, this.signal);
+        xf.sub('db:ftp', (ftp) => {
+            if(Number.isFinite(ftp) && ftp > 0) {
+                this.ftp = ftp;
+                this.render();
+            }
         }, this.signal);
         xf.sub('db:watchStatus', (status) => {
             this.watchStatus = status;
@@ -143,6 +159,17 @@ class TrainingCalendar extends HTMLElement {
 
     disconnectedCallback() {
         this.abortController.abort();
+    }
+
+    async loadRecordedActivities() {
+        try {
+            this.localActivities = await models.activity.restore();
+            if(!this.signal.signal.aborted) this.render();
+        } catch(error) {
+            console.error('Unable to load recorded calendar activities:', error);
+            this.actionMessage = 'Recorded rides could not be loaded.';
+            this.render();
+        }
     }
 
     /**
@@ -194,15 +221,22 @@ class TrainingCalendar extends HTMLElement {
         this.render();
     }
 
+    plannedRange() {
+        return this.view === 'week'
+            ? {oldest: this.weekDates()[0], newest: this.weekDates()[6]}
+            : monthRange(this.displayMonth);
+    }
+
     /**
-     * Loads planned workouts for the currently displayed month from the Intervals integration.
+     * Loads planned workouts for the visible week or month from the Intervals integration.
      *
-     * @returns {Promise<void>} Resolves after the month cache is updated or the request fails.
+     * @returns {Promise<void>} Resolves after the visible range cache is updated or the request fails.
      */
     async loadPlannedMonth() {
-        const monthKey = `${this.displayMonth.getFullYear()}-${this.displayMonth.getMonth()}`;
-        if(this.plannedByMonth.has(monthKey)) {
-            this.plannedWorkouts = this.plannedByMonth.get(monthKey);
+        const range = this.plannedRange();
+        const rangeKey = `${range.oldest}:${range.newest}`;
+        if(this.plannedByRange.has(rangeKey)) {
+            this.plannedWorkouts = this.plannedByRange.get(rangeKey);
             this.render();
             return;
         }
@@ -223,12 +257,12 @@ class TrainingCalendar extends HTMLElement {
             }
             if(!this.intervalsConnected || this.signal.signal.aborted) return;
 
-            const { oldest, newest } = monthRange(this.displayMonth);
-            const workouts = await models.planned.getIntervals(oldest, newest);
+            const workouts = await models.planned.getIntervals(range.oldest, range.newest);
             if(this.signal.signal.aborted) return;
 
-            this.plannedByMonth.set(monthKey, workouts);
-            if(monthKey === `${this.displayMonth.getFullYear()}-${this.displayMonth.getMonth()}`) {
+            this.plannedByRange.set(rangeKey, workouts);
+            const currentRange = this.plannedRange();
+            if(`${currentRange.oldest}:${currentRange.newest}` === rangeKey) {
                 this.plannedWorkouts = workouts;
                 this.render();
             }
@@ -266,7 +300,11 @@ class TrainingCalendar extends HTMLElement {
     coachingEntries() {
         try {
             const plan = coachingData()?.plan;
-            return (plan && plan.status !== 'archived' ? plan.workouts : []).map(workout => ({
+            const activities = coachingData()?.activities || [];
+            return (plan && plan.status !== 'archived' ? plan.workouts : [])
+                .filter(workout => !(workout.status === 'completed' &&
+                    activities.some(activity => activity.id === workout.matchedActivity)))
+                .map(workout => ({
                 id: workout.id, date: workout.date, name: workout.title,
                 workout: toAppWorkout(workout), coaching: workout, source: 'coaching',
             }));
@@ -286,6 +324,7 @@ class TrainingCalendar extends HTMLElement {
             })),
             ...this.plannedEntries().filter((entry) => entry.date === date),
             ...this.coachingEntries().filter(entry => entry.date === date),
+            ...this.activityEntriesForDate(date),
         ];
     }
 
@@ -341,6 +380,7 @@ class TrainingCalendar extends HTMLElement {
                     <button type="button" data-action="previous" aria-label="Previous month">‹</button>
                     <button type="button" data-action="today">Today</button>
                     <button type="button" data-action="next" aria-label="Next month">›</button>
+                    <button type="button" data-action="week">Week</button>
                 </div>
             </header>
             <div class="training-calendar--grid" role="grid" aria-label="${heading}">
@@ -350,6 +390,19 @@ class TrainingCalendar extends HTMLElement {
     }
 
     workoutMetrics(entry) {
+        if(entry.source === 'activity') {
+            const activity = entry.activity;
+            const load = activity.loadMetrics?.power?.value ?? activity.load;
+            const metrics = [
+                activity.duration ? `${Math.round(activity.duration / 60)} min` : null,
+                activity.distance ? `${(activity.distance / 1000).toFixed(1)} km` : null,
+                activity.averagePower ? `${Math.round(activity.averagePower)} W` : null,
+                activity.averageHeartRate ? `${Math.round(activity.averageHeartRate)} bpm` : null,
+                load != null ? `Load ${Math.round(load)}` : null,
+                activity.rpe != null ? `RPE ${activity.rpe}` : null,
+            ].filter(Boolean);
+            return metrics.length ? metrics : ['Completed ride'];
+        }
         const meta = entry.workout?.meta ?? {};
         const duration = typeof meta.duration === 'number' ? Math.round(meta.duration / 60) : null;
         const distance = typeof meta.distance === 'number' ? `${(meta.distance / 1000).toFixed(1)} km` : null;
@@ -366,6 +419,186 @@ class TrainingCalendar extends HTMLElement {
         return metrics.length ? metrics : ['Workout'];
     }
 
+    renderEntry(entry) {
+        const title = escapeHTML(entry.name || 'Workout');
+        const metrics = this.workoutMetrics(entry);
+        const source = entry.source === 'planned' ? 'Intervals'
+            : entry.source === 'coaching' ? 'Coach'
+                : entry.source === 'activity' ? 'Completed ride' : 'Plan';
+        const profile = entry.source === 'activity'
+            ? renderPowerProfile({
+                samples: entry.activity.powerProfile || entry.activity.streams?.power || [],
+                ftp: this.ftp,
+                label: entry.name,
+            })
+            : renderPowerProfile({
+                intervals: entry.workout?.intervals || [],
+                ftp: this.ftp,
+                label: entry.name,
+            });
+
+        return `
+            <li class="training-calendar--entry ${entry.source === 'activity' ? 'is-activity' : ''}">
+                <div class="training-calendar--copy">
+                    <div class="training-calendar--eyebrow">${source}</div>
+                    <div class="training-calendar--name">${title}</div>
+                    <div class="training-calendar--meta">
+                        ${metrics.map(metric => `<span>${escapeHTML(metric)}</span>`).join('')}
+                    </div>
+                    ${profile}
+                </div>
+                <div class="training-calendar--entry-actions">
+                    ${entry.workout &&
+                    (entry.source !== 'coaching' || this.canStartCoaching(entry.coaching))
+                        ? `<button type="button" data-action="start"
+                                   data-entry-date="${escapeHTML(entry.date || this.selectedDate)}"
+                                   data-workout="${escapeHTML(entry.workout.id || '')}">Start</button>`
+                        : !entry.workout && entry.source !== 'coaching' && entry.source !== 'activity'
+                            ? '<span class="training-calendar--source">Workout is no longer in your library</span>'
+                            : ''}
+                    ${entry.source === 'coaching'
+                        ? this.renderCoachingActions(entry)
+                        : entry.source !== 'planned' && entry.source !== 'activity'
+                            ? `<button type="button" data-action="remove" data-entry="${escapeHTML(entry.id)}">Remove</button>`
+                            : entry.source === 'planned'
+                                ? '<span class="training-calendar--source">Intervals.icu</span>' : ''}
+                </div>
+            </li>`;
+    }
+
+    activityEntriesForDate(date) {
+        const externalActivities = (coachingData()?.activities || [])
+            .filter(activity => activity.day === date)
+            .map(activity => ({
+                id: activity.id,
+                date,
+                name: activity.name || activity.original?.name || 'Ride',
+                source: 'activity',
+                activity,
+            }));
+        const externalIds = new Set(externalActivities.map(entry => String(entry.id)));
+        const localActivities = this.localActivities
+            .filter(activity => isoDate(new Date(activity.timestamp)) === date &&
+                !externalIds.has(String(activity.id)))
+            .map(activity => ({
+                id: activity.id,
+                date,
+                name: activity.name || 'Ride',
+                source: 'activity',
+                activity,
+            }));
+        return [...externalActivities, ...localActivities];
+    }
+
+    weekDates() {
+        const [year, month, day] = this.selectedDate.split('-').map(Number);
+        const selected = new Date(year, month - 1, day);
+        const mondayOffset = (selected.getDay() + 6) % 7;
+        return Array.from({length: 7}, (_, index) =>
+            localDate(year, month - 1, day - mondayOffset + index),
+        );
+    }
+
+    weekSummary(dates) {
+        const history = coachingData()?.activities || [];
+        const activities = dates.flatMap(date => this.activityEntriesForDate(date)
+            .map(entry => entry.activity));
+        const duration = activities.reduce((sum, activity) => sum + Number(activity.duration || 0), 0);
+        const distance = activities.reduce((sum, activity) => sum + Number(activity.distance || 0), 0);
+        const loadMetrics = activities.map(activity => activity.loadMetrics?.power?.value)
+            .filter(Number.isFinite);
+        let state = null;
+        const profile = coachingData()?.profile;
+        if(profile && activities.length) {
+            try {
+                const today = localDay(new Date().toISOString(), profile.timeZone);
+                state = estimateState(history, profile, today);
+            } catch(error) {
+                console.error('Unable to calculate weekly calendar training metrics:', error);
+            }
+        }
+        const durationText = `${Math.floor(duration / 3600)}h ${Math.round(duration % 3600 / 60)}m`;
+        const metrics = [
+            ['Rides', activities.length],
+            ['Time', durationText],
+            ['Distance', `${(distance / 1000).toFixed(1)} km`],
+            loadMetrics.length ? ['Load', Math.round(loadMetrics.reduce((sum, value) => sum + value, 0))] : null,
+            Number.isFinite(state?.chronicLoad) ? ['Fitness', Math.round(state.chronicLoad)] : null,
+            Number.isFinite(state?.acuteLoad) ? ['Fatigue', Math.round(state.acuteLoad)] : null,
+            Number.isFinite(state?.formBalance) ? ['Form', Math.round(state.formBalance)] : null,
+        ].filter(Boolean);
+        return `<aside class="training-calendar--week-summary" aria-label="Weekly training metrics">
+            <h3>Week overview</h3>
+            ${metrics.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}
+        </aside>`;
+    }
+
+    renderWeek() {
+        const dates = this.weekDates();
+        const startDate = new Date(`${dates[0]}T12:00:00`);
+        const endDate = new Date(`${dates[6]}T12:00:00`);
+        const sameMonth = startDate.getMonth() === endDate.getMonth();
+        const heading = sameMonth
+            ? `${startDate.toLocaleDateString(undefined, {month: 'long'})} ${startDate.getDate()}–${endDate.getDate()}, ${endDate.getFullYear()}`
+            : `${startDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} – ${endDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}`;
+        const today = isoDate();
+        const days = dates.map(date => {
+            const entries = this.entriesForDate(date);
+            const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                weekday: 'short',
+                day: 'numeric',
+            });
+            return `<section class="training-calendar--week-day ${date === today ? 'is-today' : ''}">
+                <button type="button" class="training-calendar--week-date ${entries.length ? 'has-events' : ''}"
+                        data-date="${date}" aria-pressed="${date === this.selectedDate}">
+                    <span>${escapeHTML(dateLabel)}</span>
+                    <span>${date === today ? 'Today' : ''}</span>
+                </button>
+                ${entries.length
+                    ? `<ul class="training-calendar--entries">${entries.map(entry => this.renderEntry(entry)).join('')}</ul>`
+                    : '<p class="training-calendar--empty">Rest day</p>'}
+            </section>`;
+        }).join('');
+        const options = this.workouts.map(workout =>
+            `<option value="${escapeHTML(workout.id)}">${escapeHTML(workout.meta?.name || 'Workout')}</option>`
+        ).join('');
+
+        return `
+            <header class="training-calendar--header">
+                <div>
+                    <h2 class="list--sub-heading">Training calendar</h2>
+                    <p class="training-calendar--week-label">${escapeHTML(heading)}</p>
+                </div>
+                <div class="training-calendar--navigation">
+                    <button type="button" data-action="week-previous" aria-label="Previous week">‹</button>
+                    <button type="button" data-action="week-today">Today</button>
+                    <button type="button" data-action="week-next" aria-label="Next week">›</button>
+                    <button type="button" data-action="month">Month</button>
+                </div>
+            </header>
+            <div class="training-calendar--week-layout">
+                <div class="training-calendar--week-sidebar">
+                    ${this.weekSummary(dates)}
+                    ${this.workouts.length
+                        ? `<form class="training-calendar--form">
+                               <label for="training-calendar-workout">Add a workout</label>
+                               <select id="training-calendar-workout" name="workout" required>
+                                   <option value="">Choose from your library</option>${options}
+                               </select>
+                               <button type="submit">Schedule</button>
+                           </form>`
+                        : '<p class="training-calendar--empty">Your workout library is still loading.</p>'}
+                    ${this.storageError
+                        ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.storageError)}</p>`
+                        : ''}
+                    ${this.actionMessage
+                        ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.actionMessage)}</p>`
+                        : ''}
+                </div>
+                <div class="training-calendar--week-schedule">${days}</div>
+            </div>`;
+    }
+
     renderSelectedDate() {
         const entries = this.entriesForDate(this.selectedDate);
         const heading = new Date(`${this.selectedDate}T00:00:00`).toLocaleDateString(undefined, {
@@ -378,34 +611,7 @@ class TrainingCalendar extends HTMLElement {
             `<option value="${escapeHTML(workout.id)}">${escapeHTML(workout.meta?.name || 'Workout')}</option>`
         ).join('');
         const items = entries.length
-            ? entries.map((entry) => {
-                const metrics = this.workoutMetrics(entry);
-                const title = escapeHTML(entry.name || 'Workout');
-                return `
-                <li class="training-calendar--entry">
-                    <div class="training-calendar--copy">
-                        <div class="training-calendar--eyebrow">${escapeHTML(entry.source === 'planned' ? 'Intervals' : entry.source === 'coaching' ? 'Coach' : 'Plan')}</div>
-                        <div class="training-calendar--name">${title}</div>
-                        <div class="training-calendar--meta">
-                            ${metrics.map((metric) => `<span>${escapeHTML(metric)}</span>`).join('')}
-                        </div>
-                    </div>
-                    <div class="training-calendar--entry-actions">
-                        ${entry.workout &&
-                        (entry.source !== 'coaching' || this.canStartCoaching(entry.coaching))
-                            ? `<button type="button" data-action="start"
-                                       data-workout="${escapeHTML(entry.workout.id || '')}">Start</button>`
-                            : !entry.workout && entry.source !== 'coaching'
-                                ? '<span class="training-calendar--source">Workout is no longer in your library</span>'
-                                : ''}
-                        ${entry.source === 'coaching'
-                            ? this.renderCoachingActions(entry)
-                            : entry.source !== 'planned'
-                            ? `<button type="button" data-action="remove" data-entry="${escapeHTML(entry.id)}">Remove</button>`
-                            : '<span class="training-calendar--source">Intervals.icu</span>'}
-                    </div>
-                </li>`;
-            }).join('')
+            ? entries.map(entry => this.renderEntry(entry)).join('')
             : '<li class="training-calendar--empty">No workouts planned for this day.</li>';
 
         return `
@@ -466,7 +672,9 @@ class TrainingCalendar extends HTMLElement {
             ? activeElement.value
             : this.querySelector('[name="workout"]')?.value;
 
-        this.innerHTML = `${this.renderMonth()}${this.renderSelectedDate()}`;
+        this.innerHTML = this.view === 'month'
+            ? `${this.renderMonth()}${this.renderSelectedDate()}`
+            : this.renderWeek();
 
         const select = this.querySelector('[name="workout"]');
         if(select && focusedWorkout && [...select.options].some((option) => option.value === focusedWorkout)) {
@@ -520,6 +728,31 @@ class TrainingCalendar extends HTMLElement {
                 console.error('Coaching calendar action failed:', error);
                 this.storageError = error.message;
             }
+        } else if(action.dataset.action === 'week-previous' ||
+                  action.dataset.action === 'week-next' ||
+                  action.dataset.action === 'week-today') {
+            if(action.dataset.action === 'week-today') {
+                this.selectedDate = isoDate();
+            } else {
+                const [year, month, day] = this.selectedDate.split('-').map(Number);
+                const selected = new Date(year, month - 1, day);
+                selected.setDate(selected.getDate() +
+                    (action.dataset.action === 'week-previous' ? -7 : 7));
+                this.selectedDate = isoDate(selected);
+            }
+            this.displayMonth = new Date(`${this.selectedDate}T12:00:00`);
+            this.plannedWorkouts = [];
+            this.loadPlannedMonth();
+        } else if(action.dataset.action === 'month') {
+            this.view = 'month';
+            this.plannedWorkouts = [];
+            this.render();
+            this.loadPlannedMonth();
+        } else if(action.dataset.action === 'week') {
+            this.view = 'week';
+            this.plannedWorkouts = [];
+            this.render();
+            this.loadPlannedMonth();
         } else if(action.dataset.action === 'previous') {
             this.displayMonth = new Date(
                 this.displayMonth.getFullYear(),
@@ -556,7 +789,7 @@ class TrainingCalendar extends HTMLElement {
             if(!entries) return;
             this.save(entries.filter((entry) => entry.id !== action.dataset.entry));
         } else if(action.dataset.action === 'start') {
-            const entry = this.entriesForDate(this.selectedDate).find(
+            const entry = this.entriesForDate(action.dataset.entryDate || this.selectedDate).find(
                 (item) => String(item.workout?.id || '') === action.dataset.workout,
             );
             const workout = entry?.workout;

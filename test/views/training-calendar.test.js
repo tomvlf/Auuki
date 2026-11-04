@@ -55,6 +55,55 @@ describe('training calendar', () => {
         expect(localDate(2024, 1, 29)).toBe('2024-02-29');
     });
 
+    test('renders a complete Monday-to-Sunday week by default with a planned power profile', () => {
+        const calendar = createCalendar();
+        calendar.plannedWorkouts = [{
+            id: 'threshold-1',
+            meta: {name: 'Threshold', startDateLocal: '2026-11-03', duration: 900},
+            intervals: [{steps: [{duration: 900, power: 0.9}]}],
+        }];
+
+        calendar.render();
+
+        expect(calendar.querySelectorAll('.training-calendar--week-day')).toHaveLength(7);
+        expect(calendar.querySelectorAll('.training-calendar--week-date')[0].dataset.date)
+            .toBe('2026-11-02');
+        expect(calendar.textContent).toContain('Week overview');
+        expect(calendar.querySelector('.power-profile--target')).not.toBeNull();
+        expect(calendar.querySelector('[data-action="month"]')).not.toBeNull();
+    });
+
+    test('calculates week dates across a year boundary', () => {
+        const calendar = createCalendar();
+        calendar.selectedDate = '2027-01-01';
+
+        expect(calendar.weekDates()).toEqual([
+            '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31',
+            '2027-01-01', '2027-01-02', '2027-01-03',
+        ]);
+    });
+
+    test('shows a locally recorded ride and its power profile in the weekly schedule', () => {
+        const calendar = createCalendar();
+        calendar.localActivities = [{
+            id: 'ride-local',
+            timestamp: new Date(2026, 10, 3, 12).getTime(),
+            name: 'Evening ride',
+            duration: 3600,
+            distance: 30000,
+            averagePower: 175,
+            powerProfile: [100, 150, 200],
+        }];
+
+        calendar.render();
+
+        expect(calendar.textContent).toContain('Evening ride');
+        expect(calendar.textContent).toContain('175 W');
+        expect(calendar.querySelector('.power-profile--recorded')).not.toBeNull();
+        expect(calendar.querySelector('.training-calendar--week-layout')
+            .firstElementChild.classList.contains('training-calendar--week-sidebar')).toBe(true);
+    });
+
     test('renders every day in a leap-year month', () => {
         const calendar = new TrainingCalendar();
         calendar.displayMonth = new Date(2024, 1, 1);
@@ -201,7 +250,7 @@ describe('training calendar', () => {
         },
     );
 
-    test('uses the displayed month to fetch connected Intervals.icu plans', async () => {
+    test('loads connected Intervals.icu plans for the visible week', async () => {
         const originalFetch = global.fetch;
         const futureDate = '2026-12-15';
         const workoutFile = Buffer.from(
@@ -236,12 +285,12 @@ describe('training calendar', () => {
             setAccountScope('rider@example.com');
             const calendar = createCalendar();
             calendar.displayMonth = new Date(2026, 11, 1);
+            calendar.selectedDate = futureDate;
             calendar.signal = {signal: new AbortController().signal};
             await calendar.loadPlannedMonth();
-            calendar.selectedDate = futureDate;
             calendar.render();
 
-            expect(requests).toEqual([['2026-12-01', '2026-12-31']]);
+            expect(requests).toEqual([['2026-12-14', '2026-12-20']]);
             expect(calendar.querySelector(`[data-date="${futureDate}"]`)
                 .classList.contains('has-events')).toBe(true);
             expect(calendar.textContent).toContain('Intervals workout');

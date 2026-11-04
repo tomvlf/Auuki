@@ -59,6 +59,23 @@ test('restoring local activity summaries preserves durable outbox status', async
     ]);
 });
 
+test('restored power profiles are downsampled and retain their ride shape', async () => {
+    const power = Array.from({length: 128}, (_, index) => index + 1);
+    idb.getAll.mockResolvedValue([{
+        id: 'ride',
+        pendingSync: false,
+        summary: {id: 'ride', timestamp: 1, status: {}},
+        ride: {ftp: 240, streams: {power}},
+    }]);
+
+    const [activity] = await models.activity.restore();
+
+    expect(activity.ftp).toBe(240);
+    expect(activity.powerProfile).toHaveLength(64);
+    expect(activity.powerProfile[0]).toBe(1.5);
+    expect(activity.powerProfile.at(-1)).toBe(127.5);
+});
+
 test('sensor connection state is attached to each sample without discarding real zero readings', () => {
     const db = {watchStatus: 'started', elapsed: 0, sources: {
         power: 'ble:controllable', heartRate: 'ble:heartRateMonitor', virtualState: 'speed'},

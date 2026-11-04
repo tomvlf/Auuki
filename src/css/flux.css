@@ -2604,6 +2604,103 @@ coaching-panel textarea {
     gap: 1em;
 }
 
+.training-calendar--week-label {
+    margin: 0.3em 0 0;
+    color: var(--foreground-color-inactive);
+    font-size: 1.3em;
+}
+
+.training-calendar--week-layout {
+    display: grid;
+    grid-template-columns: minmax(20em, 27em) minmax(0, 1fr);
+    gap: 1.5em;
+    align-items: start;
+    margin-top: 1.5em;
+}
+
+.training-calendar--week-schedule {
+    display: grid;
+    gap: 0.8em;
+    min-width: 0;
+}
+
+.training-calendar--week-day {
+    display: grid;
+    grid-template-columns: 7em minmax(0, 1fr);
+    gap: 1em;
+    align-items: start;
+    padding: 1em;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1em;
+    background: linear-gradient(180deg, rgba(23, 25, 38, 0.72), rgba(17, 21, 30, 0.86));
+}
+
+.training-calendar--week-day.is-today {
+    border-color: rgba(115, 151, 255, 0.48);
+    box-shadow: inset 0 0 0 1px rgba(115, 151, 255, 0.2);
+}
+
+.training-calendar .training-calendar--week-date {
+    display: grid;
+    justify-items: start;
+    gap: 0.4em;
+    padding: 0.5em;
+    border: 0;
+    background: transparent;
+    color: var(--foreground-color);
+    font-size: 1.3em;
+    text-align: left;
+}
+
+.training-calendar--week-date span + span {
+    color: var(--foreground-color-inactive);
+    font-size: 0.8em;
+}
+
+.training-calendar--week-date.has-events span:first-child {
+    color: var(--foreground-color);
+    font-weight: 700;
+}
+
+.training-calendar--week-day > .training-calendar--empty {
+    margin: 0;
+    color: var(--foreground-color-inactive);
+    font-size: 1.2em;
+}
+
+.training-calendar--week-sidebar {
+    display: grid;
+    gap: 1em;
+}
+
+.training-calendar--week-summary {
+    padding: 1.2em;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1em;
+    background: linear-gradient(180deg, rgba(23, 25, 38, 0.9), rgba(17, 21, 30, 0.95));
+    text-align: left;
+}
+
+.training-calendar--week-summary h3 {
+    margin-bottom: 0.8em;
+    font-size: 1.4em;
+}
+
+.training-calendar--week-summary > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0.55em 0;
+    border-top: 1px solid var(--white-opacity-01);
+    color: var(--foreground-color-inactive);
+    font-size: 1.2em;
+}
+
+.training-calendar--week-summary strong {
+    color: var(--foreground-color);
+    font-weight: 600;
+}
+
 .training-calendar--navigation,
 .training-calendar--entry-actions {
     display: flex;
@@ -2747,6 +2844,15 @@ coaching-panel textarea {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.training-calendar--week-day .training-calendar--entry {
+    padding: 1em;
+    font-size: 1.2em;
+}
+
+.training-calendar--week-day .training-calendar--entry.is-activity {
+    border-color: rgba(101, 228, 190, 0.18);
+}
+
 .training-calendar--copy {
     display: grid;
     gap: 0.4em;
@@ -2781,6 +2887,51 @@ coaching-panel textarea {
     color: var(--foreground-color);
     font-size: 0.82em;
     border: 1px solid rgba(115, 151, 255, 0.2);
+}
+
+.power-profile {
+    width: 100%;
+    min-width: 12em;
+    max-width: 42em;
+    margin: 0.6em 0 0;
+}
+
+.power-profile figcaption {
+    margin-bottom: 0.25em;
+    color: var(--foreground-color-inactive);
+    font-size: 0.75em;
+}
+
+.power-profile svg {
+    display: block;
+    width: 100%;
+    height: 4.8em;
+    overflow: visible;
+}
+
+.power-profile--ftp {
+    stroke: rgba(255, 255, 255, 0.25);
+    stroke-dasharray: 3 3;
+    stroke-width: 1;
+}
+
+.power-profile--target {
+    fill: rgba(115, 151, 255, 0.28);
+    stroke: #7397ff;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+}
+
+.power-profile--recorded-area {
+    fill: rgba(101, 228, 190, 0.16);
+}
+
+.power-profile--recorded {
+    fill: none;
+    stroke: #65e4be;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
 }
 
 .activity-periods {
@@ -3079,6 +3230,25 @@ activity-item {
     .activity-periods {
         grid-template-columns: 1fr;
         margin-inline: 0;
+    }
+
+    .training-calendar--week-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .training-calendar--week-day {
+        grid-template-columns: 5.5em minmax(0, 1fr);
+        gap: 0.6em;
+        padding: 0.7em;
+    }
+
+    .training-calendar--header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .training-calendar--navigation {
+        flex-wrap: wrap;
     }
 
     .activity-load-state {

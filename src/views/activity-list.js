@@ -22,6 +22,7 @@ import { formatTime, } from '../utils.js';
 import { coachingData } from '../coaching/service.js';
 import { estimateState } from '../coaching/state.js';
 import { localDay } from '../coaching/domain.js';
+import { renderPowerProfile } from './power-profile.js';
 
 /**
  * Lists recent activities in a compact, browsable strip for the trainer and plan views.
@@ -194,6 +195,11 @@ class ActivityList extends HTMLElement {
     template(i, data) {
         const status = this.uploadStatus(data);
         const metrics = this.stats(data);
+        const profile = renderPowerProfile({
+            samples: data.powerProfile || [],
+            ftp: data.ftp || 200,
+            label: data.name,
+        });
 
         return `
             <activity-item id="i${i}--activity--item" class="some" data-id="${this.id(data)}">
@@ -220,6 +226,7 @@ class ActivityList extends HTMLElement {
                                     <div class="activity--stats">
                                         ${metrics.map((metric) => `<span>${metric}</span>`).join('')}
                                     </div>
+                                    ${profile}
                                 </view-action>
                                 <view-action
                                     class=""

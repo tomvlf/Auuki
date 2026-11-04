@@ -37,6 +37,20 @@ import { Device, Status, ControlMode, } from '../ble/enums.js';
 import { TimerStatus, EventType, } from '../activity/enums.js';
 import { fromRecordedRide } from '../coaching/normalizer.js';
 
+function summarizePowerProfile(samples, maximum = 64) {
+    if(!Array.isArray(samples) || samples.length < 2) return undefined;
+    const validSamples = samples.filter(value => Number.isFinite(value) && value >= 0);
+    if(validSamples.length < 2) return undefined;
+
+    const bucketCount = Math.min(maximum, validSamples.length);
+    return Array.from({length: bucketCount}, (_, index) => {
+        const start = Math.floor(index * validSamples.length / bucketCount);
+        const end = Math.max(start + 1, Math.floor((index + 1) * validSamples.length / bucketCount));
+        const bucket = validSamples.slice(start, end);
+        return bucket.reduce((sum, value) => sum + value, 0) / bucket.length;
+    });
+}
+
 class Model {
     constructor(args = {}) {
         this.init(args);
@@ -603,6 +617,8 @@ class Activity extends Model {
             averagePower: ride.averagePower,
             averageHeartRate: ride.averageHeartRate,
             averageCadence: ride.averageCadence,
+            ftp: ride.ftp,
+            powerProfile: summarizePowerProfile(ride.streams?.power),
             pendingSync: true,
             status: {strava: 'none', intervals: 'none', trainingPeaks: 'none'},
         };
@@ -701,6 +717,9 @@ class Activity extends Model {
                 averagePower: record.summary.averagePower ?? record.ride?.averagePower,
                 averageHeartRate: record.summary.averageHeartRate ?? record.ride?.averageHeartRate,
                 averageCadence: record.summary.averageCadence ?? record.ride?.averageCadence,
+                ftp: record.summary.ftp ?? record.ride?.ftp,
+                powerProfile: record.summary.powerProfile ??
+                    summarizePowerProfile(record.ride?.streams?.power),
                 pendingSync: record.pendingSync === true,
             }))
             .sort((a, b) => b.timestamp - a.timestamp);

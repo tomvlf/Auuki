@@ -66,6 +66,20 @@ test('shows available ride metrics without inventing training-load values', () =
     })).toEqual(['25.0 km', '190 W', '145 bpm', 'Load 80', 'RPE 6']);
 });
 
+test('renders a recorded wattage profile on an activity card', () => {
+    const list = new ActivityList();
+    const markup = list.template(0, {
+        id: 'ride-1',
+        name: 'Morning ride',
+        timestamp: Date.UTC(2026, 0, 1),
+        duration: 3600,
+        status: {},
+        powerProfile: [100, 150, 200],
+    });
+
+    expect(markup).toContain('class="power-profile--recorded"');
+});
+
 test('omits unavailable current training-state values instead of rendering NaN', () => {
     coachingData.mockReturnValue({
         profile: {timeZone: 'UTC'},
