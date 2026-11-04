@@ -1,3 +1,21 @@
+/*
+ * ui.js: front-end client module.
+ *
+ * Why this exists:
+ * This file is part of Auuki and is kept separate so the application can be understood
+ * as a set of focused responsibilities instead of one large unstructured script.
+ * The code here is intentionally organized around one job so a new contributor can
+ * follow the data flow and the reason for each step without reading unrelated code.
+ *
+ * What it does:
+ * contains the project logic for this module and keeps related responsibilities together.
+ *
+ * Developer note:
+ * Read this file as the boundary of the problem it solves: inputs, transformations,
+ * persistence, and outputs. If a change affects the behaviour of this module, update
+ * the tests and the surrounding callers in the same review.
+ */
+
 import { xf } from '../functions.js';
 import { serverRequest, serverAccount, SERVER_MODE_KEY } from '../server/client.js';
 import { coachingData, coachingService } from '../coaching/service.js';
@@ -280,10 +298,14 @@ export async function launchPlatform(root, account) {
             <form id="intervals-connect"><label>Personal API key<input name="apiKey" type="password" required autocomplete="off" maxlength="1024"></label>
                 <label>Import from<input name="oldest" type="date" value="${addDays(today(), -365)}" max="${today()}" required></label>
                 <button>Test & connect</button></form><p class="muted">Personal/self-hosted connections only. Strava-origin data is not available through the Intervals.icu API.</p>`;
+        const athleteIdText = integration.athleteId && integration.athleteId !== '0'
+            ? `Athlete ID: ${escape(integration.athleteId)}`
+            : 'Athlete ID: auto-resolved from your Intervals.icu account';
         return `<p class="eyebrow">${escape(integration.status)}</p><p>Last successful sync: ${integration.lastSuccess ? escape(new Date(integration.lastSuccess).toLocaleString()) : 'Not yet synced'}</p>
             ${integration.nextDate ? `<p>Importing ${escape(integration.nextDate)} through ${escape(integration.through)} in 31-day batches.</p>` : ''}
             ${integration.error ? `<p role="alert">${escape(integration.error)}</p>` : ''}
             ${integration.retryAt && integration.status === 'queued' ? `<p>Retry after ${escape(new Date(integration.retryAt).toLocaleString())}</p>` : ''}
+            <p class="muted">${athleteIdText}</p>
             <div class="button-row"><button data-action="sync" ${['running', 'queued'].includes(integration.status) ? 'disabled' : ''}>${integration.lastSuccess ? 'Sync now' : 'Import history'}</button>
                 <button class="secondary" data-action="test-connection">Test connection</button>
                 <button class="secondary" data-action="disconnect">Disconnect</button></div>

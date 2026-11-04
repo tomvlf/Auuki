@@ -1,3 +1,21 @@
+/*
+ * app.mjs: backend service module.
+ *
+ * Why this exists:
+ * This file is part of Auuki and is kept separate so the application can be understood
+ * as a set of focused responsibilities instead of one large unstructured script.
+ * The code here is intentionally organized around one job so a new contributor can
+ * follow the data flow and the reason for each step without reading unrelated code.
+ *
+ * What it does:
+ * provides the server-side API and integration logic that authenticates users and syncs external training data.
+ *
+ * Developer note:
+ * Read this file as the boundary of the problem it solves: inputs, transformations,
+ * persistence, and outputs. If a change affects the behaviour of this module, update
+ * the tests and the surrounding callers in the same review.
+ */
+
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scrypt as deriveKey, timingSafeEqual, createHash } from 'node:crypto';
@@ -17,6 +35,16 @@ class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }
 }
 
+/**
+ * Reads a JSON request body and validates the Auuki client contract.
+ *
+ * The server intentionally rejects non-Auuki requests and oversized payloads before
+ * any application logic runs. This keeps the API predictable and prevents clients
+ * from sending invalid or malicious data into the document store.
+ *
+ * @param {import('node:http').IncomingMessage} request - The HTTP request stream.
+ * @returns {Promise<object>} The parsed JSON request payload.
+ */
 async function readJSON(request) {
     if(request.headers['content-type'] !== 'application/json' ||
        request.headers['x-auuki-client'] !== '1') {
@@ -34,6 +62,25 @@ async function readJSON(request) {
     catch { throw new HttpError(400, 'Invalid JSON.'); }
 }
 
+/**
+ * Creates the main Auuki server application and all database-backed routes.
+ *
+ * This is the top-level server factory: it sets up the SQLite schema, session
+ * management, origin validation, coaching document storage, and server-side
+ * integrations such as Intervals.icu. The returned object is the runtime that the
+ * HTTP server binds to and exposes to the browser client.
+ *
+ * @param {object} [options] - Runtime configuration for the server.
+ * @param {string} [options.database='auuki.sqlite'] - SQLite database path.
+ * @param {string} [options.origin='http://localhost:1234'] - Primary trusted browser origin.
+ * @param {string[]} [options.additionalOrigins=[]] - Extra allowed browser origins.
+ * @param {boolean} [options.secureCookies=true] - Enables secure cookie mode for HTTPS and production domains.
+ * @param {Function} [options.clock=Date.now] - Clock used for sessions, retry timing, and import windows.
+ * @param {string} [options.encryptionKey] - Base64 AES-256 key used to encrypt saved provider credentials.
+ * @param {Function} [options.fetchImpl] - Optional fetch implementation for Intervals.icu calls.
+ * @param {boolean} [options.startWorker] - Enables or disables the background sync worker.
+ * @returns {{server: import('node:http').Server, close: Function, intervals: object, user: Function, route: Function}} The running app instance with server control methods.
+ */
 export function createApp({database = 'auuki.sqlite', origin = 'http://localhost:1234', additionalOrigins = [],
     secureCookies = true, clock = () => Date.now(), encryptionKey, fetchImpl, startWorker} = {}) {
     const origins = trustedOrigins(origin, additionalOrigins);
