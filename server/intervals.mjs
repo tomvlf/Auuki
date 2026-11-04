@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { CoachingService } from '../src/coaching/service.js';
 import { addDays, date } from '../src/coaching/domain.js';
 
-const API = 'https://intervals.icu/api/v1/athlete/0';
+const API = 'https://intervals.icu/api/v1';
 
 class IntegrationError extends Error {
     constructor(message, status = 400, retryAfter = null) {
@@ -39,11 +39,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     }
     db.exec(`CREATE TABLE IF NOT EXISTS integrations (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        credential TEXT NOT NULL, oldest TEXT NOT NULL, cursor TEXT, newest TEXT,
-        status TEXT NOT NULL, last_success TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0,
-        retry_at INTEGER NOT NULL DEFAULT 0
+        athlete_id TEXT NOT NULL DEFAULT '0', credential TEXT NOT NULL, oldest TEXT NOT NULL,
+        cursor TEXT, newest TEXT, status TEXT NOT NULL, last_success TEXT, error TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0, retry_at INTEGER NOT NULL DEFAULT 0
     );
     UPDATE integrations SET status = 'queued' WHERE status = 'running';`);
+    const columns = db.prepare('PRAGMA table_info(integrations)').all();
+    if(!columns.some(column => column.name === 'athlete_id')) {
+        db.exec('ALTER TABLE integrations ADD COLUMN athlete_id TEXT NOT NULL DEFAULT "0"');
+    }
+    db.exec("UPDATE integrations SET athlete_id = '0' WHERE athlete_id IS NULL OR athlete_id = ''");
     const row = id => db.prepare('SELECT * FROM integrations WHERE user_id = ?').get(id);
     const nowDay = () => new Date(clock()).toISOString().slice(0, 10);
     let active = false;
@@ -71,15 +76,18 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     function status(id) {
         const current = row(id);
         return {configured: Boolean(key), connected: Boolean(current),
-            status: current?.status || 'disconnected', oldest: current?.oldest ?? null,
-            nextDate: current?.cursor ?? null, through: current?.newest ?? null,
-            lastSuccess: current?.last_success ?? null, error: current?.error ?? null,
-            retryAt: current?.retry_at ? new Date(current.retry_at).toISOString() : null};
+            status: current?.status || 'disconnected', athleteId: current?.athlete_id ?? null,
+            oldest: current?.oldest ?? null, nextDate: current?.cursor ?? null,
+            through: current?.newest ?? null, lastSuccess: current?.last_success ?? null,
+            error: current?.error ?? null, retryAt: current?.retry_at ? new Date(current.retry_at).toISOString() : null};
     }
-    async function remote(apiKey, path, {query, body, method = 'GET'} = {}) {
+    function athleteEndpoint(athleteId = '0') {
+        return `${API}/athlete/${encodeURIComponent(String(athleteId))}`;
+    }
+    async function remote(apiKey, path, {query, body, method = 'GET', athleteId = '0'} = {}) {
         let response;
         try {
-            response = await fetchImpl(`${API}${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
+            response = await fetchImpl(`${athleteEndpoint(athleteId)}${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
                 method, ...(body ? {body} : {}),
                 headers: {Authorization: `Basic ${Buffer.from(`API_KEY:${apiKey}`).toString('base64')}`,
                     Accept: 'application/json'}, signal: AbortSignal.timeout(25000), redirect: 'error',
@@ -103,8 +111,8 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         catch { throw new IntegrationError('Intervals.icu returned an invalid response.', 502); }
         return result;
     }
-    async function download(apiKey, oldest, newest) {
-        const activities = await remote(apiKey, '/activities', {query: {oldest, newest}});
+    async function download(apiKey, oldest, newest, athleteId = '0') {
+        const activities = await remote(apiKey, '/activities', {query: {oldest, newest}, athleteId});
         if(!Array.isArray(activities)) throw new IntegrationError('Intervals.icu returned an unexpected activity list.', 502);
         return activities;
     }
@@ -114,12 +122,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         return decrypt(current.credential, id);
     }
     async function athlete(id) {
-        return remote(credential(id), '');
+        const current = row(id);
+        if(!current || !key) throw new IntegrationError('Connect Intervals.icu in Settings > Integrations first.');
+        return remote(credential(id), '', {athleteId: current.athlete_id || '0'});
     }
     async function events(id, oldest, newest) {
         try { date(oldest); date(newest); } catch { throw new IntegrationError('Choose valid calendar dates.'); }
         if(oldest > newest || newest > addDays(oldest, 62)) throw new IntegrationError('Request at most 63 days of planned workouts.');
-        const result = await remote(credential(id), '/events', {query: {oldest, newest, category: 'WORKOUT', ext: 'zwo', resolve: 'true'}});
+        const current = row(id);
+        const athleteId = current?.athlete_id || '0';
+        const result = await remote(credential(id), '/events', {query: {oldest, newest, category: 'WORKOUT', ext: 'zwo', resolve: 'true'}, athleteId});
         if(!Array.isArray(result)) throw new IntegrationError('Intervals.icu returned an unexpected event list.', 502);
         return result;
     }
@@ -133,10 +145,12 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         if(bytes.toString('base64') !== body.file || bytes.length < 14 || bytes.subarray(8, 12).toString() !== '.FIT') {
             throw new IntegrationError('Upload a valid FIT recording.');
         }
+        const current = row(id);
+        const athleteId = current?.athlete_id || '0';
         const form = new FormData();
         form.append('file', new Blob([bytes], {type: 'application/octet-stream'}), `${body.id}.fit`);
         await remote(credential(id), '/activities', {method: 'POST', body: form,
-            query: {name: body.name, external_id: `auuki:${body.id}`}});
+            query: {name: body.name, external_id: `auuki:${body.id}`}, athleteId});
         return {success: true};
     }
     async function connect(id, body) {
@@ -153,14 +167,26 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         const operation = Symbol();
         connecting.set(id, operation);
         try {
-            await download(body.apiKey.trim(), nowDay(), nowDay());
-            if(stopped || connecting.get(id) !== operation) throw new IntegrationError('Connection changed while testing. Retry with your current settings.', 409);
+            const athleteProfile = await remote(body.apiKey.trim(), '', {athleteId: '0'});
+            if(stopped || connecting.get(id) !== operation) {
+                throw new IntegrationError('Connection changed while testing. Retry with your current settings.', 409);
+            }
+            const athleteId = Array.isArray(athleteProfile) ? '0' :
+                athleteProfile && typeof athleteProfile === 'object'
+                    ? (athleteProfile.id ?? athleteProfile.athlete?.id ?? athleteProfile.user_id ?? athleteProfile.athleteId ?? '0')
+                    : '0';
+            const resolvedAthleteId = /^\d+$/.test(String(athleteId)) ? String(athleteId) : '0';
+            if(athleteProfile && !Array.isArray(athleteProfile) && typeof athleteProfile === 'object' &&
+               athleteProfile.id === undefined && athleteProfile.athlete?.id === undefined &&
+               athleteProfile.user_id === undefined && athleteProfile.athleteId === undefined) {
+                throw new IntegrationError('Intervals.icu returned an unexpected athlete profile.', 502);
+            }
             if(['running', 'queued'].includes(row(id)?.status)) throw new IntegrationError('An import started while testing. Wait before reconnecting.', 409);
-            db.prepare(`INSERT INTO integrations (user_id, credential, oldest, status)
-            VALUES (?, ?, ?, 'connected') ON CONFLICT(user_id) DO UPDATE SET
-            credential=excluded.credential, oldest=excluded.oldest, cursor=NULL, newest=NULL,
-            status='connected', error=NULL, attempts=0, retry_at=0, last_success=NULL`)
-                .run(id, encrypt(body.apiKey.trim(), id), oldest);
+            db.prepare(`INSERT INTO integrations (user_id, athlete_id, credential, oldest, status)
+            VALUES (?, ?, ?, ?, 'connected') ON CONFLICT(user_id) DO UPDATE SET
+            athlete_id=excluded.athlete_id, credential=excluded.credential, oldest=excluded.oldest,
+            cursor=NULL, newest=NULL, status='connected', error=NULL, attempts=0, retry_at=0, last_success=NULL`)
+                .run(id, resolvedAthleteId, encrypt(body.apiKey.trim(), id), oldest);
             return status(id);
         } finally {
             if(connecting.get(id) === operation) connecting.delete(id);
@@ -169,7 +195,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     async function test(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu first.');
-        await download(decrypt(current.credential, id), nowDay(), nowDay());
+        await download(decrypt(current.credential, id), nowDay(), nowDay(), current.athlete_id || '0');
         return {success: true};
     }
     function disconnect(id) {
@@ -194,8 +220,10 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         active = true;
         db.prepare("UPDATE integrations SET status='running' WHERE user_id=?").run(current.user_id);
         try {
+            if(stopped || row(current.user_id)?.credential !== current.credential) return;
+            const athleteId = current.athlete_id || '0';
             const newest = [addDays(current.cursor, 30), current.newest].sort()[0];
-            const received = await download(decrypt(current.credential, current.user_id), current.cursor, newest);
+            const received = await download(decrypt(current.credential, current.user_id), current.cursor, newest, athleteId);
             if(stopped || row(current.user_id)?.credential !== current.credential) return;
             const raw = received.map(a => intervalsActivity(a, new Date(clock()).toISOString())).filter(Boolean);
             const stored = document(current.user_id, 'coaching');

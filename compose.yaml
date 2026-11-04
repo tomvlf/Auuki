@@ -22,7 +22,7 @@ services:
     #
     # Examples:
     #   AUUKI_ORIGIN=http://localhost:8080          # same machine; use with AUUKI_INSECURE_COOKIES=1
-    #   AUUKI_ORIGIN=https://auuki.example.com      # behind an HTTPS reverse proxy (recommended)
+    #   AUUKI_ORIGIN=https://app.example.com         # behind an HTTPS reverse proxy (recommended)
     #
     # AUUKI_ADDITIONAL_ORIGINS: comma-separated extra URLs that may also reach the app,
     #   e.g. AUUKI_ADDITIONAL_ORIGINS=https://auuki.tailnet.ts.net

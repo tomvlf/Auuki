@@ -1,0 +1,4 @@
+app.example.com {
+    reverse_proxy auuki:80
+    encode gzip
+}

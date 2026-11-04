@@ -1,0 +1,45 @@
+services:
+  auuki:
+    image: ghcr.io/tomvlf/auuki:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "80"
+
+  backend:
+    image: ghcr.io/tomvlf/auuki-backend:latest
+    pull_policy: always
+    environment:
+      AUUKI_ORIGIN: ${AUUKI_ORIGIN:-https://app.example.com}
+      AUUKI_ADDITIONAL_ORIGINS: ${AUUKI_ADDITIONAL_ORIGINS:-}
+      AUUKI_INSECURE_COOKIES: ${AUUKI_INSECURE_COOKIES:-0}
+      AUUKI_DATABASE: /app/data/auuki.sqlite
+      AUUKI_INTEGRATION_KEY: ${AUUKI_INTEGRATION_KEY:-}
+    volumes:
+      - auuki-server-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/server/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - auuki
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  auuki-server-data:
+  caddy_data:
+  caddy_config:

@@ -22,7 +22,7 @@ const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(b
 
 async function fixture(t, options = {}) {
     let now = Date.parse('2026-03-20T12:00:00Z');
-    let remote = async () => json([]);
+    let remote = async url => url.endsWith('/athlete/0') ? json({id: 42}) : json([]);
     const calls = [];
     const configuration = {database: ':memory:', origin, encryptionKey: key,
         startWorker: false, clock: () => now,
@@ -311,8 +311,9 @@ test('API-key proxy preserves athlete settings, planned ZWO workouts and FIT upl
     const f = await fixture(t);
     const cookie = await f.register();
     await f.connect(cookie);
+    assert.equal((await f.status(cookie)).data.athleteId, '42');
     f.remote(async url => url.includes('/events?') ? json([{id: 42, workout_file_base64: 'ZWO'}])
-        : url.endsWith('/athlete/0') ? json({sportSettings: [{types: ['Ride'], ftp: 250}]})
+        : url.endsWith('/athlete/42') ? json({id: 42, sportSettings: [{types: ['Ride'], ftp: 250}]})
             : json({id: 'uploaded'}));
     const athlete = await f.request(`${endpoint}/athlete`, {cookie});
     assert.equal(athlete.data.sportSettings[0].ftp, 250);
