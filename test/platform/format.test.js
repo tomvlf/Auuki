@@ -72,3 +72,18 @@ test('workout profile uses real interval durations and finite power targets', ()
     expect(html).not.toContain('undefined');
     expect(html).not.toContain('NaN');
 });
+
+test('course profiles use actual elevation, handle flat tracks and cap the number of plotted points', () => {
+    const points = Array.from({length: 1000}, (_, index) => ({x: index * 10, y: 50 + index % 20}));
+    const html = profileGraph({points, pointsSimplified: []});
+    expect(html).toContain('aria-label="Course elevation profile"');
+    const coordinates = html.match(/<polyline points="([^"]+)"/)[1].split(' ');
+    expect(coordinates).toHaveLength(128);
+    expect(coordinates[0]).toMatch(/^0\.00,/);
+    expect(coordinates.at(-1)).toMatch(/^100\.00,/);
+    expect(html).not.toContain('NaN');
+    expect(html).not.toContain('Infinity');
+    const flat = profileGraph({points: [null, {x: 0, y: 25}, {x: 0, y: 25}]});
+    expect(flat).toContain('0.00,24.00 100.00,24.00');
+    expect(profileGraph({points: [null, {x: 0, y: NaN}]})).toContain('Free ride');
+});

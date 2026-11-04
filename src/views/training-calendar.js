@@ -19,6 +19,7 @@ import { isoDate } from '../utils.js';
 import { coachingService, coachingData } from '../coaching/service.js';
 import { toAppWorkout, exportZwo } from '../coaching/workouts.js';
 import { localDay } from '../coaching/domain.js';
+import { estimateState } from '../coaching/state.js';
 import { fileHandler } from '../file.js';
 import { accountStorage, accountKey, hasAccountScope } from '../storage/account.js';
 import { serverRequest } from '../server/client.js';
@@ -41,13 +42,11 @@ function localDate(year, month, day) {
     return isoDate(new Date(year, month, day));
 }
 
-function monthRange(date) {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    return {
-        oldest: localDate(year, month, 1),
-        newest: localDate(year, month + 1, 0),
-    };
+function weekNumber(date) {
+    const thursday = new Date(`${date}T00:00:00Z`);
+    thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+    return Math.ceil(((thursday - yearStart) / 86400000 + 1) / 7);
 }
 
 function parseEntries(value) {
@@ -92,7 +91,10 @@ class TrainingCalendar extends HTMLElement {
         this.intervalsConnected = null;
         this.checkingServices = false;
         this.ftp = 200;
-        this.view = 'week';
+        this.view = 'month';
+        this.weekStateSource = null;
+        this.weekStates = new Map();
+        this.weekStateError = '';
     }
 
     /**
@@ -109,7 +111,7 @@ class TrainingCalendar extends HTMLElement {
         this.watchStatus = 'stopped';
         this.storageError = '';
         this.actionMessage = '';
-        this.view = 'week';
+        this.view = 'month';
 
         try {
             this.entries = parseEntries(accountStorage.getItem(storageKey));
@@ -222,9 +224,8 @@ class TrainingCalendar extends HTMLElement {
     }
 
     plannedRange() {
-        return this.view === 'week'
-            ? {oldest: this.weekDates()[0], newest: this.weekDates()[6]}
-            : monthRange(this.displayMonth);
+        const dates = this.view === 'week' ? this.weekDates() : this.monthDates();
+        return {oldest: dates[0], newest: dates[dates.length - 1]};
     }
 
     /**
@@ -315,59 +316,42 @@ class TrainingCalendar extends HTMLElement {
         }
     }
 
-    entriesForDate(date) {
+    calendarEntries() {
         return [
-            ...this.entries.filter((entry) => entry.date === date).map((entry) => ({
+            ...this.entries.map((entry) => ({
                 ...entry,
                 workout: this.workouts.find((workout) => String(workout.id) === entry.workoutId),
                 source: 'calendar',
             })),
-            ...this.plannedEntries().filter((entry) => entry.date === date),
-            ...this.coachingEntries().filter(entry => entry.date === date),
+            ...this.plannedEntries(),
+            ...this.coachingEntries(),
+        ];
+    }
+
+    entriesForDate(date, calendarEntries = this.calendarEntries()) {
+        return [
+            ...calendarEntries.filter(entry => entry.date === date),
             ...this.activityEntriesForDate(date),
         ];
     }
 
-    renderMonth() {
+    monthDates() {
         const year = this.displayMonth.getFullYear();
         const month = this.displayMonth.getMonth();
         const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
         const dayCount = new Date(year, month + 1, 0).getDate();
         const cellCount = Math.ceil((firstWeekday + dayCount) / 7) * 7;
-        const today = isoDate();
-        const cells = [];
+        return Array.from({length: cellCount}, (_, index) =>
+            localDate(year, month, 1 - firstWeekday + index),
+        );
+    }
 
-        for(let index = 0; index < cellCount; index += 1) {
-            const day = index - firstWeekday + 1;
-            if(day < 1 || day > dayCount) {
-                cells.push('<div class="calendar-day empty" aria-hidden="true"></div>');
-                continue;
-            }
-
-            const date = localDate(year, month, day);
-            const entries = this.entriesForDate(date);
-            const preview = entries.slice(0, 2).map((entry) =>
-                `<span class="calendar-day--event">${escapeHTML(entry.name)}</span>`
-            ).join('');
-            const more = entries.length > 2
-                ? `<span class="calendar-day--more">+${entries.length - 2} more</span>`
-                : '';
-            const classes = [
-                'calendar-day',
-                date === this.selectedDate ? 'selected' : '',
-                date === today ? 'today' : '',
-                entries.length ? 'has-events' : '',
-            ].filter(Boolean).join(' ');
-
-            cells.push(`
-                <button type="button" class="${classes}" data-date="${date}"
-                        aria-label="${date}, ${entries.length} planned workouts"
-                        aria-pressed="${date === this.selectedDate}">
-                    <span class="calendar-day--number">${day}</span>
-                    ${preview}${more}
-                </button>`);
+    renderMonth() {
+        const dates = this.monthDates();
+        const weeks = [];
+        for(let index = 0; index < dates.length; index += 7) {
+            weeks.push(dates.slice(index, index + 7));
         }
-
         const heading = this.displayMonth.toLocaleDateString(undefined, {
             month: 'long',
             year: 'numeric',
@@ -383,10 +367,73 @@ class TrainingCalendar extends HTMLElement {
                     <button type="button" data-action="week">Week</button>
                 </div>
             </header>
-            <div class="training-calendar--grid" role="grid" aria-label="${heading}">
-                ${weekdayNames.map((day) => `<div class="calendar-weekday" role="columnheader">${day}</div>`).join('')}
-                ${cells.join('')}
+            ${this.renderCalendarTable(weeks.reverse(), heading, this.displayMonth.getMonth())}`;
+    }
+
+    renderCalendarTable(weeks, heading, displayMonth = null) {
+        const today = isoDate();
+        const calendarEntries = this.calendarEntries();
+        const entriesByDate = new Map(weeks.flat().map(date =>
+            [date, this.entriesForDate(date, calendarEntries)],
+        ));
+        const rows = weeks.map(dates => {
+            const cells = dates.map(date => {
+                const day = new Date(`${date}T12:00:00`);
+                const entries = entriesByDate.get(date);
+                const dateLabel = day.toLocaleDateString(undefined, {
+                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                });
+                const classes = [
+                    'calendar-day',
+                    date === this.selectedDate ? 'selected' : '',
+                    date === today ? 'today' : '',
+                    displayMonth !== null && day.getMonth() !== displayMonth ? 'outside-month' : '',
+                ].filter(Boolean).join(' ');
+                return `<td class="${classes}">
+                    <button type="button" class="calendar-day--select" data-date="${date}"
+                            aria-label="${escapeHTML(dateLabel)}, ${entries.length} ${entries.length === 1 ? 'session' : 'sessions'}"
+                            aria-pressed="${date === this.selectedDate}"${date === today ? ' aria-current="date"' : ''}>
+                        <span class="calendar-day--number">${day.getDate()}</span>
+                        <span class="calendar-day--month">${day.toLocaleDateString(undefined, {month: 'short'})}</span>
+                    </button>
+                    ${entries.length ? `<ul class="calendar-day--events">${entries.map((entry, index) =>
+                        this.renderCalendarPreview(entry, date, index)).join('')}</ul>` : ''}
+                </td>`;
+            }).join('');
+            return `<tr data-week-start="${dates[0]}">
+                <th scope="row" class="calendar-week">${this.weekSummary(dates, entriesByDate)}</th>
+                ${cells}
+            </tr>`;
+        }).join('');
+        return `
+            <p class="training-calendar--scroll-hint">Scroll sideways to see the full week.</p>
+            <div class="training-calendar--grid-wrap" role="region"
+                 aria-label="${escapeHTML(heading)} calendar" tabindex="0">
+                <table class="training-calendar--grid" aria-label="${escapeHTML(heading)}">
+                    <colgroup><col class="calendar-week--column"><col span="7"></colgroup>
+                    <thead><tr><th scope="col">Week</th>
+                        ${weekdayNames.map(day => `<th scope="col">${day}</th>`).join('')}
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
             </div>`;
+    }
+
+    renderCalendarPreview(entry, date, index) {
+        const source = entry.source === 'activity' ? 'Ride'
+            : entry.source === 'coaching' ? 'Coach'
+                : entry.source === 'planned' ? 'Intervals' : 'Planned';
+        const metrics = this.workoutMetrics(entry);
+        return `<li class="calendar-event ${entry.source === 'activity' ? 'is-activity' : ''}">
+            <button type="button" class="calendar-event--select" data-date="${date}"
+                    data-card-index="${index}" aria-label="View ${escapeHTML(entry.name || 'Workout')} on ${date}">
+                <span class="calendar-event--source">${source}</span>
+                <strong class="calendar-event--name">${escapeHTML(entry.name || 'Workout')}</strong>
+                <span class="calendar-event--metrics">${metrics.map(metric =>
+                    `<span>${escapeHTML(metric)}</span>`).join('')}</span>
+            </button>
+            ${this.renderEntryProfile(entry)}
+        </li>`;
     }
 
     workoutMetrics(entry) {
@@ -419,13 +466,8 @@ class TrainingCalendar extends HTMLElement {
         return metrics.length ? metrics : ['Workout'];
     }
 
-    renderEntry(entry) {
-        const title = escapeHTML(entry.name || 'Workout');
-        const metrics = this.workoutMetrics(entry);
-        const source = entry.source === 'planned' ? 'Intervals'
-            : entry.source === 'coaching' ? 'Coach'
-                : entry.source === 'activity' ? 'Completed ride' : 'Plan';
-        const profile = entry.source === 'activity'
+    renderEntryProfile(entry) {
+        return entry.source === 'activity'
             ? renderPowerProfile({
                 samples: entry.activity.powerProfile || entry.activity.streams?.power || [],
                 ftp: this.ftp,
@@ -436,6 +478,15 @@ class TrainingCalendar extends HTMLElement {
                 ftp: this.ftp,
                 label: entry.name,
             });
+    }
+
+    renderEntry(entry) {
+        const title = escapeHTML(entry.name || 'Workout');
+        const metrics = this.workoutMetrics(entry);
+        const source = entry.source === 'planned' ? 'Intervals'
+            : entry.source === 'coaching' ? 'Coach'
+                : entry.source === 'activity' ? 'Completed ride' : 'Plan';
+        const profile = this.renderEntryProfile(entry);
 
         return `
             <li class="training-calendar--entry ${entry.source === 'activity' ? 'is-activity' : ''}">
@@ -478,7 +529,7 @@ class TrainingCalendar extends HTMLElement {
             }));
         const externalIds = new Set(externalActivities.map(entry => String(entry.id)));
         const localActivities = this.localActivities
-            .filter(activity => isoDate(new Date(activity.timestamp)) === date &&
+            .filter(activity => isoDate(new Date(activity.start ?? activity.timestamp)) === date &&
                 !externalIds.has(String(activity.id)))
             .map(activity => ({
                 id: activity.id,
@@ -499,38 +550,65 @@ class TrainingCalendar extends HTMLElement {
         );
     }
 
-    weekSummary(dates) {
-        const history = coachingData()?.activities || [];
-        const activities = dates.flatMap(date => this.activityEntriesForDate(date)
+    weeklyState(dates) {
+        const data = coachingData();
+        if(this.weekStateSource !== data) {
+            this.weekStateSource = data;
+            this.weekStates.clear();
+            this.weekStateError = '';
+        }
+        const history = data?.activities || [];
+        const profile = data?.profile;
+        if(!profile || !history.length) return null;
+
+        try {
+            const today = localDay(new Date().toISOString(), profile.timeZone);
+            if(dates[0] > today) return null;
+            const asOf = dates[6] < today ? dates[6] : today;
+            if(!history.some(activity => activity.sport === 'cycling' && activity.day <= asOf)) return null;
+            if(!this.weekStates.has(asOf)) {
+                const {chronicLoad, acuteLoad, formBalance, loadSource} = estimateState(history, profile, asOf);
+                this.weekStates.set(asOf, Number.isFinite(chronicLoad)
+                    ? {chronicLoad, acuteLoad, formBalance, loadSource}
+                    : null);
+            }
+            return this.weekStates.get(asOf);
+        } catch(error) {
+            if(!this.weekStateError) {
+                console.error('Unable to calculate weekly calendar training metrics:', error);
+            }
+            this.weekStateError = 'Weekly training metrics could not be calculated.';
+            return null;
+        }
+    }
+
+    weekSummary(dates, entriesByDate) {
+        const activities = dates.flatMap(date => (entriesByDate?.get(date) || this.activityEntriesForDate(date))
+            .filter(entry => entry.source === 'activity')
             .map(entry => entry.activity));
         const duration = activities.reduce((sum, activity) => sum + Number(activity.duration || 0), 0);
         const distance = activities.reduce((sum, activity) => sum + Number(activity.distance || 0), 0);
-        const loadMetrics = activities.map(activity => activity.loadMetrics?.power?.value)
+        const loadMetrics = activities.map(activity => activity.loadMetrics?.power?.value ?? activity.load)
             .filter(Number.isFinite);
-        let state = null;
-        const profile = coachingData()?.profile;
-        if(profile && activities.length) {
-            try {
-                const today = localDay(new Date().toISOString(), profile.timeZone);
-                state = estimateState(history, profile, today);
-            } catch(error) {
-                console.error('Unable to calculate weekly calendar training metrics:', error);
-            }
-        }
-        const durationText = `${Math.floor(duration / 3600)}h ${Math.round(duration % 3600 / 60)}m`;
+        const state = this.weeklyState(dates);
+        const minutes = Math.round(duration / 60);
+        const durationText = `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
         const metrics = [
             ['Rides', activities.length],
             ['Time', durationText],
             ['Distance', `${(distance / 1000).toFixed(1)} km`],
-            loadMetrics.length ? ['Load', Math.round(loadMetrics.reduce((sum, value) => sum + value, 0))] : null,
+            loadMetrics.length ? [loadMetrics.length === activities.length ? 'Load' : 'Known load',
+                Math.round(loadMetrics.reduce((sum, value) => sum + value, 0))] : null,
             Number.isFinite(state?.chronicLoad) ? ['Fitness', Math.round(state.chronicLoad)] : null,
             Number.isFinite(state?.acuteLoad) ? ['Fatigue', Math.round(state.acuteLoad)] : null,
             Number.isFinite(state?.formBalance) ? ['Form', Math.round(state.formBalance)] : null,
         ].filter(Boolean);
-        return `<aside class="training-calendar--week-summary" aria-label="Weekly training metrics">
-            <h3>Week overview</h3>
+        const source = {power: 'power', sessionRpe: 'session RPE', heartRate: 'heart rate', duration: 'duration'};
+        return `<div class="training-calendar--week-summary" aria-label="Week ${weekNumber(dates[0])} training metrics">
+            <h3>Week ${weekNumber(dates[0])}</h3>
             ${metrics.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('')}
-        </aside>`;
+            ${state ? `<p>Model: ${source[state.loadSource]}</p>` : ''}
+        </div>`;
     }
 
     renderWeek() {
@@ -541,28 +619,6 @@ class TrainingCalendar extends HTMLElement {
         const heading = sameMonth
             ? `${startDate.toLocaleDateString(undefined, {month: 'long'})} ${startDate.getDate()}–${endDate.getDate()}, ${endDate.getFullYear()}`
             : `${startDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} – ${endDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}`;
-        const today = isoDate();
-        const days = dates.map(date => {
-            const entries = this.entriesForDate(date);
-            const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                weekday: 'short',
-                day: 'numeric',
-            });
-            return `<section class="training-calendar--week-day ${date === today ? 'is-today' : ''}">
-                <button type="button" class="training-calendar--week-date ${entries.length ? 'has-events' : ''}"
-                        data-date="${date}" aria-pressed="${date === this.selectedDate}">
-                    <span>${escapeHTML(dateLabel)}</span>
-                    <span>${date === today ? 'Today' : ''}</span>
-                </button>
-                ${entries.length
-                    ? `<ul class="training-calendar--entries">${entries.map(entry => this.renderEntry(entry)).join('')}</ul>`
-                    : '<p class="training-calendar--empty">Rest day</p>'}
-            </section>`;
-        }).join('');
-        const options = this.workouts.map(workout =>
-            `<option value="${escapeHTML(workout.id)}">${escapeHTML(workout.meta?.name || 'Workout')}</option>`
-        ).join('');
-
         return `
             <header class="training-calendar--header">
                 <div>
@@ -576,27 +632,7 @@ class TrainingCalendar extends HTMLElement {
                     <button type="button" data-action="month">Month</button>
                 </div>
             </header>
-            <div class="training-calendar--week-layout">
-                <div class="training-calendar--week-sidebar">
-                    ${this.weekSummary(dates)}
-                    ${this.workouts.length
-                        ? `<form class="training-calendar--form">
-                               <label for="training-calendar-workout">Add a workout</label>
-                               <select id="training-calendar-workout" name="workout" required>
-                                   <option value="">Choose from your library</option>${options}
-                               </select>
-                               <button type="submit">Schedule</button>
-                           </form>`
-                        : '<p class="training-calendar--empty">Your workout library is still loading.</p>'}
-                    ${this.storageError
-                        ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.storageError)}</p>`
-                        : ''}
-                    ${this.actionMessage
-                        ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.actionMessage)}</p>`
-                        : ''}
-                </div>
-                <div class="training-calendar--week-schedule">${days}</div>
-            </div>`;
+            ${this.renderCalendarTable([dates], heading)}`;
     }
 
     renderSelectedDate() {
@@ -628,6 +664,9 @@ class TrainingCalendar extends HTMLElement {
                     : '<p class="training-calendar--empty">Your workout library is still loading.</p>'}
                 ${this.storageError
                     ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.storageError)}</p>`
+                    : ''}
+                ${this.weekStateError
+                    ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.weekStateError)}</p>`
                     : ''}
                 ${this.actionMessage
                     ? `<p class="training-calendar--error" role="alert">${escapeHTML(this.actionMessage)}</p>`
@@ -666,15 +705,19 @@ class TrainingCalendar extends HTMLElement {
             ? document.activeElement.closest('button, select, [tabindex], navigation-action')
             : null;
         const focusedDate = activeElement?.dataset.date;
+        const focusedCardIndex = activeElement?.dataset.cardIndex;
         const focusedAction = activeElement?.dataset.action;
         const focusedEntry = activeElement?.dataset.entry;
+        const gridHadFocus = activeElement?.classList.contains('training-calendar--grid-wrap');
+        const gridScrollLeft = this.querySelector('.training-calendar--grid-wrap')?.scrollLeft || 0;
         const focusedWorkout = activeElement?.matches('[name="workout"]')
             ? activeElement.value
             : this.querySelector('[name="workout"]')?.value;
 
-        this.innerHTML = this.view === 'month'
-            ? `${this.renderMonth()}${this.renderSelectedDate()}`
-            : this.renderWeek();
+        this.innerHTML = `${this.view === 'month' ? this.renderMonth() : this.renderWeek()}${this.renderSelectedDate()}`;
+
+        const grid = this.querySelector('.training-calendar--grid-wrap');
+        if(grid) grid.scrollLeft = gridScrollLeft;
 
         const select = this.querySelector('[name="workout"]');
         if(select && focusedWorkout && [...select.options].some((option) => option.value === focusedWorkout)) {
@@ -684,7 +727,8 @@ class TrainingCalendar extends HTMLElement {
         let nextFocus;
         if(focusedDate) {
             nextFocus = [...this.querySelectorAll('[data-date]')]
-                .find((element) => element.dataset.date === focusedDate);
+                .find((element) => element.dataset.date === focusedDate &&
+                    element.dataset.cardIndex === focusedCardIndex);
         } else if(focusedAction) {
             nextFocus = [...this.querySelectorAll('[data-action]')].find((element) =>
                 element.dataset.action === focusedAction &&
@@ -692,6 +736,8 @@ class TrainingCalendar extends HTMLElement {
             );
         } else if(activeElement?.matches('[name="workout"]')) {
             nextFocus = select;
+        } else if(gridHadFocus) {
+            nextFocus = grid;
         }
         nextFocus?.focus({preventScroll: true});
     }
@@ -745,6 +791,7 @@ class TrainingCalendar extends HTMLElement {
             this.loadPlannedMonth();
         } else if(action.dataset.action === 'month') {
             this.view = 'month';
+            this.displayMonth = new Date(`${this.selectedDate}T12:00:00`);
             this.plannedWorkouts = [];
             this.render();
             this.loadPlannedMonth();

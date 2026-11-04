@@ -21,6 +21,18 @@
 import { localDate, TrainingCalendar } from '../../src/views/training-calendar.js';
 import { xf } from '../../src/functions.js';
 import { setAccountScope } from '../../src/storage/account.js';
+import { coachingData } from '../../src/coaching/service.js';
+import { normalizeActivity } from '../../src/coaching/normalizer.js';
+import { estimateState } from '../../src/coaching/state.js';
+import { profile } from '../coaching/fixtures.js';
+
+jest.mock('../../src/coaching/service.js', () => ({
+    coachingData: jest.fn(),
+    coachingService: jest.fn(),
+}));
+jest.mock('../../src/coaching/state.js', () => ({
+    estimateState: jest.fn(),
+}));
 
 describe('training calendar', () => {
     function createCalendar(workouts = []) {
@@ -49,13 +61,20 @@ describe('training calendar', () => {
     beforeEach(() => {
         window.localStorage.clear();
         setAccountScope(null);
+        coachingData.mockReset().mockReturnValue(null);
+        estimateState.mockReset();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
     });
 
     test('formats local dates without shifting to the previous day', () => {
         expect(localDate(2024, 1, 29)).toBe('2024-02-29');
     });
 
-    test('renders a complete Monday-to-Sunday week by default with a planned power profile', () => {
+    test('defaults to a multi-week calendar with Monday-to-Sunday rows and weekly totals', () => {
         const calendar = createCalendar();
         calendar.plannedWorkouts = [{
             id: 'threshold-1',
@@ -65,12 +84,23 @@ describe('training calendar', () => {
 
         calendar.render();
 
-        expect(calendar.querySelectorAll('.training-calendar--week-day')).toHaveLength(7);
-        expect(calendar.querySelectorAll('.training-calendar--week-date')[0].dataset.date)
-            .toBe('2026-11-02');
-        expect(calendar.textContent).toContain('Week overview');
-        expect(calendar.querySelector('.power-profile--target')).not.toBeNull();
-        expect(calendar.querySelector('[data-action="month"]')).not.toBeNull();
+        expect(calendar.view).toBe('month');
+        expect([...calendar.querySelectorAll('thead th')].map(cell => cell.textContent.trim()))
+            .toEqual(['Week', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+        const rows = [...calendar.querySelectorAll('tbody tr')];
+        expect(rows).toHaveLength(6);
+        expect(rows.map(row => row.dataset.weekStart)).toEqual([
+            '2026-11-30', '2026-11-23', '2026-11-16',
+            '2026-11-09', '2026-11-02', '2026-10-26',
+        ]);
+        expect(rows.every(row => row.querySelectorAll('td').length === 7)).toBe(true);
+        expect(rows.every(row => row.querySelector('.training-calendar--week-summary'))).toBe(true);
+        const day = calendar.querySelector('.calendar-day--select[data-date="2026-11-03"]').closest('td');
+        expect(day.textContent).toContain('Threshold');
+        expect(day.textContent).toContain('15 min');
+        expect(day.querySelector('.power-profile--target')).not.toBeNull();
+        expect(calendar.querySelector('button figure, button button')).toBeNull();
+        expect(calendar.querySelector('[data-action="week"]')).not.toBeNull();
     });
 
     test('calculates week dates across a year boundary', () => {
@@ -83,11 +113,12 @@ describe('training calendar', () => {
         ]);
     });
 
-    test('shows a locally recorded ride and its power profile in the weekly schedule', () => {
+    test('shows a locally recorded ride and actual power profile in its calendar day', () => {
         const calendar = createCalendar();
         calendar.localActivities = [{
             id: 'ride-local',
-            timestamp: new Date(2026, 10, 3, 12).getTime(),
+            start: new Date(2026, 10, 3, 23, 30).toISOString(),
+            timestamp: new Date(2026, 10, 4, 0, 30).getTime(),
             name: 'Evening ride',
             duration: 3600,
             distance: 30000,
@@ -97,14 +128,21 @@ describe('training calendar', () => {
 
         calendar.render();
 
-        expect(calendar.textContent).toContain('Evening ride');
-        expect(calendar.textContent).toContain('175 W');
-        expect(calendar.querySelector('.power-profile--recorded')).not.toBeNull();
-        expect(calendar.querySelector('.training-calendar--week-layout')
-            .firstElementChild.classList.contains('training-calendar--week-sidebar')).toBe(true);
+        const day = calendar.querySelector('.calendar-day--select[data-date="2026-11-03"]').closest('td');
+        expect(day.textContent).toContain('Evening ride');
+        expect(day.textContent).toContain('60 min');
+        expect(day.textContent).toContain('30.0 km');
+        expect(day.textContent).toContain('175 W');
+        expect(day.querySelector('.power-profile--recorded')).not.toBeNull();
+        const nextDay = calendar.querySelector('.calendar-day--select[data-date="2026-11-04"]').closest('td');
+        expect(nextDay.textContent).not.toContain('Evening ride');
+        const summary = day.closest('tr').querySelector('.training-calendar--week-summary');
+        expect(summary.textContent).toMatch(/Rides\s*1/);
+        expect(summary.textContent).toMatch(/Time\s*1h 0m/);
+        expect(summary.textContent).toMatch(/Distance\s*30.0 km/);
     });
 
-    test('renders every day in a leap-year month', () => {
+    test('renders leap-year dates and adjacent-month dates in complete weeks', () => {
         const calendar = new TrainingCalendar();
         calendar.displayMonth = new Date(2024, 1, 1);
         calendar.selectedDate = '2024-02-29';
@@ -113,13 +151,113 @@ describe('training calendar', () => {
         const container = document.createElement('div');
         container.innerHTML = calendar.renderMonth();
 
-        const dates = [...container.querySelectorAll('[data-date]')]
+        const dates = [...container.querySelectorAll('.calendar-day--select')]
             .map((day) => day.dataset.date);
-        expect(dates).toHaveLength(29);
-        expect(dates[0]).toBe('2024-02-01');
-        expect(dates.at(-1)).toBe('2024-02-29');
+        expect(dates).toHaveLength(35);
+        expect(calendar.monthDates()[0]).toBe('2024-01-29');
+        expect(calendar.monthDates().at(-1)).toBe('2024-03-03');
+        expect(container.querySelector('.calendar-day--select[data-date="2024-02-29"]')).not.toBeNull();
+        expect(container.querySelector('.calendar-day--select[data-date="2024-03-03"]')
+            .closest('td').classList.contains('outside-month')).toBe(true);
         expect(container.querySelector('[aria-pressed="true"]').dataset.date)
             .toBe('2024-02-29');
+    });
+
+    test('counts duplicate local and imported rides once and labels incomplete load totals', () => {
+        coachingData.mockReturnValue({
+            profile: null,
+            activities: [{
+                id: 'ride-1', day: '2026-11-03', name: 'Imported',
+                duration: 3600, distance: 30000, loadMetrics: {power: {value: 42}},
+            }],
+            plan: null,
+        });
+        const calendar = createCalendar();
+        calendar.localActivities = [
+            {id: 'ride-1', timestamp: new Date(2026, 10, 3, 12).getTime(), duration: 3600},
+            {id: 'ride-2', timestamp: new Date(2026, 10, 4, 12).getTime(), duration: 1800, distance: 10000},
+        ];
+
+        calendar.render();
+
+        const summary = calendar.querySelector('[data-week-start="2026-11-02"] .training-calendar--week-summary');
+        expect(summary.textContent).toMatch(/Rides\s*2/);
+        expect(summary.textContent).toMatch(/Time\s*1h 30m/);
+        expect(summary.textContent).toMatch(/Distance\s*40.0 km/);
+        expect(summary.textContent).toMatch(/Known load\s*42/);
+    });
+
+    test('calculates historical models at each week end and never forecasts future weeks', () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-11-18T12:00:00Z'));
+        const data = {
+            profile: {timeZone: 'UTC'},
+            activities: [{id: 'ride-1', day: '2026-11-03', sport: 'cycling', duration: 3600}],
+            plan: null,
+        };
+        coachingData.mockReturnValue(data);
+        estimateState.mockImplementation((history, profile, asOf) => ({
+            chronicLoad: Number(asOf.slice(-2)),
+            acuteLoad: 5,
+            formBalance: 2,
+            loadSource: 'power',
+        }));
+        const calendar = createCalendar();
+
+        expect(estimateState.mock.calls.map(call => call[2])).toEqual([
+            '2026-11-18', '2026-11-15', '2026-11-08',
+        ]);
+        const historical = calendar.querySelector('[data-week-start="2026-11-09"] .training-calendar--week-summary');
+        expect(historical.textContent).toMatch(/Fitness\s*15/);
+        expect(historical.textContent).toContain('Model: power');
+        const future = calendar.querySelector('[data-week-start="2026-11-23"] .training-calendar--week-summary');
+        expect(future.textContent).not.toContain('Fitness');
+        calendar.render();
+        expect(estimateState).toHaveBeenCalledTimes(3);
+
+        coachingData.mockReturnValue({...data, activities: [...data.activities]});
+        calendar.render();
+        expect(estimateState).toHaveBeenCalledTimes(6);
+    });
+
+    test('renders historical weekly metrics from the real coaching model', () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-11-18T12:00:00Z'));
+        const activity = normalizeActivity({
+            id: 'ride-1',
+            start: '2026-11-03T09:00:00Z',
+            duration: 3600,
+            distance: 30000,
+            normalizedPower: profile.ftp,
+        }, profile);
+        coachingData.mockReturnValue({profile, activities: [activity], plan: null});
+        estimateState.mockImplementation(jest.requireActual('../../src/coaching/state.js').estimateState);
+
+        const calendar = createCalendar();
+        const summary = calendar.querySelector('[data-week-start="2026-11-02"] .training-calendar--week-summary');
+
+        expect(summary.textContent).toMatch(/Rides\s*1/);
+        expect(summary.textContent).toMatch(/Load\s*100/);
+        expect(summary.textContent).toMatch(/Fitness\s*2/);
+        expect(summary.textContent).toMatch(/Fatigue\s*7/);
+        expect(summary.textContent).toMatch(/Form\s*-4/);
+        expect(summary.textContent).toContain('Model: power');
+        expect(calendar.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    test('reports a training-state calculation error instead of silently hiding it', () => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-11-18T12:00:00Z'));
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+        coachingData.mockReturnValue({
+            profile: {timeZone: 'UTC'},
+            activities: [{id: 'ride-1', day: '2026-11-03', sport: 'cycling', duration: 3600}],
+            plan: null,
+        });
+        estimateState.mockImplementation(() => { throw new Error('Invalid profile'); });
+
+        const calendar = createCalendar();
+
+        expect(calendar.querySelector('[role="alert"]').textContent)
+            .toContain('Weekly training metrics could not be calculated');
+        expect(console.error).toHaveBeenCalled();
     });
 
     test('escapes workout names displayed in calendar cells', () => {
@@ -136,7 +274,7 @@ describe('training calendar', () => {
         container.innerHTML = calendar.renderMonth();
 
         expect(container.querySelector('img')).toBeNull();
-        expect(container.querySelector('[data-date="2026-11-03"]').textContent)
+        expect(container.querySelector('.calendar-event--select[data-date="2026-11-03"]').textContent)
             .toContain('<img src=x onerror=alert(1)>');
     });
 
@@ -250,9 +388,11 @@ describe('training calendar', () => {
         },
     );
 
-    test('loads connected Intervals.icu plans for the visible week', async () => {
+    test.each([
+        ['month', '2026-11-30', ['2026-11-30', '2027-01-03']],
+        ['week', '2026-12-15', ['2026-12-14', '2026-12-20']],
+    ])('loads connected Intervals.icu plans for the entire visible %s', async (view, futureDate, range) => {
         const originalFetch = global.fetch;
-        const futureDate = '2026-12-15';
         const workoutFile = Buffer.from(
             '<workout_file><name>Intervals workout</name><workout><SteadyState Duration="60" Power="0.5"/></workout></workout_file>',
         ).toString('base64');
@@ -286,14 +426,15 @@ describe('training calendar', () => {
             const calendar = createCalendar();
             calendar.displayMonth = new Date(2026, 11, 1);
             calendar.selectedDate = futureDate;
+            calendar.view = view;
             calendar.signal = {signal: new AbortController().signal};
             await calendar.loadPlannedMonth();
             calendar.render();
 
-            expect(requests).toEqual([['2026-12-14', '2026-12-20']]);
-            expect(calendar.querySelector(`[data-date="${futureDate}"]`)
-                .classList.contains('has-events')).toBe(true);
-            expect(calendar.textContent).toContain('Intervals workout');
+            expect(requests).toEqual([range]);
+            const day = calendar.querySelector(`.calendar-day--select[data-date="${futureDate}"]`).closest('td');
+            expect(day.textContent).toContain('Intervals workout');
+            expect(day.querySelector('.power-profile--target')).not.toBeNull();
             expect(calendar.querySelector('[data-action="start"]')).not.toBeNull();
 
             const startedWorkouts = [];
@@ -306,6 +447,83 @@ describe('training calendar', () => {
         } finally {
             setAccountScope(null);
             global.fetch = originalFetch;
+        }
+    });
+
+    test('switches between month and week grids and navigates over a year boundary', () => {
+        const calendar = createCalendar();
+        calendar.intervalsConnected = false;
+        calendar.displayMonth = new Date(2026, 11, 1);
+        calendar.selectedDate = '2026-12-31';
+        calendar.render();
+
+        calendar.onClick({target: calendar.querySelector('[data-action="week"]')});
+        expect(calendar.querySelectorAll('tbody tr')).toHaveLength(1);
+        expect(calendar.querySelector('tbody tr').dataset.weekStart).toBe('2026-12-28');
+        expect(calendar.plannedRange()).toEqual({oldest: '2026-12-28', newest: '2027-01-03'});
+
+        calendar.onClick({target: calendar.querySelector('[data-action="week-next"]')});
+        expect(calendar.selectedDate).toBe('2027-01-07');
+        expect(calendar.querySelector('tbody tr').dataset.weekStart).toBe('2027-01-04');
+        calendar.onClick({target: calendar.querySelector('[data-action="week-previous"]')});
+        expect(calendar.selectedDate).toBe('2026-12-31');
+
+        calendar.onClick({target: calendar.querySelector('[data-action="month"]')});
+        expect(calendar.displayMonth.getMonth()).toBe(11);
+        expect(calendar.querySelectorAll('tbody tr').length).toBeGreaterThan(1);
+        calendar.onClick({target: calendar.querySelector('[data-action="next"]')});
+        expect(calendar.selectedDate).toBe('2027-01-01');
+        expect(calendar.plannedRange()).toEqual({oldest: '2026-12-28', newest: '2027-01-31'});
+    });
+
+    test('selects a day from a workout preview and schedules to the selected date', () => {
+        const workout = {
+            id: 'workout-1',
+            meta: {name: 'Intervals'},
+            intervals: [{steps: [{duration: 120, power: 0.8}]}],
+        };
+        const calendar = createCalendar([workout]);
+        calendar.entries = [{id: 'existing', date: '2026-11-05', name: 'Intervals', workoutId: workout.id}];
+        calendar.render();
+
+        calendar.onClick({target: calendar.querySelector('.calendar-event--select[data-date="2026-11-05"]')});
+        expect(calendar.selectedDate).toBe('2026-11-05');
+        expect(calendar.querySelector('.calendar-day--select[data-date="2026-11-05"]').getAttribute('aria-pressed'))
+            .toBe('true');
+        schedule(calendar, workout.id);
+
+        expect(JSON.parse(window.localStorage.getItem('training-calendar'))[0].date).toBe('2026-11-05');
+    });
+
+    test('preserves scroll position and preview focus during a calendar rerender', () => {
+        const calendar = createCalendar();
+        document.body.append(calendar);
+        try {
+            calendar.displayMonth = new Date(2026, 10, 1);
+            calendar.selectedDate = '2026-11-03';
+            calendar.plannedWorkouts = [{
+                id: 'workout-1',
+                meta: {name: 'Intervals', startDateLocal: '2026-11-05'},
+            }];
+            calendar.render();
+            const grid = calendar.querySelector('.training-calendar--grid-wrap');
+            grid.scrollLeft = 240;
+            const preview = calendar.querySelector('.calendar-event--select[data-date="2026-11-05"]');
+            preview.focus();
+
+            calendar.onClick({target: preview});
+
+            expect(calendar.selectedDate).toBe('2026-11-05');
+            expect(calendar.querySelector('.training-calendar--grid-wrap').scrollLeft).toBe(240);
+            expect(document.activeElement)
+                .toBe(calendar.querySelector('.calendar-event--select[data-date="2026-11-05"]'));
+
+            const updatedGrid = calendar.querySelector('.training-calendar--grid-wrap');
+            updatedGrid.focus();
+            calendar.render();
+            expect(document.activeElement).toBe(calendar.querySelector('.training-calendar--grid-wrap'));
+        } finally {
+            calendar.remove();
         }
     });
 

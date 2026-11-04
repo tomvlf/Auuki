@@ -29,7 +29,8 @@ jest.mock('../../src/index.js', () => {
 jest.mock('../../src/db.js', () => ({db: {
     ftp: 250, weight: 75, elapsed: 0, lapTime: 0, intervalIndex: 0, stepIndex: 0,
     power1s: 0, powerTarget: 200, heartRate: 0, cadence: 0, mode: 'erg',
-    watchStatus: 'stopped', activity: [{id: 'original-ride', name: 'Original FIT ride', duration: 600}],
+    watchStatus: 'stopped', activity: [{id: 'original-ride', name: 'Original FIT ride', duration: 600,
+        timestamp: Date.now(), powerProfile: [100, 150, 200]}],
     workout: {meta: {name: 'Free ride'}, intervals: []},
     workouts: [{id: 'local', meta: {name: 'Local workout', duration: 600}, intervals: []}],
 }}));
@@ -90,6 +91,8 @@ test('mobile guests can ride, browse workouts, configure devices and use local c
     expect(root.textContent).toContain('No account or upload is required');
     expect(root.textContent).toContain('Original FIT ride');
     expect(root.querySelector('[data-download="original-ride"]')).not.toBeNull();
+    expect(root.querySelector('.activity-local .power-profile--recorded')).not.toBeNull();
+    expect(root.querySelector('[aria-label="This week activity totals"]').textContent).toContain('1');
     await go('dashboard');
     window.dispatchEvent(new Event('focus'));
     await settle();

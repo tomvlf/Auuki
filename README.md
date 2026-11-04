@@ -9,9 +9,11 @@ The app is built around a single idea: training should work without friction, wh
 ## What Athlima does
 
 - runs `.zwo` workouts and built-in structured sessions
+- searches and filters the workout library by category, type, and duration, with sorting and workout or course previews
 - controls smart trainers in ERG, resistance, and grade-simulation modes
 - records `.fit` files with power, cadence, heart rate, and RR intervals
-- supports calendar-based session planning and direct launch from the training calendar
+- supports session planning and direct launch from a multi-week calendar, with weekly ride totals and power profiles when data is available
+- reviews cycling activities with weekly and monthly totals, available training-load indicators, and recorded power previews when samples exist
 - imports and syncs ride history from Intervals.icu
 - uploads new FIT recordings back to Intervals.icu
 - includes an adaptive coaching engine for goal-based planning and ride review

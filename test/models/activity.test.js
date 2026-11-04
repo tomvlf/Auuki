@@ -65,12 +65,13 @@ test('restored power profiles are downsampled and retain their ride shape', asyn
         id: 'ride',
         pendingSync: false,
         summary: {id: 'ride', timestamp: 1, status: {}},
-        ride: {ftp: 240, streams: {power}},
+        ride: {start: '2026-03-01T23:30:00.000Z', ftp: 240, streams: {power}},
     }]);
 
     const [activity] = await models.activity.restore();
 
     expect(activity.ftp).toBe(240);
+    expect(activity.start).toBe('2026-03-01T23:30:00.000Z');
     expect(activity.powerProfile).toHaveLength(64);
     expect(activity.powerProfile[0]).toBe(1.5);
     expect(activity.powerProfile.at(-1)).toBe(127.5);
@@ -104,6 +105,7 @@ test('local write failure retains the complete recording and retries the same id
     expect(saved).toBe(retained);
     expect(saved.summary.pendingSync).toBe(true);
     expect(saved.summary.duration).toBe(60);
+    expect(saved.summary.start).toBe(saved.ride.start);
     expect(models.activity.pendingRecording).toBeNull();
     expect(db.activity).toEqual([saved.summary]);
     expect(idb.putManyChecked.mock.calls[0][0][0][1].id).toBe(idb.putManyChecked.mock.calls[1][0][0][1].id);

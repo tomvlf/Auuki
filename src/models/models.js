@@ -611,6 +611,7 @@ class Activity extends Model {
         const summary = {
             id,
             timestamp,
+            start: ride.start,
             name,
             duration: db.elapsed ?? 0,
             distance: ride.distance,
@@ -713,6 +714,7 @@ class Activity extends Model {
         return records
             .map((record) => ({
                 ...record.summary,
+                start: record.summary.start ?? record.ride?.start,
                 distance: record.summary.distance ?? record.ride?.distance,
                 averagePower: record.summary.averagePower ?? record.ride?.averagePower,
                 averageHeartRate: record.summary.averageHeartRate ?? record.ride?.averageHeartRate,

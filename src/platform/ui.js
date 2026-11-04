@@ -22,6 +22,8 @@ import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
 import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
+import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview } from './activities.js';
+import { initialLibraryFilters, renderLibrary } from './library.js';
 
 const routes = {
     dashboard: ['Overview', 'Your training, in focus'],
@@ -96,6 +98,7 @@ export async function launchPlatform(root, account) {
     let savingRide = false;
     let advancedPlayer = false;
     let state;
+    let stateVersion = 0;
     const sensorStatus = {};
     const requestedDevices = new Set();
     const report = (text, error = false) => {
@@ -178,16 +181,6 @@ export async function launchPlatform(root, account) {
             `<div><span>${Math.round(day.seconds / 60)}</span><i style="height:${Math.max(2, day.seconds / maximum * 100)}px"></i>
                 <small>${escape(new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, {weekday: 'short'}))}</small></div>`).join('')}</div>`;
     }
-    function library() {
-        return `<div class="toolbar"><label>Search workouts<input type="search" id="workout-search" placeholder="Name or category" value="${escape(search)}"></label>
-            <label class="button secondary">Import .ZWO / .FIT course<input type="file" id="platform-upload" accept=".zwo,.fit" multiple></label>
-            ${link('editor', 'Workout editor', 'button secondary')}</div><div class="workout-grid">${db.workouts.filter(workout =>
-                `${workout.meta.name} ${workout.meta.category}`.toLowerCase().includes(search.toLowerCase())).map(workout => `
-                <article class="panel workout-card"><p class="eyebrow">${escape(workout.meta.category || 'Structured session')}</p>
-                    <h2>${escape(workout.meta.name)}</h2>${profileGraph(workout)}
-                    <p class="muted">${workout.meta.duration ? minutes(workout.meta.duration) : `${number(workout.meta.distance / 1000, 1)} km course`}</p>
-                    ${link(`workout/${encodeURIComponent(workout.id)}`, 'View workout', 'button secondary')}</article>`).join('') || empty('No workouts match your search.')}</div>`;
-    }
     function selectedWorkout(data) {
         const planned = data?.plan?.workouts.find(workout => workout.id === selectedId);
         const external = legacy.querySelector('training-calendar')?.plannedWorkouts.find(workout => workout.id === selectedId);
@@ -221,29 +214,22 @@ export async function launchPlatform(root, account) {
                 '<p>Adaptations will appear after recorded rides, feedback or missed-session reviews.</p>')}`;
     }
     function activities(data) {
-        const localPending = db.activity.filter(activity => activity.pendingSync && !data?.activities.some(a => a.id === activity.id));
-        const cached = authenticated ? [] : db.activity.filter(activity =>
-            !activity.pendingSync && !data?.activities.some(a => a.id === activity.id));
-        const rides = [...(data?.activities || [])].sort((a, b) => b.start.localeCompare(a.start));
+        const lists = activityLists(data, db.activity, authenticated);
+        const timeZone = data?.profile?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         return `${lastRide ? card('Ride saved', `<div class="stats">${stat('Duration', time(lastRide.duration))}
             ${stat('Average power', number(lastRide.averagePower), 'W')}${stat('Average HR', number(lastRide.averageHeartRate), 'bpm')}</div>
-            <p>${!authenticated ? 'Saved on this device. No account or upload is required.' : data?.activities.some(activity => activity.id === lastRide.id) ? "Saved to this account's server history." : 'Saved on this device. Server synchronization is pending.'}
+            <p>${!authenticated ? 'Saved on this device. No account or upload is required.' : lists.history.some(activity => activity.id === lastRide.id) ? "Saved to this account's server history." : 'Saved on this device. Server synchronization has not been confirmed.'}
             Add session feedback in Coach to inform your next session.</p>${link('coach', 'Add feedback', 'button secondary')}`) : ''}
-            ${localPending.length ? card(authenticated ? 'Awaiting server synchronization' : 'Awaiting local coaching update', `<p>Your recordings are safely stored on this device.</p>
-                <ul class="session-list">${localPending.map(activity => `<li class="session-row"><span>${escape(activity.name)} / ${minutes(activity.duration)}</span>
-                <button class="secondary" data-download="${escape(activity.id)}">Download FIT</button></li>`).join('')}</ul><button data-action="retry-rides">Retry synchronization</button>`) : ''}
-            ${cached.length ? card('Device recordings', `<p>Recordings from earlier guest rides are still available on this device.</p>
-                <ul class="session-list">${cached.map(activity => `<li class="session-row"><span>${escape(activity.name)} / ${minutes(activity.duration)}</span>
-                <button class="secondary" data-download="${escape(activity.id)}">Download FIT</button></li>`).join('')}</ul>`) : ''}
-            ${card('Ride history', rides.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
-                <th>Avg power</th><th>Avg HR</th><th>Source</th><th>File</th></tr></thead><tbody>${rides.map(activity =>
-                `<tr><td><strong>${escape(activity.name || 'Cycling activity')}</strong><small>${escape(activity.day)}</small></td>
-                <td>${time(activity.duration)}</td><td>${activity.distance == null ? '--' : `${number(activity.distance / 1000, 1)} km`}</td>
-                <td>${number(activity.averagePower)} W</td><td>${number(activity.averageHeartRate)} bpm</td><td>${escape(activity.source)}
-                    <small>${escape(activity.externalId)}</small></td><td>${db.activity.some(a => a.id === activity.id)
-                    ? `<div class="button-row"><button class="secondary" data-download="${escape(activity.id)}">FIT</button>
-                        ${integration?.connected ? `<button class="secondary" data-upload-ride="${escape(activity.id)}">Send to Intervals.icu</button>` : ''}</div>` : '--'}</td></tr>`).join('')}</tbody></table></div>` :
-                empty(authenticated ? 'Your rides will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'))}
+            ${renderActivityOverview(data, lists, state)}
+            ${lists.pending.length ? card(authenticated ? 'Awaiting server synchronization' : 'Awaiting local coaching update', `<p>Your recordings are safely stored on this device.</p>
+                <ul class="session-list">${lists.pending.map(activity => localActivityRow(activity, timeZone)).join('')}</ul><button data-action="retry-rides">Retry synchronization</button>`) : ''}
+            ${lists.cached.length ? card('Device recordings', `<p>Recordings from earlier guest rides are still available on this device.</p>
+                <ul class="session-list">${lists.cached.map(activity => localActivityRow(activity, timeZone)).join('')}</ul>`) : ''}
+            ${card('Ride history', !lists.historyAvailable ? '<p role="status">Ride history is currently unavailable.</p>' :
+                lists.history.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
+                <th>Avg power</th><th>Avg HR</th><th>Load / feedback</th><th>Source</th><th>File</th></tr></thead><tbody>${lists.history.map(activity =>
+                historyActivityRow(activity, lists.localById.get(String(activity.id)), integration?.connected)).join('')}</tbody></table></div>` :
+                empty(authenticated ? 'Your rides will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'), 'activity-history')}
             <p class="muted">Missing measurements are shown as --, not estimated. FIT downloads are retained locally for the most recent seven rides.</p>`;
     }
     function progress(data) {
@@ -340,7 +326,7 @@ export async function launchPlatform(root, account) {
         } catch(error) { report(error.message, true); }
         finally { integrationLoading = false; }
     }
-    let search = '';
+    let libraryFilters = initialLibraryFilters();
     function render() {
         if(!ready) return;
         const data = coachingData();
@@ -352,7 +338,7 @@ export async function launchPlatform(root, account) {
         document.body.dataset.route = route;
         legacy.hidden = !['calendar', 'coach', 'devices', 'editor', 'player'].includes(route) || (route === 'player' && !advancedPlayer);
         root.querySelector('#legacy-slot').classList.toggle('legacy-player', route === 'player');
-        content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? library()
+        content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? renderLibrary(db.workouts, libraryFilters)
             : route === 'workout' ? details(data) : route === 'plan' ? plan(data)
                 : route === 'activities' ? activities(data) : route === 'progress' ? progress(data)
                     : route === 'player' ? player() : route === 'settings' ? settings()
@@ -412,7 +398,7 @@ export async function launchPlatform(root, account) {
 
     root.addEventListener('input', event => {
         if(event.target.id !== 'workout-search') return;
-        search = event.target.value;
+        libraryFilters.search = event.target.value;
         const position = event.target.selectionStart;
         render();
         const input = root.querySelector('#workout-search');
@@ -426,18 +412,33 @@ export async function launchPlatform(root, account) {
         if(advancedPlayer) window.dispatchEvent(new Event('resize'));
     }, true);
     root.addEventListener('change', event => {
-        if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
-        if(event.target.id === 'platform-upload') void run(async () => {
-            const { models } = await import('../models/models.js');
-            for(const file of event.target.files) {
-                const {result, name} = await models.workout.readFromFile(file);
-                const workout = models.workout.parse(result, name);
-                await models.workouts.save(workout);
-                db.workouts.push(workout);
-            }
+        const libraryField = {
+            'workout-category': 'category', 'workout-type': 'type',
+            'workout-duration': 'duration', 'workout-sort': 'sort',
+        }[event.target.id];
+        if(libraryField) {
+            libraryFilters[libraryField] = event.target.value;
             render();
-            report('Workout files imported.');
-        });
+            root.querySelector(`#${event.target.id}`).focus();
+            return;
+        }
+        if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
+        if(event.target.id === 'platform-upload') {
+            const files = Array.from(event.target.files);
+            if(!files.length) return;
+            void run(async () => {
+                const { models } = await import('../models/models.js');
+                for(const file of files) {
+                    const {result, name} = await models.workout.readFromFile(file);
+                    const workout = models.workout.parse(result, name);
+                    await models.workouts.save(workout);
+                    db.workouts.push(workout);
+                    xf.dispatch('db:workouts', db);
+                }
+                render();
+                report('Workout files imported.');
+            });
+        }
     });
     root.addEventListener('submit', event => {
         if(!['profile-form', 'intervals-connect', 'delete-account'].includes(event.target.id)) return;
@@ -470,6 +471,12 @@ export async function launchPlatform(root, account) {
         if(event.target.closest('.skip-link')) {
             event.preventDefault();
             root.querySelector('#main-content').focus();
+            return;
+        }
+        if(event.target.closest('[data-library-reset]')) {
+            libraryFilters = initialLibraryFilters();
+            render();
+            root.querySelector('#workout-search').focus();
             return;
         }
         const device = event.target.closest('[data-device]')?.dataset.device;
@@ -615,12 +622,17 @@ export async function launchPlatform(root, account) {
     xf.sub('coaching:changed', () => {
         if(!ready) return;
         const data = coachingData();
+        const version = ++stateVersion;
         coachingError = '';
+        state = undefined;
         if(data?.profile) {
             import('../coaching/state.js').then(({estimateState}) => {
+                if(version !== stateVersion) return;
                 try { state = estimateState(data.activities, data.profile, today(data)); }
-                catch(error) { report(error.message, true); }
-                if(['dashboard', 'progress', 'plan'].includes(route)) render();
+                catch(error) { report(`Training load could not be calculated: ${error.message}`, true); }
+                if(['dashboard', 'progress', 'plan', 'activities'].includes(route)) render();
+            }, error => {
+                if(version === stateVersion) report(`Training load could not be calculated: ${error.message}`, true);
             });
         }
         if(!['player', 'settings', 'coach'].includes(route)) render();
@@ -638,6 +650,7 @@ export async function launchPlatform(root, account) {
         else updateRide();
     });
     xf.sub('action:planned', () => { if(ready && route === 'dashboard') render(); });
+    xf.sub('db:workouts', () => { if(ready && route === 'library') render(); });
     for(const key of ['elapsed', 'lapTime', 'power1s', 'powerTarget', 'cadence', 'heartRate', 'watchStatus',
         'workoutStatus', 'intervalIndex', 'mode', 'resistanceTarget', 'slopeTarget', 'sources']) xf.sub(`db:${key}`, updateRide);
     const started = new Promise((resolve, reject) => {

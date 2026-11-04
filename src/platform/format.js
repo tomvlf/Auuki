@@ -51,7 +51,28 @@ export function trainingSummary(data, day = today(data)) {
 
 export function profileGraph(workout) {
     const steps = (workout.intervals || []).flatMap(interval => interval.steps || []);
-    if(!steps.length) return '<p class="muted">Free ride or course-based workout</p>';
+    if(!steps.length) {
+        const source = Array.isArray(workout.pointsSimplified) && workout.pointsSimplified.length
+            ? workout.pointsSimplified : Array.isArray(workout.points) ? workout.points : [];
+        const points = source.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+        if(points.length < 2) return '<p class="muted">Free ride or course-based workout</p>';
+        const bounds = points.reduce((range, point) => ({
+            min: Math.min(range.min, point.y), max: Math.max(range.max, point.y),
+        }), {min: points[0].y, max: points[0].y});
+        const count = Math.min(points.length, 128);
+        const firstX = points[0].x, distance = points[points.length - 1].x - firstX;
+        const coordinates = Array.from({length: count}, (_, index) => {
+            const point = points[Math.round(index * (points.length - 1) / (count - 1))];
+            const x = distance > 0 ? Math.max(0, Math.min(100, (point.x - firstX) / distance * 100)) :
+                index * 100 / (count - 1);
+            const y = bounds.max === bounds.min ? 24 : 44 - (point.y - bounds.min) / (bounds.max - bounds.min) * 36;
+            return `${x.toFixed(2)},${y.toFixed(2)}`;
+        }).join(' ');
+        return `<div class="course-profile" role="img" aria-label="Course elevation profile">
+            <svg viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+                <polygon points="0,48 ${coordinates} 100,48"></polygon><polyline points="${coordinates}"></polyline>
+            </svg></div>`;
+    }
     return `<div class="profile-graph" role="img" aria-label="Workout target power profile">
         ${steps.map(step => `<span style="flex-grow:${Number(step.duration) || 1};
             height:${Math.max(8, Math.min(100, (Number(step.power) || 0) < 9

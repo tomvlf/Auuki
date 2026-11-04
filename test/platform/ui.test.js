@@ -22,7 +22,9 @@ import { xf } from '../../src/functions.js';
 import { db } from '../../src/db.js';
 import { serverRequest } from '../../src/server/client.js';
 import { coachingData } from '../../src/coaching/service.js';
+import { normalizeActivity } from '../../src/coaching/normalizer.js';
 import { models } from '../../src/models/models.js';
+import { profile as coachingProfile } from '../coaching/fixtures.js';
 
 jest.mock('../../src/index.js', () => {
     queueMicrotask(() => globalThis.window.dispatchEvent(new CustomEvent('app:ready')));
@@ -46,6 +48,8 @@ jest.mock('../../src/models/models.js', () => ({models: {
     ftp: {toAbsolute: (value, ftp) => value < 9 ? Math.round(value * ftp) : value},
     activity: {},
     api: {intervals: {getAthlete: jest.fn()}},
+    workout: {readFromFile: jest.fn(), parse: jest.fn()},
+    workouts: {save: jest.fn()},
 }}));
 jest.mock('../../src/functions.js', () => {
     const actual = jest.requireActual('../../src/functions.js');
@@ -101,13 +105,70 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
 
     await go('library');
     expect(root.querySelector('.workout-card h2').textContent).toBe('Session');
+    expect(root.querySelector('.library-layout').firstElementChild.matches('aside.library-filters')).toBe(true);
+    expect(root.querySelector('#workout-search').closest('aside')).not.toBeNull();
+    expect(root.querySelector('.workout-card a').getAttribute('href')).toBe('#/workout/ride');
     const search = root.querySelector('#workout-search');
     search.value = 'unmatched';
     search.dispatchEvent(new Event('input', {bubbles: true}));
     expect(root.textContent).toContain('No workouts match your search.');
+    expect(document.activeElement.id).toBe('workout-search');
     search.value = '';
     root.querySelector('#workout-search').value = '';
     root.querySelector('#workout-search').dispatchEvent(new Event('input', {bubbles: true}));
+
+    db.workouts.push(
+        {id: 'long', meta: {name: 'Long ride', category: 'Endurance', duration: 4000},
+            intervals: [{steps: [{duration: 4000, power: .6}]}]},
+        {id: 'course', meta: {name: 'Hill course', category: 'Course', distance: 12000},
+            points: [{x: 0, y: 10}, {x: 12000, y: 300}]},
+    );
+    xf.dispatch('db:workouts', db);
+    const change = (id, value) => {
+        const field = root.querySelector(`#${id}`);
+        field.value = value;
+        field.dispatchEvent(new Event('change', {bubbles: true}));
+        expect(document.activeElement.id).toBe(id);
+    };
+    change('workout-category', 'Endurance');
+    change('workout-duration', 'long');
+    expect([...root.querySelectorAll('.workout-card h2')].map(element => element.textContent)).toEqual(['Long ride']);
+    change('workout-type', 'course');
+    expect(root.textContent).toContain('No workouts match your search.');
+    root.querySelector('[data-library-reset]').click();
+    expect(document.activeElement.id).toBe('workout-search');
+    expect(root.querySelectorAll('.workout-card')).toHaveLength(3);
+    change('workout-sort', 'name');
+    expect([...root.querySelectorAll('.workout-card h2')].map(element => element.textContent))
+        .toEqual(['Hill course', 'Long ride', 'Session']);
+    change('workout-type', 'course');
+    expect(root.querySelector('[aria-label="Course elevation profile"]')).not.toBeNull();
+    await go('dashboard');
+    await go('library');
+    expect(root.querySelector('#workout-type').value).toBe('course');
+    expect(root.querySelectorAll('.workout-card')).toHaveLength(1);
+    root.querySelector('[data-library-reset]').click();
+
+    const files = [new File(['first'], 'first.zwo'), new File(['second'], 'second.zwo')];
+    models.workout.readFromFile.mockImplementation(async file => ({result: file.name, name: file.name}));
+    models.workout.parse.mockImplementation((result, name) => ({
+        id: name, meta: {name, category: 'Imported', duration: 600},
+        intervals: [{steps: [{duration: 600, power: .5}]}],
+    }));
+    models.workouts.save.mockResolvedValueOnce().mockRejectedValueOnce(new Error('Device storage is full.'));
+    const upload = root.querySelector('#platform-upload');
+    Object.defineProperty(upload, 'files', {value: files});
+    xf.dispatch.mockClear();
+    upload.dispatchEvent(new Event('change', {bubbles: true}));
+    await settle();
+    expect(models.workouts.save).toHaveBeenCalledTimes(2);
+    expect(xf.dispatch).toHaveBeenCalledWith('db:workouts', db);
+    expect(root.textContent).toContain('first.zwo');
+    expect(root.textContent).not.toContain('second.zwo');
+    expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
+    expect(root.querySelector('#platform-message').textContent).toBe('Device storage is full.');
+    db.workouts = db.workouts.filter(workout => workout.id === 'ride');
+    xf.dispatch('db:workouts', db);
     await go('workout/ride');
     expect(root.textContent).toContain('<script>not executable</script>');
     expect(root.querySelector('script')).toBeNull();
@@ -221,4 +282,41 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(root.textContent).toContain('Awaiting server synchronization');
     expect(root.querySelector('[data-action="retry-rides"]')).not.toBeNull();
     expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
+
+    const profileData = {...coachingProfile, timeZone: 'UTC'};
+    const synced = normalizeActivity({
+        id: 'synced', name: 'Synchronized ride', start: new Date().toISOString(), duration: 1800,
+        distance: 12000, normalizedPower: 210, averagePower: 190, averageHeartRate: 140, rpe: 6,
+    }, profileData);
+    db.activity = [
+        {id: 'synced', name: 'Synchronized ride', duration: 1800, timestamp: Date.now(),
+            powerProfile: [120, 200, 240], ftp: 250, pendingSync: true},
+        {id: 'pending', name: 'Pending ride', duration: 600, timestamp: Date.now(),
+            powerProfile: [100, 150, 200], pendingSync: true},
+    ];
+    coachingData.mockReturnValue({activities: [synced], plan: null, profile: profileData});
+    xf.dispatch('coaching:changed');
+    await settle();
+    const week = root.querySelector('[aria-label="This week activity totals"]');
+    const rideCount = [...week.querySelectorAll('dt')].find(item => item.textContent === 'Rides').nextElementSibling;
+    expect(rideCount.textContent).toBe('2');
+    expect(root.querySelectorAll('.power-profile--recorded')).toHaveLength(2);
+    expect(root.querySelector('.activity-history').textContent).toContain('RPE 6');
+    expect(root.querySelector('[aria-label="Current training load"]')).not.toBeNull();
+    expect(root.querySelectorAll('[data-download="synced"]')).toHaveLength(1);
+    expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
+    models.activity.download = jest.fn().mockResolvedValue();
+    root.querySelector('[data-download="synced"]').click();
+    await settle();
+    expect(models.activity.download).toHaveBeenCalledWith('synced');
+
+    coachingData.mockReturnValue({activities: [], plan: null, profile: null});
+    xf.dispatch('coaching:changed');
+    expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
+    coachingData.mockReturnValue({activities: [synced], plan: null, profile: profileData});
+    xf.dispatch('coaching:changed');
+    coachingData.mockReturnValue({activities: [], plan: null, profile: null});
+    xf.dispatch('coaching:changed');
+    await settle();
+    expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
 });

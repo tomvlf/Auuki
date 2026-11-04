@@ -197,7 +197,7 @@ class ActivityList extends HTMLElement {
         const metrics = this.stats(data);
         const profile = renderPowerProfile({
             samples: data.powerProfile || [],
-            ftp: data.ftp || 200,
+            ftp: data.ftp,
             label: data.name,
         });
 

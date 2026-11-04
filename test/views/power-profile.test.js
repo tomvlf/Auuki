@@ -20,3 +20,8 @@ test('renders sampled ride power and omits unavailable profiles', () => {
         .toContain('class="power-profile--recorded"');
     expect(renderPowerProfile({samples: [0, NaN, -1]})).toBe('');
 });
+
+test('does not show an invented FTP reference on recorded profiles', () => {
+    expect(renderPowerProfile({samples: [100, 120, 180]})).not.toContain('power-profile--ftp');
+    expect(renderPowerProfile({samples: [100, 120, 180], ftp: 250})).toContain('power-profile--ftp');
+});

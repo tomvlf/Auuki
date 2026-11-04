@@ -8,8 +8,9 @@ function escapeAttribute(value) {
     })[character]);
 }
 
-function renderPowerProfile({intervals = [], samples = [], ftp = 200, label = 'Power profile'} = {}) {
-    const threshold = Number.isFinite(ftp) && ftp > 0 ? ftp : 200;
+function renderPowerProfile({intervals = [], samples = [], ftp, label = 'Power profile'} = {}) {
+    const hasThreshold = Number.isFinite(ftp) && ftp > 0;
+    const threshold = hasThreshold ? ftp : 200;
     const width = 240;
     const height = 58;
     const left = 2;
@@ -65,7 +66,7 @@ function renderPowerProfile({intervals = [], samples = [], ftp = 200, label = 'P
         const bucket = validSamples.slice(start, end);
         return bucket.reduce((sum, value) => sum + value, 0) / bucket.length;
     });
-    const maxWatts = Math.max(1, threshold, ...points);
+    const maxWatts = Math.max(1, hasThreshold ? threshold : 0, ...points);
     const x = index => left + (index / Math.max(1, points.length - 1)) * (right - left);
     const y = value => bottom - (value / maxWatts) * (bottom - top);
     const line = points.map((value, index) =>
@@ -79,7 +80,7 @@ function renderPowerProfile({intervals = [], samples = [], ftp = 200, label = 'P
         <svg viewBox="0 0 ${width} ${height}" role="img"
              aria-label="${escapeAttribute(`${label}: recorded power from 0 to ${Math.round(maxWatts)} watts`)}"
              preserveAspectRatio="none">
-            <line class="power-profile--ftp" x1="${left}" y1="${ftpY}" x2="${right}" y2="${ftpY}"></line>
+            ${hasThreshold ? `<line class="power-profile--ftp" x1="${left}" y1="${ftpY}" x2="${right}" y2="${ftpY}"></line>` : ''}
             <path class="power-profile--recorded-area" d="${area}"></path>
             <path class="power-profile--recorded" d="${line}"></path>
         </svg>
