@@ -1,7 +1,7 @@
 let scope = '';
 
 export function setAccountScope(email) {
-    scope = `auuki:${encodeURIComponent(email)}:`;
+    scope = email ? `auuki:${encodeURIComponent(email)}:` : '';
 }
 
 export const accountKey = key => `${scope}${key}`;

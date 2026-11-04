@@ -28,9 +28,9 @@ defaults, safety limits and known data limitations. It provides training decisio
 support, not medical diagnosis or medical advice.
 
 Built as a **progressive web app (PWA)**, Auuki is fully browser-based and runs independently. It makes use of some of the most advanced Browser APIs like: Web Bluetooth, Web Serial, and Web Components. The web version is **free and open-source**, keeping everything on your device by default. Server storage and computation are opt-in.
-Train with full control directly in your browser. The platform requires a server
-account to sign in; once loaded, workout execution and device recording remain
-local and continue if the server connection is interrupted. There is no runtime
+Train with full control directly in your browser without an account, including
+the `/mobile` companion. Sign in only for optional server features; workout
+execution and device recording remain local. There is no runtime
 frontend framework or external CDN dependency.
 
 _Status_: Currently working on creating a full suite of Apple platform native apps (iOS, iPadOS, tvOS, watchOS).
@@ -84,13 +84,19 @@ AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml u
 The app uses browser device APIs that require a secure context. `localhost`
 works for local use; deployments accessed from another host need HTTPS, typically
 provided by a reverse proxy. For HTTPS deployments, set `AUUKI_ORIGIN` to the
-exact public origin, without a trailing slash, and leave insecure cookies disabled.
+exact public browser origin (scheme, hostname and port), and leave insecure cookies
+disabled. The default `http://localhost:8080` only allows that browser URL, not
+a LAN address or public proxy hostname. For additional trusted URLs, set
+`AUUKI_ADDITIONAL_ORIGINS` to a comma-separated list of exact origins.
 
 ## Self-hosted accounts and integrations
 
-The desktop platform and `/mobile` require the backend for account authentication.
-The workout engine, BLE/ANT+ controls, recording and recovery still run in the
-browser. See the [backend guide](doc/backend.md) for deployment, data storage,
+The desktop platform and `/mobile` open in guest mode by default. Workouts,
+BLE/ANT+ controls, FIT recording/downloads, recovery, the calendar and local
+coaching need no account or backend. Choose **Sign in / Create account** for
+server coaching, private backups and server-side integrations. Guest data is
+kept separately and is not automatically uploaded to an account.
+See the [backend guide](doc/backend.md) for deployment, data storage,
 API-key encryption and Intervals.icu synchronization.
 
 Create an account or sign in after starting the stack. Use **Settings >

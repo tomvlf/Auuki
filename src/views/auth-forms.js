@@ -51,9 +51,10 @@ class AuthForms extends HTMLElement {
         this.subForm('password', '$forgot', 'forgot');
         this.subForm('password', '$reset', 'reset');
 
-        this.el.$logout.addEventListener('pointerup', (e) => {
-            models.api.auth.logout();
-        });
+        this.el.$logout.addEventListener('click', async () => {
+            try { await models.api.auth.logout(); }
+            catch(error) { this.error(error.message || 'Sign out could not be completed.'); }
+        }, this.signal);
 
         this.$forgotMsg = document.querySelector('#forgot--msg'),
 
@@ -68,20 +69,16 @@ class AuthForms extends HTMLElement {
         $form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData($form);
-            const cfTurnstileResponse = window.turnstile.getResponse();
-            if(cfTurnstileResponse === undefined) { return; }
-            formData.append('cf-turnstile-response', cfTurnstileResponse);
-            const data = Object.fromEntries(formData);
-
-            await models.api.auth[method]({data,});
-            $form.reset();
-
-            // TODO:
-            // refresh turnstile
-            if(method === 'register' ||
-               method === 'forgot' ||
-               method === 'reset') {
-                models.api.auth.resetTurnstile();
+            try {
+                if(!['register', 'login'].includes(method)) {
+                    if(!window.turnstile) throw new Error('Password recovery is not available on this server.');
+                    formData.append('cf-turnstile-response', window.turnstile.getResponse());
+                }
+                await models.api.auth[method]({data: Object.fromEntries(formData)});
+                $form.reset();
+                if(['forgot', 'reset'].includes(method)) models.api.auth.resetTurnstile();
+            } catch(error) {
+                this.error(error.message || 'Authentication could not be completed.');
             }
 
         }, this.signal);
@@ -195,4 +192,3 @@ class AuthForms extends HTMLElement {
 }
 
 customElements.define('auth-forms', AuthForms);
-

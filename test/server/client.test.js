@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { ServerCoachingService, serverRequest, serverEnabled, SERVER_MODE_KEY, serverAccount } from '../../src/server/client.js';
+import { authenticate, ServerCoachingService, serverRequest, serverEnabled, SERVER_MODE_KEY, serverAccount } from '../../src/server/client.js';
 
 const response = (data, ok = true) => ({ok, status: ok ? 200 : 409,
     headers: {get: () => 'application/json'}, json: async () => data});
@@ -70,4 +70,18 @@ test('authentication expiry triggers the protected shell without silently switch
     expect(expired).toHaveBeenCalledTimes(1);
     expect(expired.mock.calls[0][0].detail).toBe('Your session expired');
     window.removeEventListener('session:expired', expired);
+});
+
+test('malformed backend responses produce an actionable error', async () => {
+    fetch.mockResolvedValue({headers: {get: () => 'application/json'},
+        json: async () => { throw new SyntaxError('Unexpected token'); }});
+    await expect(serverRequest('login')).rejects.toThrow('backend returned an invalid response');
+});
+
+test('authentication never opens a different session account after a concurrent login', async () => {
+    fetch.mockResolvedValueOnce(response({email: 'alice@example.com'}))
+        .mockResolvedValueOnce(response({email: 'bob@example.com'}));
+    await expect(authenticate('login', {email: 'alice@example.com', password: 'a long test password'}))
+        .rejects.toThrow('signed-in account changed');
+    expect(serverEnabled()).toBe(false);
 });

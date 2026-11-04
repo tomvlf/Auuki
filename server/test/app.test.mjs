@@ -84,6 +84,41 @@ test('rejects invalid requests and cross-origin writes without altering data', a
     assert.deepEqual((await request('backup', {cookie})).data, {data: null, revision: 0});
 });
 
+test('explicit public and local aliases work behind a proxy without trusting forwarded headers', async t => {
+    const {request} = await fixture(t, {origin: 'https://cycling.example.com/',
+        additionalOrigins: ['https://mobile.example.com', 'http://127.0.0.1:1234']});
+    for(const allowed of ['https://cycling.example.com', 'https://mobile.example.com', 'http://127.0.0.1:1234']) {
+        const registered = await request('register', {method: 'POST',
+            headers: {Origin: allowed, Host: 'backend:3000'},
+            body: {...credentials, email: `rider${allowed.length}@example.com`}});
+        assert.equal(registered.status, 200);
+        const cookie = registered.headers.get('set-cookie').split(';')[0];
+        assert.equal((await request('session', {cookie})).status, 200);
+        assert.equal((await request('login', {method: 'POST', headers: {Origin: allowed},
+            body: {...credentials, email: `rider${allowed.length}@example.com`}})).status, 200);
+    }
+    for(const rejected of ['https://evil.example', 'https://cycling.example.com.evil.example',
+        'http://cycling.example.com', 'https://cycling.example.com:8443', 'null', '']) {
+        const result = await request('register', {method: 'POST', body: credentials, headers: {
+            Origin: rejected, 'X-Forwarded-Host': 'cycling.example.com', 'X-Forwarded-Proto': 'https',
+        }});
+        assert.equal(result.status, 403);
+        assert.match(result.data.error, /AUUKI_ORIGIN/);
+    }
+    assert.equal((await request('coaching')).status, 401);
+    assert.equal((await request('backup')).status, 401);
+    assert.equal((await request('integrations/intervals')).status, 401);
+});
+
+test('invalid origin configuration and non-local insecure cookies fail at startup', () => {
+    for(const origin of ['https://example.com/path', 'https://user:pass@example.com',
+        'https://example.com?query=1', 'https://example.com#fragment', 'file:///']) {
+        assert.throws(() => createApp({database: ':memory:', origin}), /origins must be/);
+    }
+    assert.throws(() => createApp({database: ':memory:', origin,
+        additionalOrigins: ['https://example.com'], secureCookies: false}), /only allowed for localhost/);
+});
+
 test('private backups are isolated, revisioned, persistent, and deleted with the account', async t => {
     const directory = await mkdtemp(join(tmpdir(), 'auuki-test-'));
     const {request, restart} = await fixture(t, {database: join(directory, 'accounts.sqlite')});
@@ -100,6 +135,7 @@ test('private backups are isolated, revisioned, persistent, and deleted with the
     assert.equal((await request('backup', {method: 'PUT', cookie: alice, body: {data: backup}})).status, 400);
     assert.equal((await request('backup', {method: 'PUT', cookie: alice, body: {data: {version: 2}, revision: 1}})).status, 400);
     await restart();
+    assert.equal((await request('login', {method: 'POST', body: credentials})).status, 200);
     assert.deepEqual((await request('backup', {cookie: alice})).data, saved.data);
     assert.equal((await request('account', {method: 'DELETE', cookie: alice, body: {confirm: 'wrong@example.com'}})).status, 400);
     assert.equal((await request('account', {method: 'DELETE', cookie: alice, body: {confirm: credentials.email}})).status, 200);

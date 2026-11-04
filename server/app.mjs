@@ -4,6 +4,7 @@ import { randomBytes, scrypt as deriveKey, timingSafeEqual, createHash } from 'n
 import { promisify } from 'node:util';
 import { CoachingService } from '../src/coaching/service.js';
 import { createIntervals } from './intervals.mjs';
+import { trustedOrigins } from './origins.mjs';
 
 const scrypt = promisify(deriveKey);
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -33,8 +34,14 @@ async function readJSON(request) {
     catch { throw new HttpError(400, 'Invalid JSON.'); }
 }
 
-export function createApp({database = 'auuki.sqlite', origin = 'http://localhost:3000',
+export function createApp({database = 'auuki.sqlite', origin = 'http://localhost:1234', additionalOrigins = [],
     secureCookies = true, clock = () => Date.now(), encryptionKey, fetchImpl, startWorker} = {}) {
+    const origins = trustedOrigins(origin, additionalOrigins);
+    origin = [...origins][0];
+    if(!secureCookies && [...origins].some(value =>
+        !['localhost', '127.0.0.1', '[::1]'].includes(new URL(value).hostname))) {
+        throw new Error('Insecure cookies are only allowed for localhost development.');
+    }
     const db = new DatabaseSync(database);
     db.exec(`
         PRAGMA journal_mode = WAL;
@@ -101,7 +108,10 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
         if(!['GET', 'POST', 'PUT', 'DELETE'].includes(request.method)) throw new HttpError(405, 'Method not allowed.');
         let body;
         if(request.method !== 'GET') {
-            if(request.headers.origin !== origin) throw new HttpError(403, 'Request origin is not allowed.');
+            if(!origins.has(request.headers.origin)) {
+                console.warn('Rejected request origin:', request.headers.origin ?? '(missing)', 'Expected:', [...origins].join(', '));
+                throw new HttpError(403, 'Request origin is not allowed. The server operator must configure AUUKI_ORIGIN (or AUUKI_ADDITIONAL_ORIGINS) to match the browser URL.');
+            }
             body = await readJSON(request);
             if(!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Expected a JSON object.');
         }
