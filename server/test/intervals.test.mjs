@@ -1,3 +1,17 @@
+// These tests document the expected behavior for the Intervals.icu integration.
+// Read them as examples of user flows, not as isolated unit tests:
+//
+// - connection + encryption
+// - valid/invalid API-key handling
+// - account isolation and secure persistence
+// - retry logic and batch import progress
+// - disconnect/reconnect race conditions
+// - athlete-specific API usage
+// - upload + coaching history integration
+//
+// The goal is to protect the user-facing behavior: if a rider connects their own
+// Intervals account, Auuki must keep the API key encrypted, use the correct athlete ID,
+// and never allow one account to read or mutate another account's provider data.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';

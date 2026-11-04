@@ -2,6 +2,25 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { CoachingService } from '../src/coaching/service.js';
 import { addDays, date } from '../src/coaching/domain.js';
 
+// The Intervals.icu integration is a small server-side service. It is intentionally
+// separated from the browser code so a user can connect with a personal API key
+// without exposing that key in the frontend or in public deployment files.
+//
+// High level flow:
+//   1. Save the encrypted API key for the signed-in account.
+//   2. Resolve the user's athlete ID from Intervals.icu.
+//   3. Fetch historical activities in bounded date windows.
+//   4. Normalize provider responses into Auuki's internal activity model.
+//   5. Upload FIT recordings and planned workouts using the stored athlete ID.
+//   6. Keep sync state and retry metadata so resumable imports continue after restart.
+//
+// Function reference:
+// - intervalsActivity(): converts raw provider data into Auuki's common activity format.
+// - createIntervals(): creates the account-scoped Intervals service and its worker.
+// - encrypt()/decrypt(): secure API-key storage and retrieval using AES-256-GCM.
+// - status()/athlete()/events()/upload(): API surface used by the browser/server routes.
+// - connect()/sync()/tick(): connection and import lifecycle management.
+
 const API = 'https://intervals.icu/api/v1';
 
 class IntegrationError extends Error {
@@ -13,6 +32,21 @@ class IntegrationError extends Error {
 }
 
 // Provider objects stop here. All consumers, including the coach, use normalizeActivity.
+/**
+ * Maps a raw Intervals.icu activity payload to Auuki's normalized activity format.
+ *
+ * The coach and history logic consume only the normalized model, so Intervals data
+ * must be reduced to a stable internal shape before any planning logic runs.
+ *
+ * @param {object} activity - Raw activity payload returned from Intervals.icu.
+ * @param {string} syncedAt - ISO timestamp when this import batch was processed.
+ * @returns {{id: string, externalId: string, source: string, providerIds: object,
+ *   name: string|null, start: string, duration: number, movingTime: number,
+ *   distance: number|null, elevation: number|null, indoor: boolean,
+ *   averagePower: number|null, normalizedPower: number|null, ftp: number|null,
+ *   averageHeartRate: number|null, averageCadence: number|null, rawReference: string,
+ *   syncedAt: string}|null} A normalized activity or null when the activity type is not a cycling ride.
+ */
 export function intervalsActivity(activity, syncedAt) {
     if(!['Ride', 'VirtualRide', 'EBikeRide', 'MountainBikeRide', 'GravelRide',
         'EMountainBikeRide'].includes(activity.type)) return null;
@@ -32,6 +66,24 @@ export function intervalsActivity(activity, syncedAt) {
     };
 }
 
+/**
+ * Creates the Intervals.icu account service bound to one SQLite database.
+ *
+ * Each signed-in account gets a separate row in the integrations table. The service
+ * stores encrypted credentials, the athlete-specific ID, and the import cursor.
+ *
+ * @param {object} options - Configuration for the provider service.
+ * @param {import('node:sqlite').DatabaseSync} options.db - SQLite database handle.
+ * @param {Function} options.document - Returns a persisted document by user and kind.
+ * @param {Function} options.save - Persists a user document and revision.
+ * @param {Function} options.clock - Returns the current time in milliseconds.
+ * @param {string} [options.encryptionKey] - Base64-encoded 32-byte AES key used for API-key encryption.
+ * @param {Function} [options.fetchImpl=fetch] - HTTP fetch implementation used for provider calls.
+ * @param {boolean} [options.startWorker=true] - Enables the background sync worker timer.
+ * @returns {{status: Function, connect: Function, test: Function, disconnect: Function,
+ *   sync: Function, tick: Function, athlete: Function, events: Function, upload: Function,
+ *   close: Function}} The Intervals integration API used by the server routes.
+ */
 export function createIntervals({db, document, save, clock, encryptionKey, fetchImpl = fetch, startWorker = true}) {
     const key = encryptionKey ? Buffer.from(encryptionKey, 'base64') : null;
     if(key && (key.length !== 32 || key.toString('base64') !== encryptionKey)) {

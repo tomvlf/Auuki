@@ -103,6 +103,8 @@ Create an account or sign in after starting the stack. Use **Settings >
 Intervals.icu** to connect a personal API key. This requires a persistent
 `AUUKI_INTEGRATION_KEY`; see the backend guide for configuration. The previous
 Intervals.icu OAuth proxy has been replaced by this server-side connection.
+For a plain-English walkthrough of the Intervals.icu code flow, see the
+[Intervals guide](doc/intervals-guide.md).
 
 ## Sponsors 💖
 So, if you’re loving what Auuki’s bringing to the table, consider supporting the project on [GitHub Sponsors](https://github.com/sponsors/dvmarinoff)? Think of it as buying me a coffee or, heck, a whole power meter to keep this thing cranking. Hit that sponsor button and let’s keep the good times rolling!
