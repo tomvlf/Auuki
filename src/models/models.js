@@ -591,12 +591,18 @@ class Activity extends Model {
         const id = uuid();
         const blob = fileHandler.toBlob(this.encode(db));
         const name = db.workout?.meta?.name ?? 'Powered by Athlima workout';
+        const timestamp = Date.now();
+        const ride = fromRecordedRide(db, id, timestamp);
 
         const summary = {
             id,
-            timestamp: Date.now(),
+            timestamp,
             name,
             duration: db.elapsed ?? 0,
+            distance: ride.distance,
+            averagePower: ride.averagePower,
+            averageHeartRate: ride.averageHeartRate,
+            averageCadence: ride.averageCadence,
             pendingSync: true,
             status: {strava: 'none', intervals: 'none', trainingPeaks: 'none'},
         };
@@ -604,7 +610,7 @@ class Activity extends Model {
             id,
             blob,
             summary,
-            ride: fromRecordedRide(db, id, summary.timestamp),
+            ride,
             coachingWorkoutId: db.workout?.coachingWorkoutId ?? null,
             pendingSync: true,
         };
@@ -689,7 +695,14 @@ class Activity extends Model {
         });
 
         return records
-            .map((record) => ({...record.summary, pendingSync: record.pendingSync === true}))
+            .map((record) => ({
+                ...record.summary,
+                distance: record.summary.distance ?? record.ride?.distance,
+                averagePower: record.summary.averagePower ?? record.ride?.averagePower,
+                averageHeartRate: record.summary.averageHeartRate ?? record.ride?.averageHeartRate,
+                averageCadence: record.summary.averageCadence ?? record.ride?.averageCadence,
+                pendingSync: record.pendingSync === true,
+            }))
             .sort((a, b) => b.timestamp - a.timestamp);
     }
 }

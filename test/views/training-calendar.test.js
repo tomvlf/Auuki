@@ -91,6 +91,22 @@ describe('training calendar', () => {
             .toContain('<img src=x onerror=alert(1)>');
     });
 
+    test('shows planned workout duration, distance, category, and coaching targets', () => {
+        const calendar = new TrainingCalendar();
+        const metrics = calendar.workoutMetrics({
+            source: 'coaching',
+            workout: {meta: {duration: 3600, distance: 42000, category: 'Endurance'}},
+            coaching: {targetLoad: 75.4, expectedRpe: 6},
+        });
+
+        expect(metrics).toEqual(['60 min', '42.0 km', 'Endurance', 'Load 75', 'RPE 6']);
+        expect(calendar.workoutMetrics({
+            source: 'coaching',
+            workout: {meta: {}},
+            coaching: {targetLoad: null, expectedRpe: null},
+        })).toEqual(['Workout']);
+    });
+
     test('stores a library reference instead of copying a large course', () => {
         const course = {
             id: 'course-1',

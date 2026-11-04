@@ -19,6 +19,9 @@
 import { xf, formatDate, } from '../functions.js';
 import { models } from '../models/models.js';
 import { formatTime, } from '../utils.js';
+import { coachingData } from '../coaching/service.js';
+import { estimateState } from '../coaching/state.js';
+import { localDay } from '../coaching/domain.js';
 
 /**
  * Lists recent activities in a compact, browsable strip for the trainer and plan views.
@@ -32,8 +35,9 @@ class ActivityList extends HTMLElement {
      */
     constructor() {
         super();
-        this.capacity = 3;
+        this.capacity = 7;
         this.index = 0;
+        this.activities = [];
     }
     /**
      * Subscribes the list to activity lifecycle events when the component is attached.
@@ -44,7 +48,8 @@ class ActivityList extends HTMLElement {
         this.signal = { signal: self.abortController.signal };
 
         xf.sub('activity:add', self.onAdd.bind(this), this.signal);
-        xf.sub('db:activity', self.onRestore.bind(this), this.signal);
+        xf.sub('activity:restore', () => this.loadActivities(), this.signal);
+        xf.sub('coaching:changed', () => this.render(), this.signal);
     }
 
     /**
@@ -52,7 +57,6 @@ class ActivityList extends HTMLElement {
      */
     disconnectedCallback() {
         this.abortController.abort();
-        this.unsubs();
     }
 
     /**
@@ -61,15 +65,9 @@ class ActivityList extends HTMLElement {
      * @param {object} activity - The activity object just added to the in-memory store.
      */
     onAdd(activity) {
-        const self = this;
-        self.insertAdjacentHTML("afterbegin", self.template(this.index, activity));
+        this.activities = [activity, ...this.activities.filter(item => item.id !== activity.id)];
+        this.render();
         xf.dispatch(`action:activity:${this.id(activity)}`, ':toggleExpand');
-
-        if(this.childElementCount > 3) {
-            self.removeChild(self.lastElementChild);
-        }
-
-        this.index++;
     }
 
     /**
@@ -77,11 +75,14 @@ class ActivityList extends HTMLElement {
      *
      * @param {object[]} activities - Stored activity records already loaded from the app.
      */
-    onRestore(activities) {
-        const self = this;
-        activities.forEach((a) => {
-            self.insertAdjacentHTML("beforeend", self.template(this.index, a));
-        });
+    async loadActivities() {
+        try {
+            this.activities = await models.activity.restore();
+            this.render();
+        } catch(error) {
+            console.error('Unable to restore the activity list:', error);
+            this.innerHTML = '<p class="activity-list--error">Activities could not be loaded from this browser.</p>';
+        }
     }
     id(data) {
         return data.id;
@@ -97,13 +98,102 @@ class ActivityList extends HTMLElement {
         });
     }
     duration(data) {
-        return `${Math.ceil(data.duration / 60)} min`;
+        const seconds = Number(data.duration || 0);
+        return `${Math.ceil(seconds / 60)} min`;
+    }
+    stats(data) {
+        const coachedRide = coachingData()?.activities.find(activity =>
+            activity.id === String(data.id) || activity.original?.id === String(data.id),
+        );
+        const ride = {...coachedRide, ...data};
+        const distance = Number(data.distance || 0);
+        const avgPower = Number(ride.averagePower || ride.avgPower || 0);
+        const avgHr = Number(ride.averageHeartRate || ride.avgHr || 0);
+        const items = [];
+        if(distance > 0) items.push(`${(distance / 1000).toFixed(1)} km`);
+        if(avgPower > 0) items.push(`${Math.round(avgPower)} W`);
+        if(avgHr > 0) items.push(`${Math.round(avgHr)} bpm`);
+        const loadSource = coachedRide?.loadMetrics;
+        const load = loadSource && Object.values(loadSource).find(metric => metric?.value != null);
+        if(load) items.push(`Load ${Math.round(load.value)}`);
+        if(coachedRide?.rpe != null) items.push(`RPE ${coachedRide.rpe}`);
+        if(items.length === 0) items.push(this.duration(data));
+        return items;
+    }
+    summary() {
+        const data = coachingData();
+        const rides = data?.activities ?? [];
+        const profile = data?.profile;
+        const timeZone = profile?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const today = localDay(Date.now(), timeZone);
+        const date = new Date(`${today}T00:00:00Z`);
+        const mondayOffset = (date.getUTCDay() + 6) % 7;
+        date.setUTCDate(date.getUTCDate() - mondayOffset);
+        const weekStart = date.toISOString().slice(0, 10);
+        const monthStart = `${today.slice(0, 7)}-01`;
+        const weekly = rides.filter(ride => ride.day >= weekStart && ride.day <= today);
+        const monthly = rides.filter(ride => ride.day >= monthStart && ride.day <= today);
+        const total = list => ({
+            minutes: list.reduce((sum, ride) => sum + Number(ride.duration || 0), 0) / 60,
+            distance: list.reduce((sum, ride) => sum + Number(ride.distance || 0), 0) / 1000,
+        });
+        const week = total(weekly);
+        const month = total(monthly);
+        let state = null;
+        if(profile && rides.length) {
+            try {
+                state = estimateState(rides, profile, today);
+            } catch(error) {
+                console.error('Unable to calculate activity training-load metrics:', error);
+            }
+        }
+        const hasStateMetrics = state && [
+            state.chronicLoad,
+            state.acuteLoad,
+            state.formBalance,
+            state.rampRate,
+        ].every(Number.isFinite);
+        const formatDuration = minutes => {
+            const rounded = Math.round(minutes);
+            const hours = Math.floor(rounded / 60);
+            const remainder = rounded % 60;
+            return hours ? `${hours}h ${remainder}m` : `${remainder}m`;
+        };
+        const loadFor = list => {
+            if(!state) return null;
+            if(state.loadSource === 'duration') {
+                return Math.round(list.reduce((sum, ride) => sum + ride.duration, 0) / 60);
+            }
+            return Math.round(list.reduce((sum, ride) =>
+                sum + (ride.loadMetrics[state.loadSource]?.value ?? 0), 0));
+        };
+        const loadLabel = state?.loadSource === 'duration' ? 'min' : 'load';
+        const stats = (label, values, count, load) => `
+            <section class="activity-period" aria-label="${label} activity totals">
+                <h3>${label}</h3>
+                <span>${count} ride${count === 1 ? '' : 's'}</span>
+                <span>${formatDuration(values.minutes)}</span>
+                ${values.distance ? `<span>${values.distance.toFixed(1)} km</span>` : ''}
+                ${load == null ? '' : `<span>${load} ${loadLabel}</span>`}
+            </section>`;
+        return `
+            <div class="activity-periods">
+                ${stats('This week', week, weekly.length, loadFor(weekly))}
+                ${stats('This month', month, monthly.length, loadFor(monthly))}
+            </div>
+            ${hasStateMetrics ? `<div class="activity-load-state" aria-label="Current training load">
+                <span>Fitness <strong>${Math.round(state.chronicLoad)}</strong></span>
+                <span>Fatigue <strong>${Math.round(state.acuteLoad)}</strong></span>
+                <span>Form <strong>${Math.round(state.formBalance)}</strong></span>
+                <span>Ramp <strong>${state.rampRate.toFixed(1)}</strong></span>
+            </div>` : ''}`;
     }
     uploadStatus(data) {
         return data.status;
     }
     template(i, data) {
         const status = this.uploadStatus(data);
+        const metrics = this.stats(data);
 
         return `
             <activity-item id="i${i}--activity--item" class="some" data-id="${this.id(data)}">
@@ -114,14 +204,21 @@ class ActivityList extends HTMLElement {
                                     class="info"
                                     action=":toggleExpand"
                                     topic=":activity:${this.id(data)}">
-                                    <div id="i${i}--activity--date" class="activity--name">
-                                        ${this.name(data)}
+                                    <div class="activity--summary-row">
+                                        <div>
+                                            <div id="i${i}--activity--date" class="activity--name">
+                                                ${this.name(data)}
+                                            </div>
+                                            <div class="activity--date">
+                                                ${this.date(data)}
+                                            </div>
+                                        </div>
+                                        <div id="i${i}--activity--duration" class="activity--duration">
+                                            ${this.duration(data)}
+                                        </div>
                                     </div>
-                                    <div class="activity--date">
-                                        ${this.date(data)}
-                                    </div>
-                                    <div id="i${i}--activity--duration" class="activity--duration">
-                                        ${this.duration(data)}
+                                    <div class="activity--stats">
+                                        ${metrics.map((metric) => `<span>${metric}</span>`).join('')}
                                     </div>
                                 </view-action>
                                 <view-action
@@ -185,6 +282,12 @@ class ActivityList extends HTMLElement {
                     </view-action>
             </activity-item>
         `;
+    }
+    render() {
+        const items = this.activities.slice(0, this.capacity);
+        this.innerHTML = `${this.summary()}<div class="activity-list--items">
+            ${items.map((activity, index) => this.template(index, activity)).join('')}
+        </div>`;
     }
 }
 

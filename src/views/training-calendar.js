@@ -349,6 +349,23 @@ class TrainingCalendar extends HTMLElement {
             </div>`;
     }
 
+    workoutMetrics(entry) {
+        const meta = entry.workout?.meta ?? {};
+        const duration = typeof meta.duration === 'number' ? Math.round(meta.duration / 60) : null;
+        const distance = typeof meta.distance === 'number' ? `${(meta.distance / 1000).toFixed(1)} km` : null;
+        const category = meta.category || (entry.source === 'planned' ? 'Planned' : 'Workout');
+        const targetLoad = entry.coaching?.targetLoad;
+        const expectedRpe = entry.coaching?.expectedRpe;
+        const metrics = [
+            duration ? `${duration} min` : null,
+            distance,
+            category,
+            Number.isFinite(targetLoad) ? `Load ${Math.round(targetLoad)}` : null,
+            Number.isFinite(expectedRpe) ? `RPE ${expectedRpe}` : null,
+        ].filter(Boolean);
+        return metrics.length ? metrics : ['Workout'];
+    }
+
     renderSelectedDate() {
         const entries = this.entriesForDate(this.selectedDate);
         const heading = new Date(`${this.selectedDate}T00:00:00`).toLocaleDateString(undefined, {
@@ -361,9 +378,18 @@ class TrainingCalendar extends HTMLElement {
             `<option value="${escapeHTML(workout.id)}">${escapeHTML(workout.meta?.name || 'Workout')}</option>`
         ).join('');
         const items = entries.length
-            ? entries.map((entry) => `
+            ? entries.map((entry) => {
+                const metrics = this.workoutMetrics(entry);
+                const title = escapeHTML(entry.name || 'Workout');
+                return `
                 <li class="training-calendar--entry">
-                    <span>${escapeHTML(entry.name)}</span>
+                    <div class="training-calendar--copy">
+                        <div class="training-calendar--eyebrow">${escapeHTML(entry.source === 'planned' ? 'Intervals' : entry.source === 'coaching' ? 'Coach' : 'Plan')}</div>
+                        <div class="training-calendar--name">${title}</div>
+                        <div class="training-calendar--meta">
+                            ${metrics.map((metric) => `<span>${escapeHTML(metric)}</span>`).join('')}
+                        </div>
+                    </div>
                     <div class="training-calendar--entry-actions">
                         ${entry.workout &&
                         (entry.source !== 'coaching' || this.canStartCoaching(entry.coaching))
@@ -378,7 +404,8 @@ class TrainingCalendar extends HTMLElement {
                             ? `<button type="button" data-action="remove" data-entry="${escapeHTML(entry.id)}">Remove</button>`
                             : '<span class="training-calendar--source">Intervals.icu</span>'}
                     </div>
-                </li>`).join('')
+                </li>`;
+            }).join('')
             : '<li class="training-calendar--empty">No workouts planned for this day.</li>';
 
         return `
