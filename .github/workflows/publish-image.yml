@@ -24,7 +24,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/tomvlf/auuki
+          images: ghcr.io/tomvlf/athlima
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
@@ -40,7 +40,7 @@ jobs:
         id: backend_meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/tomvlf/auuki-backend
+          images: ghcr.io/tomvlf/athlima-backend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

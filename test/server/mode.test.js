@@ -2,7 +2,7 @@
  * mode.test.js: test coverage module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -44,28 +44,28 @@ test('switching to server coaching does not upload or replace local history', as
     expect(service.coachingService()).toBe(remote);
     expect(service.coachingData().profile).toBeNull();
     expect(local.data.profile).toEqual(profile);
-    expect(window.localStorage.getItem('auuki-server-mode')).toBe('1');
+    expect(window.localStorage.getItem('athlima-server-mode')).toBe('1');
     expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual({method: 'advance', args: [], revision: 0});
     expect(await service.useLocalCoaching()).toBe(local);
     expect(service.coachingData().profile).toEqual(profile);
-    expect(window.localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(window.localStorage.getItem('athlima-server-mode')).toBeNull();
 });
 
 test('startup in server mode never silently falls back to local coaching on failure', async () => {
-    window.localStorage.setItem('auuki-server-mode', '1');
+    window.localStorage.setItem('athlima-server-mode', '1');
     fetch.mockRejectedValue(new Error('Server unreachable'));
     const service = require('../../src/coaching/service.js');
-    await expect(service.initializeCoaching()).rejects.toThrow('Cannot reach the Auuki server');
+    await expect(service.initializeCoaching()).rejects.toThrow('Cannot reach the Athlima server');
     expect(service.coachingData()).toBeNull();
     expect(() => service.coachingService()).toThrow('not loaded');
-    expect(window.localStorage.getItem('auuki-server-mode')).toBe('1');
+    expect(window.localStorage.getItem('athlima-server-mode')).toBe('1');
     await service.useLocalCoaching();
     expect(service.coachingData().profile).toBeNull();
-    expect(window.localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(window.localStorage.getItem('athlima-server-mode')).toBeNull();
 });
 
 test('a delayed server startup cannot override an explicit local-only switch', async () => {
-    window.localStorage.setItem('auuki-server-mode', '1');
+    window.localStorage.setItem('athlima-server-mode', '1');
     let finish;
     fetch.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }))
         .mockResolvedValueOnce(response({data: {profile: {id: 'server'}}, revision: 1}));
@@ -76,6 +76,6 @@ test('a delayed server startup cannot override an explicit local-only switch', a
     expect(await pending).toBe(local);
     expect(service.coachingService()).toBe(local);
     expect(service.coachingData().profile).toBeNull();
-    expect(window.localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(window.localStorage.getItem('athlima-server-mode')).toBeNull();
     expect(require('../../src/server/client.js').serverAccount.email).toBeNull();
 });

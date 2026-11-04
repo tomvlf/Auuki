@@ -2,7 +2,7 @@
  * jest-setup.js: test coverage module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -18,7 +18,7 @@
 
 // Jest's pretend browser window does not include Node's text encoder.
 // The jsdom package asks for it the moment a test imports it.
-const { TextDecoder, TextEncoder } = require('node:util');
+import { TextDecoder, TextEncoder } from 'node:util';
 
 if (typeof globalThis.TextEncoder === 'undefined') {
     globalThis.TextEncoder = TextEncoder;

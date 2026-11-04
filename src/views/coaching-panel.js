@@ -2,7 +2,7 @@
  * coaching-panel.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -180,7 +180,7 @@ class CoachingPanel extends HTMLElement {
                     priority: values.get('priority'), date: values.get('date'), active: true};
                 await service.configure(profile, goal);
                 await service.importActivities(db.activity.filter(a => a.duration > 0).map(a => ({
-                    id: a.id, duration: a.duration, source: 'auuki-summary',
+                    id: a.id, duration: a.duration, source: 'athlima-summary',
                     start: new Date(a.timestamp - a.duration * 1000).toISOString(),
                 })));
                 if(event.submitter?.value === 'generate') await service.generate(values.get('start'));
@@ -207,7 +207,7 @@ class CoachingPanel extends HTMLElement {
             if(button.dataset.coach === 'review') await service.advance();
             if(button.dataset.coach === 'recovery') await service.resolve({trigger: 'recovery'});
             if(button.dataset.coach === 'export') {
-                fileHandler.download()(JSON.stringify(service.data, null, 2), 'auuki-coaching-history.json', 'application/json');
+                fileHandler.download()(JSON.stringify(service.data, null, 2), 'athlima-coaching-history.json', 'application/json');
             }
             this.changed();
         } catch(error) {

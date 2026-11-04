@@ -17,7 +17,7 @@ the [backend guide](backend.md) for storage, recovery and integration details.
    minutes for each available weekday, and zero for rest days.
 3. Connect **Settings > Intervals.icu** or import ride history using the JSON
    form, then generate a plan. The existing
-   Auuki activity summaries seed the history automatically; they contain only
+   Athlima activity summaries seed the history automatically; they contain only
    duration, and the application's existing FIT cache retains only seven rides.
    Import a longer history for better-informed targets.
 4. Start generated sessions from the calendar, or export individual ZWO files.
@@ -27,7 +27,7 @@ the [backend guide](backend.md) for storage, recovery and integration details.
    plan; future/archived sessions cannot accidentally be executed as today's
    prescription. Without FTP, follow the duration/RPE guidance instead of
    executing power targets.
-5. Recorded Auuki rides update the coach automatically. Imported rides can match
+5. Recorded Athlima rides update the coach automatically. Imported rides can match
    sessions too. Confirm a duration-only ride with **Use substitute**; duration
    alone is intentionally insufficient for automatic matching.
 6. Submit post-ride feedback, mark unsuccessful sessions **Not completed**, mark
@@ -233,7 +233,7 @@ change, deterministic reason, validation warnings, version and timestamp.
 Resolved outcomes update completion/success statistics in the new snapshot.
 Repeated imports, recordings and identical feedback are idempotent.
 
-The dedicated `auuki-coaching` IndexedDB database stores the complete coaching
+The dedicated `athlima-coaching` IndexedDB database stores the complete coaching
 bundle in an atomic transaction: normalized history, versioned snapshots,
 complete plan revisions and adaptation records. It is independent of the
 seven-ride FIT cache and does not inherit localStorage's small quota.

@@ -1,6 +1,6 @@
 services:
-  auuki:
-    image: ghcr.io/tomvlf/auuki:latest
+  athlima:
+    image: ghcr.io/tomvlf/athlima:latest
     ports:
       - "8080:80"
     restart: unless-stopped
@@ -9,11 +9,11 @@ services:
       backend:
         condition: service_healthy
   backend:
-    image: ghcr.io/tomvlf/auuki-backend:latest
+    image: ghcr.io/tomvlf/athlima-backend:latest
     pull_policy: always
     # Configure these in a .env file next to this compose.yaml, then run `docker compose up -d`.
     #
-    # AUUKI_ORIGIN must exactly match the URL in the browser's address bar
+    # ATHLIMA_ORIGIN must exactly match the URL in the browser's address bar
     # (scheme + host + port, no trailing slash). Otherwise POST/PUT/DELETE requests fail with
     # "Request origin is not allowed". The backend logs the rejected value:
     #   docker compose logs backend | grep "Rejected request origin"
@@ -21,27 +21,27 @@ services:
     #   docker compose logs backend | grep "trusted browser origins"
     #
     # Examples:
-    #   AUUKI_ORIGIN=http://localhost:8080          # same machine; use with AUUKI_INSECURE_COOKIES=1
-    #   AUUKI_ORIGIN=https://app.example.com         # behind an HTTPS reverse proxy (recommended)
+    #   ATHLIMA_ORIGIN=http://localhost:8080          # same machine; use with ATHLIMA_INSECURE_COOKIES=1
+    #   ATHLIMA_ORIGIN=https://app.example.com         # behind an HTTPS reverse proxy (recommended)
     #
-    # AUUKI_ADDITIONAL_ORIGINS: comma-separated extra URLs that may also reach the app,
-    #   e.g. AUUKI_ADDITIONAL_ORIGINS=https://auuki.tailnet.ts.net
+    # ATHLIMA_ADDITIONAL_ORIGINS: comma-separated extra URLs that may also reach the app,
+    #   e.g. ATHLIMA_ADDITIONAL_ORIGINS=https://athlima.tailnet.ts.net
     #
-    # AUUKI_INSECURE_COOKIES=1 drops the cookie's Secure flag so login works over plain HTTP.
+    # ATHLIMA_INSECURE_COOKIES=1 drops the cookie's Secure flag so login works over plain HTTP.
     #   It is only allowed for localhost/127.0.0.1 origins; the backend refuses to start otherwise.
     #   On a LAN IP over plain HTTP the browser will not keep the Secure session cookie, so use
     #   HTTPS (Caddy, Traefik, Nginx Proxy Manager, ...) in front of port 8080 for other devices.
     #
-    # AUUKI_INTEGRATION_KEY: optional base64-encoded 32-byte key used to encrypt stored
+    # ATHLIMA_INTEGRATION_KEY: optional base64-encoded 32-byte key used to encrypt stored
     #   integration credentials (e.g. Intervals.icu). Generate one with: openssl rand -base64 32
     environment:
-      AUUKI_ORIGIN: ${AUUKI_ORIGIN:-http://localhost:8080}
-      AUUKI_ADDITIONAL_ORIGINS: ${AUUKI_ADDITIONAL_ORIGINS:-}
-      AUUKI_INSECURE_COOKIES: ${AUUKI_INSECURE_COOKIES:-0}
-      AUUKI_DATABASE: /app/data/auuki.sqlite
-      AUUKI_INTEGRATION_KEY: ${AUUKI_INTEGRATION_KEY:-}
+      ATHLIMA_ORIGIN: ${ATHLIMA_ORIGIN:-http://localhost:8080}
+      ATHLIMA_ADDITIONAL_ORIGINS: ${ATHLIMA_ADDITIONAL_ORIGINS:-}
+      ATHLIMA_INSECURE_COOKIES: ${ATHLIMA_INSECURE_COOKIES:-0}
+      ATHLIMA_DATABASE: /app/data/athlima.sqlite
+      ATHLIMA_INTEGRATION_KEY: ${ATHLIMA_INTEGRATION_KEY:-}
     volumes:
-      - auuki-server-data:/app/data
+      - athlima-server-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/server/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -49,4 +49,4 @@ services:
       timeout: 5s
       start_period: 10s
 volumes:
-  auuki-server-data:
+  athlima-server-data:

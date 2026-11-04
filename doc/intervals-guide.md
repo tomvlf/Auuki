@@ -4,7 +4,7 @@ This document explains the Intervals.icu code path in plain language so a non-de
 
 ## What this part of the app does
 
-Auuki can connect to Intervals.icu using the rider's personal API key. Once connected, the server can:
+Athlima can connect to Intervals.icu using the rider's personal API key. Once connected, the server can:
 
 - read the athlete profile
 - fetch planned workouts and calendar events
@@ -46,7 +46,7 @@ After a successful connection, the app can import historical rides:
 
 1. It chooses a date window to fetch.
 2. It requests activity data from Intervals.icu.
-3. It converts the raw provider data into Auuki's normalized activity format.
+3. It converts the raw provider data into Athlima's normalized activity format.
 4. It saves the data into the user's coaching history.
 5. It moves the date cursor forward so the next sync can continue from where it left off.
 
@@ -69,7 +69,7 @@ The goal is to avoid duplicate imports and to keep sync state predictable even w
 
 ### 5. Upload flow
 
-Auuki also uploads new FIT files back to Intervals.icu.
+Athlima also uploads new FIT files back to Intervals.icu.
 
 For uploads, the app:
 
@@ -124,8 +124,8 @@ The tests are written as small examples of real user flows, not as abstract inte
 
 A normal Intervals.icu setup looks like this:
 
-1. The server operator configures `AUUKI_INTEGRATION_KEY`.
-2. The rider signs in to Auuki.
+1. The server operator configures `ATHLIMA_INTEGRATION_KEY`.
+2. The rider signs in to Athlima.
 3. The rider enters their Intervals.icu API key in Settings.
 4. The app resolves the athlete ID.
 5. The import worker starts fetching historical activity history.

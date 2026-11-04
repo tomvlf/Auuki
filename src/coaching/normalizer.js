@@ -2,7 +2,7 @@
  * normalizer.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -158,7 +158,7 @@ export function fromRecordedRide(db, id, timestamp) {
         record[key === 'power' ? 'powerValid' : 'heartRateValid'] !== false);
     const complete = key => contiguous && valid(key) && records.every(r => Number.isFinite(r[key]));
     return {
-        id, source: 'auuki', name: db.workout?.meta?.name || 'Free ride',
+        id, source: 'athlima', name: db.workout?.meta?.name || 'Free ride',
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         start: new Date(start).toISOString(),
         duration: db.elapsed, ftp: db.ftp, indoor: true,

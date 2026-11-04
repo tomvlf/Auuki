@@ -2,7 +2,7 @@
  * start.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -27,9 +27,9 @@ let expired = false;
 function login(message = '', unavailable = false) {
     root.removeAttribute('role');
     root.innerHTML = `<main class="auth-screen"><section class="auth-card">
-        <a class="brand" href="/">auuki<span> / training</span></a>
+        <a class="brand" href="/">Athlima<span> / training</span></a>
         <p class="eyebrow">A clear path to your next goal</p>
-        <h1>Your training.<br>Your next chapter.</h1>
+        <h1>Athlima.<br>Your training, elevated.</h1>
         <p class="muted">Plan with purpose. Ride with focus. See your progress.</p>
         <p id="auth-error" role="alert">${escape(message)}</p>
         <form id="platform-login">
@@ -41,7 +41,7 @@ function login(message = '', unavailable = false) {
         </form>
         <button class="secondary" type="button" id="continue-guest">Continue without an account</button>
         <p class="muted">Guest rides, workouts and local coaching stay on this device. Sign in for server coaching, private backups and integrations.</p>
-        ${unavailable ? '<p>Account features need the Auuki backend. You can still train as a guest.</p>' : ''}
+        ${unavailable ? '<p>Account features need the Athlima backend. You can still train as a guest.</p>' : ''}
         <p class="muted">Trainer connections require Chrome or Edge with Bluetooth support, on HTTPS or localhost. iOS browsers do not support Web Bluetooth.</p>
     </section></main>`;
     root.querySelector('form').addEventListener('submit', async event => {
@@ -104,7 +104,7 @@ window.addEventListener('session:expired', async event => {
     login(event.detail || 'Your session expired. Sign in to resume. Your ride is kept on this device.');
 });
 window.addEventListener('storage', async event => {
-    if(event.key !== 'auuki-session-change' || !launched) return;
+    if(event.key !== 'athlima-session-change' || !launched) return;
     const { xf } = await import('../functions.js');
     xf.dispatch('ui:watchPause');
     xf.dispatch('lock:beforeunload');

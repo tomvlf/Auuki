@@ -2,7 +2,7 @@
  * client.test.js: test coverage module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -46,8 +46,8 @@ test('remote coach uses server state and revisions for all mutations', async () 
     const [url, options] = fetch.mock.calls[2];
     expect(url).toBe('/api/server/coaching');
     expect(options.credentials).toBe('same-origin');
-    expect(options.headers['X-Auuki-Client']).toBe('1');
-    expect(options.headers['X-Auuki-Account']).toBe('rider@example.com');
+    expect(options.headers['X-Athlima-Client']).toBe('1');
+    expect(options.headers['X-Athlima-Account']).toBe('rider@example.com');
     expect(JSON.parse(options.body)).toEqual({
         method: 'configure', args: [{id: 'server'}, {id: 'goal'}], revision: 2,
     });
@@ -75,7 +75,7 @@ test('overlapping remote writes are rejected', async () => {
 
 test('static hosts report unavailable backend rather than a JSON parsing error', async () => {
     fetch.mockResolvedValue({headers: {get: () => 'text/html'}});
-    await expect(serverRequest('session')).rejects.toThrow('Auuki backend is unavailable');
+    await expect(serverRequest('session')).rejects.toThrow('Athlima backend is unavailable');
 });
 
 test('authentication expiry triggers the protected shell without silently switching to local mode', async () => {

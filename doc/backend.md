@@ -81,7 +81,7 @@ planned ZWO workouts and FIT uploads as well as history import. All calls use
 the current account's encrypted server-side API key. No key is placed in a
 browser URL, local storage, response or log.
 
-Set `AUUKI_INTEGRATION_KEY` to a persistent base64-encoded 32-byte encryption
+Set `ATHLIMA_INTEGRATION_KEY` to a persistent base64-encoded 32-byte encryption
 key, for example generated with `openssl rand -base64 32`. Supply it through
 your secret manager/environment, not version control. Losing or changing it
 requires reconnecting integrations; keep it separate from database backups.
@@ -96,7 +96,7 @@ days before the last successful synchronization through today. A 31-day
 date-window cursor is persisted after each atomic batch. Interrupted jobs
 resume after a process restart. Repeated syncs update stable provider IDs
 without duplicating activities, rider feedback or workout completions. Uploads
-carry an Auuki external identity so importing your own uploaded recording does
+carry an Athlima external identity so importing your own uploaded recording does
 not create a second ride.
 
 Syncs are serialized in this single-process deployment. HTTP 429 honors
@@ -128,15 +128,15 @@ Use Node.js 22.18 or newer. The backend has no third-party runtime dependencies;
 it uses Node's HTTP, crypto and SQLite modules.
 
 ```sh
-AUUKI_INSECURE_COOKIES=1 npm run server
+ATHLIMA_INSECURE_COOKIES=1 npm run server
 # In another terminal:
 npm start
 ```
 
 Parcel proxies `/api/server` to port 3000. Use the `http://localhost:1234` Parcel
 URL or `http://127.0.0.1:1234` (both are trusted by the CLI development defaults).
-If Parcel selects another port, set `AUUKI_ORIGIN` to the URL it prints. For HTTPS
-development set the matching `AUUKI_ORIGIN` and leave secure cookies enabled.
+If Parcel selects another port, set `ATHLIMA_ORIGIN` to the URL it prints. For HTTPS
+development set the matching `ATHLIMA_ORIGIN` and leave secure cookies enabled.
 
 ```sh
 npm run test:server
@@ -149,7 +149,7 @@ The default `compose.yaml` pulls the frontend and backend images from GitHub
 Container Registry:
 
 ```sh
-AUUKI_ORIGIN=https://cycling.example.com \
+ATHLIMA_ORIGIN=https://cycling.example.com \
   docker compose up -d
 ```
 
@@ -158,12 +158,12 @@ version tags. Make the packages public or authenticate to GHCR before pulling
 private images. To build both images from a local checkout instead, use:
 
 ```sh
-AUUKI_ORIGIN=https://cycling.example.com \
+ATHLIMA_ORIGIN=https://cycling.example.com \
   docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
 Terminate TLS at a trusted reverse proxy in front of port 8080. Set
-`AUUKI_ORIGIN` to the URL in the browser's address bar, **not** the backend's
+`ATHLIMA_ORIGIN` to the URL in the browser's address bar, **not** the backend's
 `http://backend:3000` address or the proxy's internal address. Forward the
 browser's `Origin` header unchanged. The backend is accessible only on the
 Compose network, not a published host port. Nginx forwards `/api/server/` to it.
@@ -171,13 +171,13 @@ Without that service, login is unavailable. The included nginx resolver uses Doc
 deployments must configure their own backend address and resolver.
 
 If multiple URLs legitimately serve the app, list their exact origins in
-`AUUKI_ADDITIONAL_ORIGINS`, for example `https://mobile.example.com,https://cycling.example.com:8443`.
+`ATHLIMA_ADDITIONAL_ORIGINS`, for example `https://mobile.example.com,https://cycling.example.com:8443`.
 Only explicitly configured origins are trusted; forwarded host/protocol headers
 do not grant trust. A trailing slash in configuration is normalized; paths,
 credentials, query strings and fragments are rejected. Scheme and port matter.
 Never add an untrusted site or a wildcard.
 
-For an HTTP trial on localhost only, set `AUUKI_INSECURE_COOKIES=1`. This setting
+For an HTTP trial on localhost only, set `ATHLIMA_INSECURE_COOKIES=1`. This setting
 is rejected if any configured origin is non-loopback. Keep Secure cookies enabled
 on real deployments. HTTP LAN addresses cannot support secure authentication or
 Web Bluetooth: use HTTPS. A missing cookie after successful registration/login
@@ -199,14 +199,14 @@ Rebuilding static frontend assets does not change the backend's trusted origins.
 | Environment | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | Backend listening port |
-| `AUUKI_ORIGIN` | `http://localhost:1234` (CLI), `http://localhost:8080` (Compose) | Exact allowed browser origin |
-| `AUUKI_ADDITIONAL_ORIGINS` | `http://127.0.0.1:1234` (CLI only when `AUUKI_ORIGIN` is unset), otherwise empty | Comma-separated additional trusted browser origins |
-| `AUUKI_DATABASE` | `./data/auuki.sqlite` | Persistent SQLite path |
-| `AUUKI_INSECURE_COOKIES` | `0` | Set to `1` only for local HTTP |
-| `AUUKI_INTEGRATION_KEY` | unset | Base64-encoded 32-byte server-only encryption key |
+| `ATHLIMA_ORIGIN` | `http://localhost:1234` (CLI), `http://localhost:8080` (Compose) | Exact allowed browser origin |
+| `ATHLIMA_ADDITIONAL_ORIGINS` | `http://127.0.0.1:1234` (CLI only when `ATHLIMA_ORIGIN` is unset), otherwise empty | Comma-separated additional trusted browser origins |
+| `ATHLIMA_DATABASE` | `./data/athlima.sqlite` | Persistent SQLite path |
+| `ATHLIMA_INSECURE_COOKIES` | `0` | Set to `1` only for local HTTP |
+| `ATHLIMA_INTEGRATION_KEY` | unset | Base64-encoded 32-byte server-only encryption key |
 
 SQLite uses WAL and stores accounts, hashed sessions and per-account documents.
-Compose keeps these in the `auuki-server-data` volume; do not use
+Compose keeps these in the `athlima-server-data` volume; do not use
 `docker compose down -v` unless you intend to delete all server data. Back up
 this volume consistently with SQLite's backup tooling or stop the backend before
 copying the database and WAL files. Protect backups and restrict filesystem
@@ -237,7 +237,7 @@ other users' data.
 All routes are under `/api/server/`, separate from existing integration APIs.
 Successful responses and errors are JSON with `Cache-Control: no-store`; errors
 contain `error`. Authenticated requests use the session cookie. Writes require
-`Origin: <AUUKI_ORIGIN>`, `Content-Type: application/json`, and `X-Auuki-Client: 1`.
+`Origin: <ATHLIMA_ORIGIN>`, `Content-Type: application/json`, and `X-Athlima-Client: 1`.
 
 | Route | Method | Body / response |
 |---|---|---|

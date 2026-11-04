@@ -2,7 +2,7 @@
  * workouts.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -80,7 +80,7 @@ export function progressWorkout({id, date, minutes, family, level = 1, phaseId, 
 export function toAppWorkout(workout) {
     return {
         id: workout.id, coachingWorkoutId: workout.id,
-        meta: {name: workout.title, description: workout.description, author: 'Auuki deterministic coach',
+        meta: {name: workout.title, description: workout.description, author: 'Athlima deterministic coach',
             category: workout.family, startDateLocal: workout.date, duration: workout.duration},
         intervals: workout.steps.map(step => ({duration: step.duration, steps: [{...step}]})),
     };
@@ -89,7 +89,7 @@ export function toAppWorkout(workout) {
 export function exportZwo(workout) {
     const escape = value => String(value).replace(/[&<>"']/g, c =>
         ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'}[c]));
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file><author>Auuki</author>` +
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file><author>Athlima</author>` +
         `<name>${escape(workout.title)}</name><description>${escape(workout.description)}</description>` +
         `<sportType>bike</sportType><workout>` +
         workout.steps.map(s => `<SteadyState Duration="${s.duration}" Power="${s.power}"/>`).join('') +

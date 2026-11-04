@@ -2,7 +2,7 @@
  * auth.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -122,7 +122,7 @@ function Auth(args = {}) {
         if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
         await serverRequest('logout', {method: 'POST', body: {}});
         window.localStorage.removeItem(SERVER_MODE_KEY);
-        window.localStorage.setItem('auuki-session-change', String(Date.now()));
+        window.localStorage.setItem('athlima-session-change', String(Date.now()));
         window.location.reload();
     }
 

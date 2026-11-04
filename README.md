@@ -1,198 +1,170 @@
-<img alt="Auuki Indoor Cyling app for Structured Training" src="https://github.com/user-attachments/assets/292a3216-2f52-4994-9b15-614446e41912" />
+<img alt="Athlima smart trainer app" src="https://github.com/user-attachments/assets/292a3216-2f52-4994-9b15-614446e41912" />
 
-# Auuki
-Auuki is a powerful, no-nonsense app built for hammering out **structured workouts** on a smart trainer, right in your browser. No installs, no dependencies, no slow updates taking from precious training time.
+# Athlima
 
-**Key Features**:
-* Run Zwift **.ZWO workouts**
-* Connect via **Bluetooth** to smart trainers, power meters, heart rate monitors, the moxy monitor, and many more
-* Full control with **ERG mode**, **Grade Simulation**, and **Resistance mode**
-* Workouts with **Slope-based targets** for realistic effort control
-* Record **.FIT activities** in a cross-industry standard
-* Recording of native **RR intervals** in the .FIT file
-* Built-in structured workouts to get you started
-* Schedule workouts from your library in a **monthly training calendar**, view workouts planned in Intervals.icu, and start a workout directly from the calendar
-* **OpenBikeControl** support for Bluetooth virtual gear shifting and handlebar controls
-* **Intervals.icu and Strava** integrations for seamless syncing and uploads
-* On-device **adaptive cycling coaching** with dated goals, availability-aware
-  periodisation, structured workouts and deterministic post-ride adaptation
-* Private **server accounts**, account-scoped device backups and server-side
-  adaptive coaching
-* A desktop training platform and a dedicated **`/mobile` ride companion**,
-  built around the same browser-native workout and trainer engine
+Athlima is a browser-based indoor cycling platform for structured workouts, trainer control, activity recording, and coaching. It is intentionally local-first: the workout engine, device controls, FIT recording, and most ride logic run in the browser, while optional server features are available when you sign in and configure the backend.
 
-The coach is available in **Coach**, with sessions in **Training Calendar** and
-**Training Plan**, and works without an LLM.
-See the [coaching guide](doc/coaching.md) for setup, history import, calculation
-defaults, safety limits and known data limitations. It provides training decision
-support, not medical diagnosis or medical advice.
+The app is built around a single idea: training should work without friction, while still supporting private accounts, backups, history import, and provider integrations when you want them.
 
-Built as a **progressive web app (PWA)**, Auuki is fully browser-based and runs independently. It makes use of some of the most advanced Browser APIs like: Web Bluetooth, Web Serial, and Web Components. The web version is **free and open-source**, keeping everything on your device by default. Server storage and computation are opt-in.
-Train with full control directly in your browser without an account, including
-the `/mobile` companion. Sign in only for optional server features; workout
-execution and device recording remain local. There is no runtime
-frontend framework or external CDN dependency.
+## What Athlima does
 
-_Status_: Currently working on creating a full suite of Apple platform native apps (iOS, iPadOS, tvOS, watchOS).
+- runs `.zwo` workouts and built-in structured sessions
+- controls smart trainers in ERG, resistance, and grade-simulation modes
+- records `.fit` files with power, cadence, heart rate, and RR intervals
+- supports calendar-based session planning and direct launch from the training calendar
+- imports and syncs ride history from Intervals.icu
+- uploads new FIT recordings back to Intervals.icu
+- includes an adaptive coaching engine for goal-based planning and ride review
+- supports a desktop web app and a dedicated `/mobile` training companion
+- keeps guest-mode data separate from server-backed account data
 
-# The Web App
-- You can find the web app at [auuki.com](https://auuki.com)
-- There is also a special development version which has the latest features available for preview: [dev.auuki.com](https://dev.auuki.com)
-- [How to create a Profile and Connect Intervals.icu](https://forum.intervals.icu/t/auuki-com-intervals-icu-integration/87105)
+## Current repo status
 
-## Development
+This repository is the browser app plus a self-hosted account backend. The main flow is:
 
-Install [Node.js](https://nodejs.org/) 22.18.0 or later, then install the dependencies and start Parcel:
+- guest mode works without a server
+- account mode enables server-side coaching, private backups, and provider integrations
+- Intervals.icu integration is server-side and uses the current rider's encrypted API key
+- the backend stores account-scoped state in SQLite and keeps the app contract explicit rather than silently falling back to guest mode
 
-```sh
+
+## Quick start
+
+### Local development
+
+Requirements:
+- Node.js 22.18.0 or later
+
+```bash
 npm install
-AUUKI_INSECURE_COOKIES=1 npm run server
-# In a second terminal:
+ATHLIMA_INSECURE_COOKIES=1 npm run server
+# in a second terminal
 npm start
 ```
 
-Parcel prints the local URL when it starts. To run the test suite or create a production build, use:
+The frontend is run through Parcel. Open the local URL it prints in the browser.
 
-```sh
+Useful commands:
+
+```bash
 npm test
 npm run build
 ```
 
-For HTTPS development, `npm run starttls` uses `dev_cert/cert.pem` and
-`dev_cert/key.pem`; provide those local certificate files first.
+For HTTPS development, use:
 
-## Run with Docker Compose
-
-The default Compose stack runs the frontend and backend images published to
-GitHub Container Registry. For a local HTTP trial, start both services with:
-
-```sh
-AUUKI_INSECURE_COOKIES=1 docker compose up -d
+```bash
+npm run starttls
 ```
 
-Then open [http://localhost:8080](http://localhost:8080). To stop it, run
-`docker compose down`. The backend stores its data in the persistent
-`auuki-server-data` volume. The images must first be published by the GitHub
-Actions workflow; if a package is private, authenticate to GHCR before pulling.
+This expects local cert files in `dev_cert/cert.pem` and `dev_cert/key.pem`.
 
-To build both images from a local checkout instead, use:
+### Docker Compose
 
-```sh
-AUUKI_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
+The default Compose setup runs the frontend and backend together for local testing and self-hosted use.
+
+```bash
+ATHLIMA_INSECURE_COOKIES=1 docker compose up -d
 ```
 
-The app uses browser device APIs that require a secure context. `localhost`
-works for local use; deployments accessed from another host need HTTPS, typically
-provided by a reverse proxy. For HTTPS deployments, set `AUUKI_ORIGIN` to the
-exact public browser origin (scheme, hostname and port), and leave insecure cookies
-disabled. The default `http://localhost:8080` only allows that browser URL, not
-a LAN address or public proxy hostname. For additional trusted URLs, set
-`AUUKI_ADDITIONAL_ORIGINS` to a comma-separated list of exact origins.
+Then open:
+
+- http://localhost:8080
+
+To stop it:
+
+```bash
+docker compose down
+```
+
+To build from a local checkout instead of using published images:
+
+```bash
+ATHLIMA_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
+```
 
 ## Self-hosted accounts and integrations
 
-The desktop platform and `/mobile` open in guest mode by default. Workouts,
-BLE/ANT+ controls, FIT recording/downloads, recovery, the calendar and local
-coaching need no account or backend. Choose **Sign in / Create account** for
-server coaching, private backups and server-side integrations. Guest data is
-kept separately and is not automatically uploaded to an account.
-See the [backend guide](doc/backend.md) for deployment, data storage,
-API-key encryption and Intervals.icu synchronization.
+The app is usable without an account for workouts, device control, recovery, local training calendar work, and on-device coaching.
 
-Create an account or sign in after starting the stack. Use **Settings >
-Intervals.icu** to connect a personal API key. This requires a persistent
-`AUUKI_INTEGRATION_KEY`; see the backend guide for configuration. The previous
-Intervals.icu OAuth proxy has been replaced by this server-side connection.
-For a plain-English walkthrough of the Intervals.icu code flow, see the
-[Intervals guide](doc/intervals-guide.md).
+Account features are opt-in and include:
 
-## Sponsors 💖
-So, if you’re loving what Auuki’s bringing to the table, consider supporting the project on [GitHub Sponsors](https://github.com/sponsors/dvmarinoff)? Think of it as buying me a coffee or, heck, a whole power meter to keep this thing cranking. Hit that sponsor button and let’s keep the good times rolling!
+- server-side coaching and adaptive planning
+- private encrypted backups
+- Intervals.icu API-key connections
+- per-user account isolation for saved data and history
+- server-side sync for imported ride history and uploads
 
-## Supported Browsers and Platforms
+If you are self-hosting, see:
 
-### MacOS, Windows, Android
+- [doc/backend.md](doc/backend.md)
+- [doc/intervals-guide.md](doc/intervals-guide.md)
+- [doc/coaching.md](doc/coaching.md)
 
-Please use either Chrome, Edge, Opera, Samsung Internet, or Brave. These browsers include built-in bluetooth.
+For Intervals.icu, the app expects a configured server-side encryption key:
 
-Web Bluetooth also requires a **secure context**: HTTPS with a trusted
-certificate, or `http://localhost` on the device running the browser. Chrome
-does not expose Bluetooth on an HTTP LAN address such as `http://192.168.1.10:8080`.
-This includes Android accessing a self-hosted server: use HTTPS, not the server's
-HTTP LAN URL. On Android, open the URL directly in Chrome rather than an in-app
-browser. If Bluetooth is still unavailable over HTTPS, check browser Bluetooth
-permissions and the Linux setup below.
+```bash
+openssl rand -base64 32
+```
 
-| Chrome | Edge | Opera | Chrome Android | Samsung Internet | Brave | Firefox | Safari | Safari iOS | Chrome iOS |
-|--------|------|-------|----------------|------------------|-------|---------|--------|------------|------------|
-| yes    | yes  | yes   | yes            | yes              | yes*  | no      | no     | no         | no         |
+Store the result in `ATHLIMA_INTEGRATION_KEY` as a secret environment variable. Do not commit it to the repo.
 
-If using Brave browser, you'll need to [manually enable bluetooth support](https://community.brave.com/t/can-you-enable-web-bluetooth-api-in-brave/522553/2).
+## Browser and device support
+
+Athlima relies on browser APIs such as Web Bluetooth, Web Serial, and Web Components. For a supported experience, use a secure context and a compatible browser.
+
+Supported browsers:
+- Chrome
+- Edge
+- Opera
+- Brave
+- Samsung Internet
+
+Important notes:
+- Bluetooth requires HTTPS or localhost
+- Android generally works best by opening the URL directly in Chrome
+- Firefox and Safari are not supported for the trainer/Web Bluetooth path
 
 ### Linux
-On Linux you might need to turn on the experimental platforms feature flag in your browser:
+
+On Linux, enable the experimental web platform flag if needed:
 
 - Chrome: `chrome://flags/#enable-experimental-web-platform-features`
-
 - Edge: `edge://flags/#enable-experimental-web-platform-features`
-
 - Opera: `opera://flags/#enable-experimental-web-platform-features`
 
-Relaunch the browser after changing the flag. The HTTPS/localhost requirement
-still applies; enabling the flag does not enable Bluetooth on insecure pages.
-
 ### iOS
-Not Supported by the Web version
 
-## Supported Trainers
+The web version is not currently supported on iOS.
 
-### FTMS, FE-C over BLE, or WahooCPS
+## Supported trainer protocols
 
-Works with all trainers that implement the bluetooth Fitness Machine Service (FTMS) or the Tacx FE-C over BLE solution.
+Athlima supports the industry-standard trainer and sensor protocols used by indoor bikes:
 
-The following table is copied from [DC Rainmaker Trainer Guide](https://www.dcrainmaker.com/2020/11/smart-cycle-trainer-recommendations-guide-winter.html/#technical-considerations) and shows current protocol support across the industry.
+- FTMS over Bluetooth
+- FE-C over BLE
+- Wahoo CPS
+- ANT+ FE-C via a compatible USB ANT+ adapter
 
-```
-- Elite:    ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- Gravat:   ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers
-- JetBlack: ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- Kinetic:  ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- Minoura:  ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- Saris:    ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- STAC:     ANT+ FE-C and Bluetooth FTMS on all 2020 smart trainers.
-- Tacx:     ANT+ FE-C on all ‘Smart’ branded trainers (except Satori). FTMS on all non-NEO models. FEC over BLE on NEO.
-- Wahoo:    ANT+ FE-C on all smart trainers. FTMS on all 2020 smart trainer.
-- 4iiii:    ANT+ FE-C and Bluetooth FTMS on Fliiiight (--Ed)
-- Schwinn:  Bluetooth FTMS on the IC8 / 800IC (--Ed)
-```
+## Server safety and deployment notes
 
-### ANT+
+The backend enforces trusted browser origins and must be configured to match the real public URL used by the browser.
 
-ANT+ FE-C smart trainers and ANT+ heart-rate monitors are supported through a compatible USB ANT+ adapter. The browser must expose Web Serial or WebUSB, and the app must be served from a secure context (HTTPS or localhost). Connecting prompts you to select the adapter; availability depends on the browser, operating system, and adapter.
+Key variables:
 
-## Manual
-- [How to create a Profile and Connect Intervals.icu](https://forum.intervals.icu/t/auuki-com-intervals-icu-integration/87105)
-- [How-To: Using the connection settings](https://github.com/dvmarinoff/Auuki/discussions/91)
-- [How-To: Using Auuki and another app concurrently](https://github.com/dvmarinoff/Auuki/discussions/101)
+- `ATHLIMA_ORIGIN` — exact public browser origin to allow
+- `ATHLIMA_ADDITIONAL_ORIGINS` — extra trusted origins when needed
+- `ATHLIMA_INSECURE_COOKIES` — only for localhost HTTP development; do not use this in production
 
-## Backers
-<div>
-    <a href="https://github.com/KlausMu" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/14290221?v=4" width="48" height="48" />
-    </a>
-    <a href="https://github.com/TClin76" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/96434118?v=4" width="48" height="48" />
-    </a>
-    <a href="https://github.com/fvolcic" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/59806465?s=64&v=4" width="48" height="48" />
-    </a>
-    <a href="https://github.com/napfbike" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/192727271?v=4" width="48" height="48" />
-    </a>
-    <a href="https://github.com/sharalds" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/25537910?v=4" width="48" height="48" />
-    </a>
-    <a href="https://github.com/BenSimpsonAnalytics" target="_blank">
-        <img style="display: inline-block;" src="https://avatars.githubusercontent.com/u/81325092?v=4" width="48" height="48" />
-    </a>
-</div>
+The backend is meant to be used behind a secure public deployment, not just as a local dev convenience.
+
+## Documentation
+
+- [README.md](README.md)
+- [doc/backend.md](doc/backend.md)
+- [doc/intervals-guide.md](doc/intervals-guide.md)
+- [doc/coaching.md](doc/coaching.md)
+
+## License
+
+This project is licensed under the terms in [LICENSE.txt](LICENSE.txt).

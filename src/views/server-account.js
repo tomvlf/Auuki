@@ -2,7 +2,7 @@
  * server-account.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -114,7 +114,7 @@ class ServerAccount extends HTMLElement {
             } else if(form.dataset.serverForm === 'delete') {
                 await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
                 window.localStorage.removeItem(SERVER_MODE_KEY);
-                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.setItem('athlima-session-change', String(Date.now()));
                 window.location.reload();
             }
         });
@@ -126,7 +126,7 @@ class ServerAccount extends HTMLElement {
             if(action === 'local' || action === 'logout') {
                 if(action === 'logout') await serverRequest('logout', {method: 'POST', body: {}});
                 window.localStorage.removeItem(SERVER_MODE_KEY);
-                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.setItem('athlima-session-change', String(Date.now()));
                 window.location.reload();
             } else if(action === 'save') {
                 // First save after reload must not overwrite an existing backup without reviewing it.
@@ -145,7 +145,7 @@ class ServerAccount extends HTMLElement {
             } else if(action === 'download') {
                 const backup = await serverRequest('backup');
                 if(!backup.data) throw new Error('No server backup has been saved yet.');
-                fileHandler.download()(JSON.stringify(backup.data, null, 2), 'auuki-server-backup.json', 'application/json');
+                fileHandler.download()(JSON.stringify(backup.data, null, 2), 'athlima-server-backup.json', 'application/json');
                 this.message = 'Server backup downloaded. Export coaching history separately in Workouts > Calendar.';
             }
         });

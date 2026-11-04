@@ -2,7 +2,7 @@
  * service.test.js: test coverage module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -49,13 +49,13 @@ describe('persistent coaching loop', () => {
     });
     test('uploaded app recordings and later provider imports share one identity without losing streams', async () => {
         const service = new CoachingService(memoryStorage(), () => timestamp);
-        await service.recordRide({id: 'app-ride', source: 'auuki', start: timestamp,
+        await service.recordRide({id: 'app-ride', source: 'athlima', start: timestamp,
             duration: 60, streams: {power: Array(60).fill(150)}});
         await service.importActivities([{id: 'app-ride', source: 'intervals', externalId: 'provider-id',
             providerIds: {intervals: 'provider-id'}, start: timestamp, duration: 60}]);
         expect(service.data.activities).toHaveLength(1);
         expect(service.data.activities[0].streams.power).toHaveLength(60);
-        expect(service.data.activities[0].source).toBe('auuki');
+        expect(service.data.activities[0].source).toBe('athlima');
         expect(service.data.activities[0].providerIds.intervals).toBe('provider-id');
     });
     test('first profile recalculates imported history using declared timezone and FTP without losing provenance or feedback', async () => {
@@ -170,7 +170,7 @@ describe('persistent coaching loop', () => {
         const {service, storage} = await setup();
         await expect(service.generate(start)).rejects.toThrow(/Archive/);
         await expect(service.configure(profile, goal)).rejects.toThrow(/archive/);
-        storage.setItem('auuki-coaching-v1', '{"version":"unknown"}');
+        storage.setItem('athlima-coaching-v1', '{"version":"unknown"}');
         expect(() => new CoachingService(storage)).toThrow(/Unsupported/);
     });
     test('missed workouts are reviewed only once and dates after the event finish the plan', async () => {

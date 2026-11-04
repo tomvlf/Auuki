@@ -2,7 +2,7 @@
  * sw.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -16,7 +16,7 @@
  * the tests and the surrounding callers in the same review.
  */
 
-const cacheName = 'auuki-shell-v1';
+const cacheName = 'athlima-shell-v1';
 const isAsset = url => url.origin === self.location.origin &&
     !url.pathname.startsWith('/api/') && /\.(?:js|css|png|svg|webmanifest)$/.test(url.pathname);
 
@@ -26,7 +26,7 @@ async function cacheResponse(request, response) {
             const cache = await caches.open(cacheName);
             await cache.put(request, response.clone());
         } catch(error) {
-            console.warn('Auuki offline caching unavailable; using the network response.', error);
+            console.warn('Athlima offline caching unavailable; using the network response.', error);
         }
     }
     return response;
@@ -66,7 +66,7 @@ self.addEventListener('fetch', event => {
             (await caches.match('/')) || Response.error()));
     } else if(isAsset(url)) {
         event.respondWith(caches.match(event.request).catch(error => {
-            console.warn('Auuki offline cache unavailable; using the network.', error);
+            console.warn('Athlima offline cache unavailable; using the network.', error);
             return null;
         }).then(cached => cached || fetch(event.request).then(response => cacheResponse(event.request, response))));
     }

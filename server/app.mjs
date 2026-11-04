@@ -2,7 +2,7 @@
  * app.mjs: backend service module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -36,9 +36,9 @@ class HttpError extends Error {
 }
 
 /**
- * Reads a JSON request body and validates the Auuki client contract.
+ * Reads a JSON request body and validates the Athlima client contract.
  *
- * The server intentionally rejects non-Auuki requests and oversized payloads before
+ * The server intentionally rejects non-Athlima requests and oversized payloads before
  * any application logic runs. This keeps the API predictable and prevents clients
  * from sending invalid or malicious data into the document store.
  *
@@ -47,8 +47,8 @@ class HttpError extends Error {
  */
 async function readJSON(request) {
     if(request.headers['content-type'] !== 'application/json' ||
-       request.headers['x-auuki-client'] !== '1') {
-        throw new HttpError(415, 'Use the Auuki JSON client.');
+       request.headers['x-athlima-client'] !== '1') {
+        throw new HttpError(415, 'Use the Athlima JSON client.');
     }
     if(Number(request.headers['content-length']) > MAX_BODY) throw new HttpError(413, 'Request exceeds 32 MiB.');
     let size = 0;
@@ -63,7 +63,7 @@ async function readJSON(request) {
 }
 
 /**
- * Creates the main Auuki server application and all database-backed routes.
+ * Creates the main Athlima server application and all database-backed routes.
  *
  * This is the top-level server factory: it sets up the SQLite schema, session
  * management, origin validation, coaching document storage, and server-side
@@ -71,7 +71,7 @@ async function readJSON(request) {
  * HTTP server binds to and exposes to the browser client.
  *
  * @param {object} [options] - Runtime configuration for the server.
- * @param {string} [options.database='auuki.sqlite'] - SQLite database path.
+ * @param {string} [options.database='athlima.sqlite'] - SQLite database path.
  * @param {string} [options.origin='http://localhost:1234'] - Primary trusted browser origin.
  * @param {string[]} [options.additionalOrigins=[]] - Extra allowed browser origins.
  * @param {boolean} [options.secureCookies=true] - Enables secure cookie mode for HTTPS and production domains.
@@ -81,7 +81,7 @@ async function readJSON(request) {
  * @param {boolean} [options.startWorker] - Enables or disables the background sync worker.
  * @returns {{server: import('node:http').Server, close: Function, intervals: object, user: Function, route: Function}} The running app instance with server control methods.
  */
-export function createApp({database = 'auuki.sqlite', origin = 'http://localhost:1234', additionalOrigins = [],
+export function createApp({database = 'athlima.sqlite', origin = 'http://localhost:1234', additionalOrigins = [],
     secureCookies = true, clock = () => Date.now(), encryptionKey, fetchImpl, startWorker} = {}) {
     const origins = trustedOrigins(origin, additionalOrigins);
     origin = [...origins][0];
@@ -108,7 +108,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
         PRAGMA user_version = 1;
     `);
     const attempts = new Map();
-    const cookie = (token, maxAge) => `auuki_session=${token}; Path=/api/server; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookies ? '; Secure' : ''}`;
+    const cookie = (token, maxAge) => `athlima_session=${token}; Path=/api/server; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookies ? '; Secure' : ''}`;
     const document = (id, kind) => {
         const row = db.prepare('SELECT value, revision FROM documents WHERE user_id = ? AND kind = ?').get(id, kind);
         return {data: row ? JSON.parse(row.value) : null, revision: row?.revision ?? 0};
@@ -126,7 +126,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
     const intervals = createIntervals({db, document, save, clock, encryptionKey, fetchImpl, startWorker});
     function user(request) {
         const token = request.headers.cookie?.split(';').map(c => c.trim())
-            .find(c => c.startsWith('auuki_session='))?.slice('auuki_session='.length);
+            .find(c => c.startsWith('athlima_session='))?.slice('athlima_session='.length);
         if(!token || !/^[a-f0-9]{64}$/.test(token)) throw new HttpError(401, 'Sign in to your server account.');
         const row = db.prepare(`SELECT users.id, users.email FROM sessions JOIN users ON users.id = sessions.user_id
             WHERE sessions.token = ? AND sessions.expires > ?`).get(digest(token), clock());
@@ -157,7 +157,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
         if(request.method !== 'GET') {
             if(!origins.has(request.headers.origin)) {
                 console.warn('Rejected request origin:', request.headers.origin ?? '(missing)', 'Expected:', [...origins].join(', '));
-                throw new HttpError(403, 'Request origin is not allowed. The server operator must configure AUUKI_ORIGIN (or AUUKI_ADDITIONAL_ORIGINS) to match the browser URL.');
+                throw new HttpError(403, 'Request origin is not allowed. The server operator must configure ATHLIMA_ORIGIN (or ATHLIMA_ADDITIONAL_ORIGINS) to match the browser URL.');
             }
             body = await readJSON(request);
             if(!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Expected a JSON object.');
@@ -187,7 +187,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
                 id = row.id;
             }
             // Replace this browser's prior session rather than leaving it live.
-            const oldToken = request.headers.cookie?.match(/(?:^|;\s*)auuki_session=([a-f0-9]{64})(?:;|$)/)?.[1];
+            const oldToken = request.headers.cookie?.match(/(?:^|;\s*)athlima_session=([a-f0-9]{64})(?:;|$)/)?.[1];
             if(oldToken) db.prepare('DELETE FROM sessions WHERE token = ?').run(digest(oldToken));
             db.prepare('DELETE FROM sessions WHERE expires <= ?').run(clock());
             const token = randomBytes(32).toString('hex');
@@ -196,7 +196,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
             return send(200, {email});
         }
         const account = user(request);
-        if(request.headers['x-auuki-account'] && request.headers['x-auuki-account'] !== account.email) {
+        if(request.headers['x-athlima-account'] && request.headers['x-athlima-account'] !== account.email) {
             throw new HttpError(409, 'The signed-in account changed in another tab. Reload before continuing.');
         }
         if(path === '/api/server/session' && request.method === 'GET') return send(200, {email: account.email});
@@ -240,7 +240,7 @@ export function createApp({database = 'auuki.sqlite', origin = 'http://localhost
                    !Array.isArray(body.data.activities) || !body.data.settings ||
                    typeof body.data.settings !== 'object' || Array.isArray(body.data.settings) ||
                    !Array.isArray(body.data.calendar)) {
-                    throw new HttpError(400, 'Invalid Auuki backup.');
+                    throw new HttpError(400, 'Invalid Athlima backup.');
                 }
                 return send(200, save(account.id, 'backup', body.data, body.revision));
             }

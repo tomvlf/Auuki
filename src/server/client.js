@@ -2,7 +2,7 @@
  * client.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -16,7 +16,7 @@
  * the tests and the surrounding callers in the same review.
  */
 
-export const SERVER_MODE_KEY = 'auuki-server-mode';
+export const SERVER_MODE_KEY = 'athlima-server-mode';
 export const serverAccount = {email: null};
 export const serverEnabled = () => window.localStorage.getItem(SERVER_MODE_KEY) === '1';
 
@@ -24,21 +24,20 @@ export async function serverRequest(path, {method = 'GET', body, account = serve
     let response;
     try { response = await fetch(`/api/server/${path}`, {
         method, credentials: 'same-origin', cache: 'no-store',
-        headers: {'Content-Type': 'application/json', 'X-Auuki-Client': '1',
-            ...(account ? {'X-Auuki-Account': account} : {})},
+        headers: {'Content-Type': 'application/json', 'X-Athlima-Client': '1',
+            ...(account ? {'X-Athlima-Account': account} : {})},
         ...(body === undefined ? {} : {body: JSON.stringify(body)}),
     }); } catch(error) {
-        throw new Error('Cannot reach the Auuki server. Check your connection and try again.', {cause: error});
+        throw new Error('Cannot reach the Athlima server. Check your connection and try again.', {cause: error});
     }
     if(!response.headers.get('content-type')?.includes('application/json')) {
-        throw new Error('The Auuki backend is unavailable on this host. Your loaded ride remains local; retry when the server is available.');
+        throw new Error('The Athlima backend is unavailable on this host. Your loaded ride remains local; retry when the server is available.');
     }
     let result;
     try { result = await response.json(); }
     catch(error) {
-        throw new Error('The Auuki backend returned an invalid response. Try again or contact the server operator.', {cause: error});
-    }
-    if(!response.ok) {
+        throw new Error('The Athlima backend returned an invalid response. Try again or contact the server operator.', {cause: error});
+    }    if(!response.ok) {
         const error = new Error(result?.error || `Server request failed (${response.status}).`);
         error.status = response.status;
         if(response.status === 401 && account && typeof window !== 'undefined') {
@@ -56,13 +55,13 @@ export async function authenticate(operation, credentials) {
     try { account = await serverRequest('session', {account: null}); }
     catch(error) {
         if(error.status !== 401) throw error;
-        throw new Error(`${operation === 'register' ? 'Your account was created, but' : 'Your credentials were accepted, but'} the session cookie was not saved. Enable cookies and use HTTPS, or ask the operator to enable AUUKI_INSECURE_COOKIES for localhost HTTP.`);
+        throw new Error(`${operation === 'register' ? 'Your account was created, but' : 'Your credentials were accepted, but'} the session cookie was not saved. Enable cookies and use HTTPS, or ask the operator to enable ATHLIMA_INSECURE_COOKIES for localhost HTTP.`);
     }
     if(typeof signedIn?.email !== 'string' || account?.email !== signedIn.email) {
         throw new Error('The signed-in account changed. Please sign in again before opening account data.');
     }
     window.localStorage.setItem(SERVER_MODE_KEY, '1');
-    window.localStorage.setItem('auuki-session-change', String(Date.now()));
+    window.localStorage.setItem('athlima-session-change', String(Date.now()));
     return account;
 }
 

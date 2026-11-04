@@ -2,7 +2,7 @@
  * intervals.test.mjs: backend service module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -28,7 +28,7 @@
 // - upload + coaching history integration
 //
 // The goal is to protect the user-facing behavior: if a rider connects their own
-// Intervals account, Auuki must keep the API key encrypted, use the correct athlete ID,
+// Intervals account, Athlima must keep the API key encrypted, use the correct athlete ID,
 // and never allow one account to read or mutate another account's provider data.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,7 +67,7 @@ async function fixture(t, options = {}) {
     await start();
     const request = async (path, {method = 'GET', body, cookie, headers = {}} = {}) => {
         const response = await fetch(`http://127.0.0.1:${app.server.address().port}/api/server/${path}`, {
-            method, headers: {Origin: origin, 'Content-Type': 'application/json', 'X-Auuki-Client': '1',
+            method, headers: {Origin: origin, 'Content-Type': 'application/json', 'X-Athlima-Client': '1',
                 ...(cookie ? {Cookie: cookie} : {}), ...headers},
             ...(body === undefined ? {} : {body: JSON.stringify(body)}),
         });
@@ -100,7 +100,7 @@ test('provider adapter maps only cycling summaries and retains provenance withou
     assert.equal(raw.start, activity.start_date);
     assert.equal(intervalsActivity({...activity, type: 'Run'}), null);
     assert.equal(intervalsActivity({...activity, type: 'VirtualRide'}).indoor, true);
-    assert.equal(intervalsActivity({...activity, external_id: 'auuki:recording-123'}).id, 'recording-123');
+    assert.equal(intervalsActivity({...activity, external_id: 'athlima:recording-123'}).id, 'recording-123');
     assert.equal(intervalsActivity({...activity, icu_weighted_avg_watts: null}).normalizedPower, null);
     assert.throws(() => intervalsActivity({...activity, start_date: null}), /missing/);
 });
@@ -118,7 +118,7 @@ test('integration endpoints require authentication, CSRF headers, encryption con
 });
 
 test('encrypted credentials survive restart, never appear in responses, and are account isolated', async t => {
-    const directory = await mkdtemp(join(tmpdir(), 'auuki-intervals-'));
+    const directory = await mkdtemp(join(tmpdir(), 'athlima-intervals-'));
     t.after(() => rm(directory, {recursive: true, force: true}));
     const database = join(directory, 'server.sqlite');
     const f = await fixture(t, {database});
@@ -189,7 +189,7 @@ test('a later connection wins over a slow earlier test', async t => {
 });
 
 test('a changed server encryption key produces an actionable reconnect error', async t => {
-    const directory = await mkdtemp(join(tmpdir(), 'auuki-key-change-'));
+    const directory = await mkdtemp(join(tmpdir(), 'athlima-key-change-'));
     t.after(() => rm(directory, {recursive: true, force: true}));
     const f = await fixture(t, {database: join(directory, 'server.sqlite')});
     const cookie = await f.register();
@@ -325,7 +325,7 @@ test('concurrent sync requests coalesce and disconnect during an in-flight batch
 });
 
 test('queued imports resume from persistent cursor after process restart', async t => {
-    const directory = await mkdtemp(join(tmpdir(), 'auuki-resume-'));
+    const directory = await mkdtemp(join(tmpdir(), 'athlima-resume-'));
     t.after(() => rm(directory, {recursive: true, force: true}));
     const f = await fixture(t, {database: join(directory, 'server.sqlite')});
     const cookie = await f.register();
@@ -361,7 +361,7 @@ test('API-key proxy preserves athlete settings, planned ZWO workouts and FIT upl
     const uploaded = await f.request(`${endpoint}/upload`, {method: 'POST', cookie,
         body: {id: 'local-ride', name: 'My ride', file: fit.toString('base64')}});
     assert.equal(uploaded.status, 200);
-    assert.equal(new URL(f.calls.at(-1).url).searchParams.get('external_id'), 'auuki:local-ride');
+    assert.equal(new URL(f.calls.at(-1).url).searchParams.get('external_id'), 'athlima:local-ride');
     assert.equal(f.calls.at(-1).args.method, 'POST');
     assert.ok(f.calls.at(-1).args.body instanceof FormData);
     assert.equal((await f.request(`${endpoint}/upload`, {method: 'POST', cookie,

@@ -2,7 +2,7 @@
  * storage.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -19,14 +19,14 @@
 // Separate from the seven-item FIT activity cache: coaching history must not be evicted with it.
 export async function openCoachingStorage(indexedDB) {
     const database = await new Promise((resolve, reject) => {
-        const request = indexedDB.open('auuki-coaching', 1);
+        const request = indexedDB.open('athlima-coaching', 1);
         request.onupgradeneeded = () => request.result.createObjectStore('state');
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
         request.onblocked = () => reject(new Error('Coaching storage is blocked by another browser tab.'));
     });
     database.onversionchange = () => database.close();
-    const key = 'auuki-coaching-v1';
+    const key = 'athlima-coaching-v1';
     const initial = await new Promise((resolve, reject) => {
         const transaction = database.transaction('state', 'readonly');
         const request = transaction.objectStore('state').get(key);

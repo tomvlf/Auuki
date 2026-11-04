@@ -2,7 +2,7 @@
  * auth.test.js: test coverage module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -57,7 +57,7 @@ test.each(['/', '/mobile'])('guest startup at %s preserves local data and never 
     expect(launch).toHaveBeenCalledWith(document.querySelector('#platform'), null);
     expect(require('../../src/storage/account.js').accountDatabase()).toBe('store');
     expect(localStorage.getItem('ftp')).toBe('250');
-    expect(localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(localStorage.getItem('athlima-server-mode')).toBeNull();
 });
 
 test.each(['login', 'register'])('%s submits to the current backend and restores an isolated account scope', async operation => {
@@ -73,7 +73,7 @@ test.each(['login', 'register'])('%s submits to the current backend and restores
         email: 'rider@example.com', password: 'a long test password'});
     expect(launch).toHaveBeenCalledWith(document.querySelector('#platform'), {email: 'rider@example.com'});
     expect(require('../../src/storage/account.js').accountDatabase()).toContain('rider%40example.com');
-    expect(localStorage.getItem('auuki-server-mode')).toBe('1');
+    expect(localStorage.getItem('athlima-server-mode')).toBe('1');
     expect(localStorage.getItem('password')).toBeNull();
 });
 
@@ -90,16 +90,16 @@ test('implicit submission, duplicate registration and network failures show erro
     form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
     await settle();
     expect(fetch.mock.calls[1][0]).toBe('/api/server/login');
-    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Auuki server');
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Athlima server');
 });
 
 test('origin and credential errors stay visible and guest access is explicit after session failure', async () => {
-    localStorage.setItem('auuki-server-mode', '1');
+    localStorage.setItem('athlima-server-mode', '1');
     fetch.mockResolvedValueOnce(response({error: 'Session expired'}, 401));
     const launch = await start();
     expect(launch).not.toHaveBeenCalled();
     const form = fill();
-    for(const [error, status] of [['Request origin is not allowed. Configure AUUKI_ORIGIN.', 403],
+    for(const [error, status] of [['Request origin is not allowed. Configure ATHLIMA_ORIGIN.', 403],
         ['Email or password is incorrect.', 401]]) {
         fetch.mockResolvedValueOnce(response({error}, status));
         form.querySelector('[value="login"]').click();
@@ -109,7 +109,7 @@ test('origin and credential errors stay visible and guest access is explicit aft
     document.querySelector('#continue-guest').click();
     await settle();
     expect(launch).toHaveBeenCalledWith(document.querySelector('#platform'), null);
-    expect(localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(localStorage.getItem('athlima-server-mode')).toBeNull();
 });
 
 test('a rejected session cookie is reported instead of pretending registration succeeded', async () => {
@@ -121,11 +121,11 @@ test('a rejected session cookie is reported instead of pretending registration s
     await settle();
     expect(document.querySelector('[role="alert"]').textContent).toContain('account was created, but the session cookie');
     expect(launch).not.toHaveBeenCalled();
-    expect(localStorage.getItem('auuki-server-mode')).toBeNull();
+    expect(localStorage.getItem('athlima-server-mode')).toBeNull();
 });
 
 test('restoring an account verifies its session; simultaneous expiry errors keep account data protected', async () => {
-    localStorage.setItem('auuki-server-mode', '1');
+    localStorage.setItem('athlima-server-mode', '1');
     fetch.mockResolvedValueOnce(response({email: 'rider@example.com'}));
     const launch = await start();
     expect(launch).toHaveBeenCalledWith(document.querySelector('#platform'), {email: 'rider@example.com'});
@@ -134,15 +134,15 @@ test('restoring an account verifies its session; simultaneous expiry errors keep
     await settle();
     expect(document.querySelector('#platform-login')).not.toBeNull();
     expect(document.querySelector('.wrapper').hidden).toBe(true);
-    expect(localStorage.getItem('auuki-server-mode')).toBe('1');
+    expect(localStorage.getItem('athlima-server-mode')).toBe('1');
 });
 
 test('an unavailable account backend is reported without silently switching to guest mode', async () => {
-    localStorage.setItem('auuki-server-mode', '1');
+    localStorage.setItem('athlima-server-mode', '1');
     fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const launch = await start();
     expect(launch).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Auuki server');
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Athlima server');
     expect(document.querySelector('#continue-guest')).not.toBeNull();
-    expect(localStorage.getItem('auuki-server-mode')).toBe('1');
+    expect(localStorage.getItem('athlima-server-mode')).toBe('1');
 });

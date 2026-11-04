@@ -2,7 +2,7 @@
  * jest.config.js: project utility module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -16,12 +16,11 @@
  * the tests and the surrounding callers in the same review.
  */
 
-module.exports = {
-    "testPathIgnorePatterns": ["/node_modules/", "<rootDir>/server/"],
-    "setupFiles": [
-        "<rootDir>/test/jest-setup.js"
-    ],
-    "transform": {
-        "^.+\\.js$": "babel-jest"
-    }
+export default {
+    testEnvironment: 'jsdom',
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/server/'],
+    setupFiles: ['<rootDir>/test/jest-setup.js'],
+    transform: {
+        '^.+\\.js$': 'babel-jest',
+    },
 };

@@ -2,7 +2,7 @@
  * workouts.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -128,7 +128,7 @@ let workouts = [
 </workout_file>
 `,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Quiche</name>
     <category>HIIT</category>
     <description>This workout features three 6-minute intervals that train your body to better manage and tolerate lactate buildup. You'll begin 'at' your FTP, increase to Zone 5 intensity (over), then finish with a Zone 3 effort (under).</description>
@@ -155,7 +155,7 @@ let workouts = [
 </workout_file>`
 ,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Quiche +1</name>
     <category>HIIT</category>
     <description>This workout features two sets with 5 intervals each that train your body to better manage and tolerate lactate buildup. You'll begin 'at' your FTP, increase to Zone 5 intensity (over), then finish with a Zone 3 effort (under).</description>
@@ -210,7 +210,7 @@ let workouts = [
 </workout_file>`
 ,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Salad</name>
     <category>HIIT</category>
     <description>This workout uses pyramid-structured intervals that gradually build up to your FTP threshold. These efforts enhance your body's capacity to metabolize exercise byproducts—such as lactate and convert them into usable fuel for your cardiovascular system.</description>
@@ -395,7 +395,7 @@ let workouts = [
 </workout_file>`
 ,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Salmon</name>
     <category>Base</category>
     <subcategory></subcategory>
@@ -412,7 +412,7 @@ let workouts = [
     </workout>
 </workout_file>`,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Salmon +1</name>
     <category>Base</category>
     <subcategory></subcategory>
@@ -430,7 +430,7 @@ let workouts = [
     </workout>
 </workout_file>`,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Blackcurrant</name>
     <category>Recovery</category>
     <description>A recovery ride in zone 1 at 50% of FTP.</description>
@@ -443,7 +443,7 @@ let workouts = [
     </workout>
 </workout_file>`,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>5-1-5 Moxy Test</name>
     <category>Test</category>
     <subcategory>Moxy 515</subcategory>
@@ -474,7 +474,7 @@ let workouts = [
     </workout>
 </workout_file>`,
 `<workout_file>
-    <author>Auuki</author>
+    <author>Athlima</author>
     <name>Ramp Test</name>
     <category>Test</category>
     <subcategory>Power Ramp</subcategory>

@@ -2,7 +2,7 @@
  * account.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -19,7 +19,7 @@
 let scope = '';
 
 export function setAccountScope(email) {
-    scope = email ? `auuki:${encodeURIComponent(email)}:` : '';
+    scope = email ? `athlima:${encodeURIComponent(email)}:` : '';
 }
 
 export const accountKey = key => `${scope}${key}`;

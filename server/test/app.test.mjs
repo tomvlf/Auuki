@@ -2,7 +2,7 @@
  * app.test.mjs: backend service module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -38,7 +38,7 @@ async function fixture(t, options = {}) {
     await listen();
     const request = async (path, {method = 'GET', body, cookie, headers = {}} = {}) => {
         const response = await fetch(`http://127.0.0.1:${app.server.address().port}/api/server/${path}`, {
-            method, headers: {Origin: origin, 'Content-Type': 'application/json', 'X-Auuki-Client': '1',
+            method, headers: {Origin: origin, 'Content-Type': 'application/json', 'X-Athlima-Client': '1',
                 ...(cookie ? {Cookie: cookie} : {}), ...headers},
             ...(body === undefined ? {} : {body: typeof body === 'string' ? body : JSON.stringify(body)}),
         });
@@ -95,7 +95,7 @@ test('rejects invalid requests and cross-origin writes without altering data', a
     assert.equal((await request('backup', {method: 'PUT', cookie, body: {},
         headers: {'Content-Type': 'text/plain'}})).status, 415);
     assert.equal((await request('backup', {method: 'PUT', cookie, body: {},
-        headers: {'X-Auuki-Client': ''}})).status, 415);
+        headers: {'X-Athlima-Client': ''}})).status, 415);
     assert.equal((await request('backup', {method: 'PUT', cookie, body: '{invalid'})).status, 400);
     assert.equal((await request('backup', {method: 'PUT', cookie, body: []})).status, 400);
     assert.equal((await request('register', {method: 'POST', body: {...credentials, password: 'short'}})).status, 400);
@@ -121,7 +121,7 @@ test('explicit public and local aliases work behind a proxy without trusting for
             Origin: rejected, 'X-Forwarded-Host': 'cycling.example.com', 'X-Forwarded-Proto': 'https',
         }});
         assert.equal(result.status, 403);
-        assert.match(result.data.error, /AUUKI_ORIGIN/);
+        assert.match(result.data.error, /ATHLIMA_ORIGIN/);
     }
     assert.equal((await request('coaching')).status, 401);
     assert.equal((await request('backup')).status, 401);
@@ -138,7 +138,7 @@ test('invalid origin configuration and non-local insecure cookies fail at startu
 });
 
 test('private backups are isolated, revisioned, persistent, and deleted with the account', async t => {
-    const directory = await mkdtemp(join(tmpdir(), 'auuki-test-'));
+    const directory = await mkdtemp(join(tmpdir(), 'athlima-test-'));
     const {request, restart} = await fixture(t, {database: join(directory, 'accounts.sqlite')});
     t.after(() => rm(directory, {recursive: true, force: true}));
     const alice = await register(request);
@@ -147,7 +147,7 @@ test('private backups are isolated, revisioned, persistent, and deleted with the
     assert.equal(saved.status, 200);
     assert.deepEqual(saved.data, {data: backup, revision: 1});
     assert.deepEqual((await request('backup', {cookie: bob})).data, {data: null, revision: 0});
-    assert.equal((await request('backup', {method: 'PUT', cookie: bob, headers: {'X-Auuki-Account': credentials.email},
+    assert.equal((await request('backup', {method: 'PUT', cookie: bob, headers: {'X-Athlima-Account': credentials.email},
         body: {data: backup, revision: 0}})).status, 409);
     assert.equal((await request('backup', {method: 'PUT', cookie: alice, body: {data: backup, revision: 0}})).status, 409);
     assert.equal((await request('backup', {method: 'PUT', cookie: alice, body: {data: backup}})).status, 400);

@@ -2,7 +2,7 @@
  * origins.mjs: backend service module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -21,7 +21,7 @@ export function trustedOrigins(origin, additionalOrigins = []) {
         const url = new URL(value);
         if(!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
            url.search || url.hash || url.pathname !== '/') {
-            throw new Error('Auuki origins must be HTTP(S) scheme/host/port values without paths, credentials, queries or fragments.');
+            throw new Error('Athlima origins must be HTTP(S) scheme/host/port values without paths, credentials, queries or fragments.');
         }
         return url.origin;
     }));

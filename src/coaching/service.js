@@ -2,7 +2,7 @@
  * service.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -24,14 +24,14 @@ import { matchWorkout, adaptPlan } from './adaptation.js';
 import { openCoachingStorage } from './storage.js';
 import { ServerCoachingService, SERVER_MODE_KEY, serverEnabled, serverAccount } from '../server/client.js';
 
-const KEY = 'auuki-coaching-v1';
+const KEY = 'athlima-coaching-v1';
 const empty = () => ({version: VERSION, profile: null, goal: null, activities: [],
     snapshots: [], revisions: [], plan: null});
 
 /**
  * Stores the athlete profile, training goal, imported activities, and generated plan.
  *
- * This service is the central coaching state container for Auuki. It keeps the rider's
+ * This service is the central coaching state container for Athlima. It keeps the rider's
  * profile and plan together in one JSON object so the planner, activity importer, and UI
  * can all read a single consistent state instead of separate fragmented stores.
  */
@@ -134,7 +134,7 @@ export class CoachingService {
         return this.commit(next);
     }
     /**
-     * Imports raw provider activity data and normalizes it into Auuki's internal activity model.
+     * Imports raw provider activity data and normalizes it into Athlima's internal activity model.
      *
      * @param {Array<object>} rawActivities - Raw ride records from a provider like Intervals.icu.
      * @returns {Promise<object>} Updated coaching state with the imported activities applied.
@@ -149,7 +149,7 @@ export class CoachingService {
             const index = next.activities.findIndex(a => a.id === activity.id);
             if(index !== -1) {
                 const previous = next.activities[index];
-                if(previous.source === 'auuki' && activity.source === 'intervals') {
+                if(previous.source === 'athlima' && activity.source === 'intervals') {
                     next.activities[index] = {...previous, providerIds: {...previous.providerIds, ...activity.providerIds},
                         syncedAt: activity.syncedAt};
                     continue;
@@ -207,7 +207,7 @@ export class CoachingService {
     async recordRide(raw, explicitId = null) {
         const existing = this.data.activities.find(a => a.id === String(raw.id));
         if(existing) {
-            if(existing.source === 'intervals' && raw.source === 'auuki') {
+            if(existing.source === 'intervals' && raw.source === 'athlima') {
                 const next = JSON.parse(JSON.stringify(this.data));
                 next.activities[next.activities.findIndex(a => a.id === existing.id)] =
                     normalizeActivity({...raw, providerIds: existing.providerIds}, this.data.profile || undefined);

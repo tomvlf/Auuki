@@ -2,7 +2,7 @@
  * ui.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -63,7 +63,7 @@ export async function launchPlatform(root, account) {
     const mobile = /^\/mobile\/?$/.test(window.location.pathname);
     document.body.classList.add('platform-app', ...(mobile ? ['mobile-app'] : []));
     root.innerHTML = `<a class="skip-link" href="#main-content">Skip to content</a>
-        <aside class="sidebar"><a class="brand" href="${mobile ? '/mobile' : '/'}">auuki<span> / training</span></a>
+        <aside class="sidebar"><a class="brand" href="${mobile ? '/mobile' : '/'}">Athlima<span> / training</span></a>
             <nav aria-label="Main navigation">${(mobile
                 ? ['dashboard', 'player', 'devices', 'activities', 'settings']
                 : Object.keys(routes).filter(r => !['workout'].includes(r)))
@@ -280,7 +280,7 @@ export async function launchPlatform(root, account) {
                 <button class="secondary" data-action="target-down" aria-label="Decrease current target">-</button>
                 <span id="ride-adjust-value"></span><button class="secondary" data-action="target-up" aria-label="Increase current target">+</button></div>
             <p class="muted" id="ride-recovery">${db.elapsed ? 'Ride recovered on this device. Reconnect sensors before resuming.' : 'Connect a trainer and sensors, then start. Your ride is recovered locally after an interruption.'}</p>
-            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Workout profile and original trainer controls</summary><p>The controls below use the original Auuki workout engine.</p></details>
+            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Workout profile and original trainer controls</summary><p>The controls below use the original Athlima workout engine.</p></details>
         </section>`;
     }
     function settings() {
@@ -453,7 +453,7 @@ export async function launchPlatform(root, account) {
                 if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before deleting the account.');
                 if(!confirm('Permanently delete this account, all server training data and integrations?')) return;
                 await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
-                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.setItem('athlima-session-change', String(Date.now()));
                 window.localStorage.removeItem(SERVER_MODE_KEY);
                 window.location.reload();
             } else {
@@ -504,7 +504,7 @@ export async function launchPlatform(root, account) {
             } else if(action === 'logout') {
                 if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
                 await serverRequest('logout', {method: 'POST', body: {}});
-                window.localStorage.setItem('auuki-session-change', String(Date.now()));
+                window.localStorage.setItem('athlima-session-change', String(Date.now()));
                 window.localStorage.removeItem(SERVER_MODE_KEY);
                 serverAccount.email = null;
                 window.location.reload();
@@ -561,7 +561,7 @@ export async function launchPlatform(root, account) {
                 }
             } else if(action === 'export') {
                 const {fileHandler} = await import('../file.js');
-                fileHandler.download()(JSON.stringify(coachingData(), null, 2), 'auuki-training-history.json', 'application/json');
+                fileHandler.download()(JSON.stringify(coachingData(), null, 2), 'athlima-training-history.json', 'application/json');
             } else if(action === 'import-profile') {
                 const {models} = await import('../models/models.js');
                 const settings = await models.api.intervals.getAthlete();

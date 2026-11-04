@@ -2,7 +2,7 @@
  * config.js: front-end client module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -26,8 +26,8 @@ class Config {
         this.env = {
             // PWA_URI: "http://localhost:1234",
             // API_URI: "http://localhost:8080",
-            PWA_URI: window.location.origin ?? "https://auuki.com",
-            API_URI: "https://api.auuki.com",
+            PWA_URI: window.location.origin ?? "https://athlima.com",
+            API_URI: "https://api.athlima.com",
             STRAVA_CLIENT_ID: this.defaultStravaClientId,
             INTERVALS_CLIENT_ID: this.defaultIntervalsClientId,
             TRAINING_PEAKS_CLIENT_ID: this.defaultTrainingPeaksClientId,

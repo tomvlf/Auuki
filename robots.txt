@@ -13,5 +13,5 @@ Disallow: /sw.js
 
 Allow: /images/
 
-Sitemap: https://auuki.com/sitemap.xml
+Sitemap: https://athlima.com/sitemap.xml
 

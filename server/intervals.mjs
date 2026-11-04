@@ -2,7 +2,7 @@
  * intervals.mjs: backend service module.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
+ * This file is part of Athlima and is kept separate so the application can be understood
  * as a set of focused responsibilities instead of one large unstructured script.
  * The code here is intentionally organized around one job so a new contributor can
  * follow the data flow and the reason for each step without reading unrelated code.
@@ -28,12 +28,12 @@ import { addDays, date } from '../src/coaching/domain.js';
 //   1. Save the encrypted API key for the signed-in account.
 //   2. Resolve the user's athlete ID from Intervals.icu.
 //   3. Fetch historical activities in bounded date windows.
-//   4. Normalize provider responses into Auuki's internal activity model.
+//   4. Normalize provider responses into Athlima's internal activity model.
 //   5. Upload FIT recordings and planned workouts using the stored athlete ID.
 //   6. Keep sync state and retry metadata so resumable imports continue after restart.
 //
 // Function reference:
-// - intervalsActivity(): converts raw provider data into Auuki's common activity format.
+// - intervalsActivity(): converts raw provider data into Athlima's common activity format.
 // - createIntervals(): creates the account-scoped Intervals service and its worker.
 // - encrypt()/decrypt(): secure API-key storage and retrieval using AES-256-GCM.
 // - status()/athlete()/events()/upload(): API surface used by the browser/server routes.
@@ -51,7 +51,7 @@ class IntegrationError extends Error {
 
 // Provider objects stop here. All consumers, including the coach, use normalizeActivity.
 /**
- * Maps a raw Intervals.icu activity payload to Auuki's normalized activity format.
+ * Maps a raw Intervals.icu activity payload to Athlima's normalized activity format.
  *
  * The coach and history logic consume only the normalized model, so Intervals data
  * must be reduced to a stable internal shape before any planning logic runs.
@@ -71,8 +71,10 @@ export function intervalsActivity(activity, syncedAt) {
     if(!activity.id || !activity.start_date || !(activity.moving_time > 0)) {
         throw new IntegrationError('A cycling activity is missing its ID, UTC start or moving time. Retry after correcting it in Intervals.icu.');
     }
+    const externalId = activity.external_id || '';
+    const legacyId = /^(?:athlima|auuki):([\w-]{1,100})$/.exec(externalId);
     return {
-        id: /^auuki:[\w-]{1,100}$/.test(activity.external_id || '') ? activity.external_id.slice(6) : `intervals:${activity.id}`,
+        id: legacyId ? legacyId[1] : `intervals:${activity.id}`,
         externalId: String(activity.id), source: 'intervals', providerIds: {intervals: String(activity.id)},
         name: activity.name, start: activity.start_date, duration: activity.moving_time,
         movingTime: activity.moving_time, distance: activity.distance,
@@ -105,7 +107,7 @@ export function intervalsActivity(activity, syncedAt) {
 export function createIntervals({db, document, save, clock, encryptionKey, fetchImpl = fetch, startWorker = true}) {
     const key = encryptionKey ? Buffer.from(encryptionKey, 'base64') : null;
     if(key && (key.length !== 32 || key.toString('base64') !== encryptionKey)) {
-        throw new Error('AUUKI_INTEGRATION_KEY must be a base64-encoded 32-byte key.');
+        throw new Error('ATHLIMA_INTEGRATION_KEY must be a base64-encoded 32-byte key.');
     }
     db.exec(`CREATE TABLE IF NOT EXISTS integrations (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -296,7 +298,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         const form = new FormData();
         form.append('file', new Blob([bytes], {type: 'application/octet-stream'}), `${body.id}.fit`);
         await remote(credential(id), '/activities', {method: 'POST', body: form,
-            query: {name: body.name, external_id: `auuki:${body.id}`}, athleteId});
+            query: {name: body.name, external_id: `athlima:${body.id}`}, athleteId});
         return {success: true};
     }
     /**
@@ -310,7 +312,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
      * @returns {Promise<object>} The persisted connection state.
      */
     async function connect(id, body) {
-        if(!key) throw new IntegrationError('The operator must configure AUUKI_INTEGRATION_KEY before connecting.', 503);
+        if(!key) throw new IntegrationError('The operator must configure ATHLIMA_INTEGRATION_KEY before connecting.', 503);
         if(typeof body.apiKey !== 'string' || !body.apiKey.trim() || body.apiKey.length > 1024) {
             throw new IntegrationError('Enter your Intervals.icu API key.');
         }
