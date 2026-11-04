@@ -41,6 +41,16 @@ export const sum = values => values.reduce((a, b) => a + b, 0);
 export const mean = values => values.length ? sum(values) / values.length : null;
 export const positive = value => Number.isFinite(value) && value > 0;
 export const round = value => Math.round(value * 100) / 100;
+/**
+ * Validates a date string and ensures it is an actual date in ISO YYYY-MM-DD format.
+ *
+ * This is a strict helper because the planner and calendar operate on comparable dates,
+ * and even a single invalid date can offset a full training week or cause misalignment
+ * with imported activities.
+ *
+ * @param {string} value - Raw date value to validate.
+ * @returns {string} The same valid date string.
+ */
 export function date(value) {
     if(typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
        !Number.isFinite(Date.parse(`${value}T00:00:00Z`)) ||
@@ -49,9 +59,23 @@ export function date(value) {
     }
     return value;
 }
+/**
+ * Adds a number of calendar days to an ISO date while preserving the date's timezone semantics.
+ *
+ * @param {string} value - Base date in YYYY-MM-DD format.
+ * @param {number} days - Positive or negative day offset.
+ * @returns {string} The shifted date in YYYY-MM-DD format.
+ */
 export const addDays = (value, days) => new Date(Date.parse(`${date(value)}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 export const daysBetween = (a, b) => (Date.parse(date(b)) - Date.parse(date(a))) / DAY;
 export const weekday = value => new Date(`${date(value)}T00:00:00Z`).getUTCDay();
+/**
+ * Returns the local calendar day for a timestamp in a specific time zone.
+ *
+ * @param {number|string} timestamp - UTC timestamp or ISO date value.
+ * @param {string} timeZone - IANA time zone such as Europe/Amsterdam.
+ * @returns {string} The rider-local date in YYYY-MM-DD format.
+ */
 export function localDay(timestamp, timeZone) {
     const parts = new Intl.DateTimeFormat('en-US', {
         timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -59,6 +83,16 @@ export function localDay(timestamp, timeZone) {
     const part = name => parts.find(p => p.type === name).value;
     return `${part('year')}-${part('month')}-${part('day')}`;
 }
+/**
+ * Validates an athlete configuration before it is accepted by the planner.
+ *
+ * The coaching engine relies on the profile being internally consistent: training time,
+ * weekday availability, FTP, and any heart-rate thresholds must all align or the plan
+ * can become misleading or impossible to execute.
+ *
+ * @param {object} profile - Athlete profile and availability.
+ * @returns {object} The validated profile.
+ */
 export function validateProfile(profile) {
     if(!profile.id || !positive(profile.weight) || (profile.ftp != null && !positive(profile.ftp)) ||
        !['beginner', 'intermediate', 'advanced'].includes(profile.experience) ||
@@ -92,6 +126,14 @@ export function validateProfile(profile) {
     }
     return profile;
 }
+/**
+ * Validates a training goal before it can generate a plan.
+ *
+ * @param {object} goal - Goal metadata and target values.
+ * @param {string} startDate - Plan start date in YYYY-MM-DD format.
+ * @param {Record<string, number[]>} [registry=GOALS] - Supported goal archetypes.
+ * @returns {object} The validated goal.
+ */
 export function validateGoal(goal, startDate, registry = GOALS) {
     date(startDate);
     date(goal.date);

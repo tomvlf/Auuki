@@ -22,6 +22,18 @@ import { modelGoalDemand, analyzeGaps } from './demands.js';
 import { progressWorkout, FAMILIES, stepLoad } from './workouts.js';
 import { explainPhase, explainWeek } from './explanations.js';
 
+/**
+ * Splits the goal timeline into training phases with a clear purpose and focus.
+ *
+ * The periodisation logic groups a goal into preparation, build, specific, peak, taper,
+ * and recovery blocks so that the scheduler can allocate training stress thoughtfully.
+ *
+ * @param {string} startDate - Plan start date in YYYY-MM-DD format.
+ * @param {object} goal - Active athlete goal and objective data.
+ * @param {object} state - Derived athlete state used for readiness and capacity decisions.
+ * @param {object} gaps - Capability priorities and weaknesses discovered from recent state analysis.
+ * @returns {Array<object>} Period blocks that define the time-based plan structure.
+ */
 export function periodise(startDate, goal, state, gaps) {
     const total = daysBetween(startDate, goal.date);
     const focus = gaps.priorities.slice(0, 2).map(p => p.capability);
@@ -51,6 +63,20 @@ export function periodise(startDate, goal, state, gaps) {
     return days;
 }
 
+/**
+ * Builds the weekly target envelope for each week in the plan.
+ *
+ * This keeps the schedule within realistic training capacity while allowing controlled
+ * ramping. The model uses recent load and athlete readiness to prevent over-ambitious
+ * increases in minutes and load.
+ *
+ * @param {string} startDate - Plan start date.
+ * @param {object} goal - Goal metadata and priority.
+ * @param {object} state - Estimated athlete state.
+ * @param {object} profile - Session availability and weekly capacity limits.
+ * @param {Array<object>} phases - Period blocks for the plan.
+ * @returns {Array<object>} Weekly target objects with minutes, load, phase, and rationale.
+ */
 export function weeklyTargets(startDate, goal, state, profile, phases) {
     const capacity = Math.min(profile.maxWeeklyHours * 60, profile.typicalWeeklyHours * 60,
         sum(profile.availableDays.map(d => profile.maxSessionMinutes[d])));
@@ -94,6 +120,21 @@ export function weeklyTargets(startDate, goal, state, profile, phases) {
     return weeks;
 }
 
+/**
+ * Turns weekly targets and training phases into concrete workout slots.
+ *
+ * The scheduler allocates minutes to available training days, chooses workout families
+ * based on the active phase and athlete readiness, and keeps a realistic rhythm so the
+ * plan remains actionable instead of becoming an impossible stress curve.
+ *
+ * @param {Array<object>} weeks - Weekly target objects.
+ * @param {Array<object>} phases - Period blocks in the plan.
+ * @param {object} profile - Athlete availability and session constraints.
+ * @param {object} state - Athlete readiness and training state.
+ * @param {object} gaps - Capability and objective gaps that shape workout types.
+ * @param {string} planId - Unique plan identifier used when building workout IDs.
+ * @returns {Array<object>} The concrete workout schedule for the full plan.
+ */
 export function scheduleWorkouts(weeks, phases, profile, state, gaps, planId) {
     const workouts = [];
     let lastHard = null;

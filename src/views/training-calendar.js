@@ -1,19 +1,16 @@
-/*
- * training-calendar.js: front-end client module.
+/**
+ * training-calendar.js: browser-side training calendar and planned workout view.
  *
  * Why this exists:
- * This file is part of Auuki and is kept separate so the application can be understood
- * as a set of focused responsibilities instead of one large unstructured script.
- * The code here is intentionally organized around one job so a new contributor can
- * follow the data flow and the reason for each step without reading unrelated code.
+ * Riders need one place to see their captured ride history, imported Intervals.icu
+ * calendar entries, and coaching plan items without bouncing between disconnected
+ * screens. This module keeps that calendar logic in one ownership boundary so it is
+ * easier to reason about data flow and persistence.
  *
  * What it does:
- * renders the screen, controls, and UI panels that let a rider interact with the app.
- *
- * Developer note:
- * Read this file as the boundary of the problem it solves: inputs, transformations,
- * persistence, and outputs. If a change affects the behaviour of this module, update
- * the tests and the surrounding callers in the same review.
+ * It loads saved calendar entries from local storage, listens for workout and service
+ * updates from the rest of the app, merges imported plan sessions into the visible month,
+ * and renders interactive date selection plus import/export actions.
  */
 
 import { xf } from '../functions.js';
@@ -73,7 +70,17 @@ function parseEntries(value) {
     });
 }
 
+/**
+ * Displays the rider's personal calendar, imported planned workouts, and coaching events.
+ *
+ * This component keeps a browser-local training log and merges it with imported provider
+ * workouts such as Intervals.icu so the rider sees both their stored sessions and future
+ * planned work in one place.
+ */
 class TrainingCalendar extends HTMLElement {
+    /**
+     * Creates a calendar view to hold entries, workload, and planned-workout month state.
+     */
     constructor() {
         super();
         this.entries = [];
@@ -84,6 +91,9 @@ class TrainingCalendar extends HTMLElement {
         this.checkingServices = false;
     }
 
+    /**
+     * Connects the calendar to storage, event subscriptions, and the initial render.
+     */
     connectedCallback() {
         this.abortController = new AbortController();
         this.signal = {signal: this.abortController.signal};
@@ -135,6 +145,11 @@ class TrainingCalendar extends HTMLElement {
         this.abortController.abort();
     }
 
+    /**
+     * Reads the persisted calendar entries from browser storage.
+     *
+     * @returns {Array<object>|null} Stored entries or null when the browser data is invalid or cannot be read.
+     */
     getStoredEntries() {
         try {
             return parseEntries(accountStorage.getItem(storageKey));
@@ -146,6 +161,12 @@ class TrainingCalendar extends HTMLElement {
         }
     }
 
+    /**
+     * Saves calendar changes to the account-local storage bucket.
+     *
+     * @param {Array<object>} entries - Calendar event list for the rider's account.
+     * @returns {boolean} True when the calendar persisted successfully.
+     */
     save(entries) {
         try {
             accountStorage.setItem(storageKey, JSON.stringify(entries));
@@ -173,6 +194,11 @@ class TrainingCalendar extends HTMLElement {
         this.render();
     }
 
+    /**
+     * Loads planned workouts for the currently displayed month from the Intervals integration.
+     *
+     * @returns {Promise<void>} Resolves after the month cache is updated or the request fails.
+     */
     async loadPlannedMonth() {
         const monthKey = `${this.displayMonth.getFullYear()}-${this.displayMonth.getMonth()}`;
         if(this.plannedByMonth.has(monthKey)) {

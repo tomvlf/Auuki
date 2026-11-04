@@ -46,6 +46,17 @@ const empty = (text, route = 'library', action = 'Browse workouts') =>
     `<div class="empty-state"><p>${text}</p>${link(route, action, 'button secondary')}</div>`;
 const stat = (label, value, unit = '') => `<div class="stat"><span>${label}</span><strong>${value}<small>${unit}</small></strong></div>`;
 
+/**
+ * Launches the main training platform shell and hosts the navigation routing logic.
+ *
+ * This is the app-level UI entry point: it creates the side navigation, bootstraps the
+ * current route, and then lets other modules render the dashboard, calendar, plan, and
+ * settings views into the same shell.
+ *
+ * @param {Element} root - Root DOM element that will receive the platform markup.
+ * @param {object|null} account - The current authenticated account or guest fallback.
+ * @returns {Promise<void>} Resolves after the platform shell and route plumbing are ready.
+ */
 export async function launchPlatform(root, account) {
     root.removeAttribute('role');
     const authenticated = Boolean(account?.email);

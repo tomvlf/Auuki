@@ -20,12 +20,24 @@ import { xf, formatDate, } from '../functions.js';
 import { models } from '../models/models.js';
 import { formatTime, } from '../utils.js';
 
+/**
+ * Lists recent activities in a compact, browsable strip for the trainer and plan views.
+ *
+ * This component keeps the UI focused on recent rides, their timestamps, and provider
+ * upload status rather than dumping a large technical record into every screen.
+ */
 class ActivityList extends HTMLElement {
+    /**
+     * Creates a compact activity summary list controller.
+     */
     constructor() {
         super();
         this.capacity = 3;
         this.index = 0;
     }
+    /**
+     * Subscribes the list to activity lifecycle events when the component is attached.
+     */
     connectedCallback() {
         const self = this;
         this.abortController = new AbortController();
@@ -34,10 +46,20 @@ class ActivityList extends HTMLElement {
         xf.sub('activity:add', self.onAdd.bind(this), this.signal);
         xf.sub('db:activity', self.onRestore.bind(this), this.signal);
     }
+
+    /**
+     * Cleans up event subscriptions when the component is removed.
+     */
     disconnectedCallback() {
         this.abortController.abort();
         this.unsubs();
     }
+
+    /**
+     * Adds a newly created activity to the top of the list and expands it by default.
+     *
+     * @param {object} activity - The activity object just added to the in-memory store.
+     */
     onAdd(activity) {
         const self = this;
         self.insertAdjacentHTML("afterbegin", self.template(this.index, activity));
@@ -49,6 +71,12 @@ class ActivityList extends HTMLElement {
 
         this.index++;
     }
+
+    /**
+     * Re-renders activities restored from persisted storage.
+     *
+     * @param {object[]} activities - Stored activity records already loaded from the app.
+     */
     onRestore(activities) {
         const self = this;
         activities.forEach((a) => {

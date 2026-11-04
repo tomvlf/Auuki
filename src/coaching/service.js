@@ -28,7 +28,20 @@ const KEY = 'auuki-coaching-v1';
 const empty = () => ({version: VERSION, profile: null, goal: null, activities: [],
     snapshots: [], revisions: [], plan: null});
 
+/**
+ * Stores the athlete profile, training goal, imported activities, and generated plan.
+ *
+ * This service is the central coaching state container for Auuki. It keeps the rider's
+ * profile and plan together in one JSON object so the planner, activity importer, and UI
+ * can all read a single consistent state instead of separate fragmented stores.
+ */
 export class CoachingService {
+    /**
+     * Creates a coaching state manager bound to a storage implementation.
+     *
+     * @param {{getItem: Function, setItem: Function}} storage - Persistence layer for the coached athlete state.
+     * @param {Function} [clock=() => new Date().toISOString()] - Clock used to generate timestamps and local-day checks.
+     */
     constructor(storage, clock = () => new Date().toISOString()) {
         this.storage = storage;
         this.clock = clock;
@@ -39,6 +52,12 @@ export class CoachingService {
             throw new Error('Unsupported or corrupt coaching storage; export or repair it before continuing.');
         }
     }
+    /**
+     * Persists the next coaching state and swaps the runtime state only after a successful write.
+     *
+     * @param {object} next - The full coaching state object to store.
+     * @returns {Promise<object>} The just-saved and active state snapshot.
+     */
     async commit(next) {
         // A single atomic storage write: failure leaves the prior in-memory revision intact.
         if(this.saving) throw new Error('Another coaching update is saving; retry when it finishes.');
@@ -51,6 +70,13 @@ export class CoachingService {
             this.saving = false;
         }
     }
+    /**
+     * Saves the rider profile and dated goal and blocks invalid or mismatched athlete data.
+     *
+     * @param {object} profile - Athlete profile including FTP, availability, and limits.
+     * @param {object} goal - Active training goal with priority, date, and objectives.
+     * @returns {Promise<object>} Updated coaching state with the athlete configuration applied.
+     */
     async configure(profile, goal) {
         validateProfile(profile);
         if(this.data.plan?.status === 'active') throw new Error('Finish or archive the current plan before changing profile or goal.');
@@ -62,6 +88,14 @@ export class CoachingService {
         return this.commit({...this.data, activities, profile: JSON.parse(JSON.stringify(profile)),
             goal: JSON.parse(JSON.stringify(goal))});
     }
+    /**
+     * Captures a training-state snapshot at a specific date for planning and historical comparison.
+     *
+     * @param {object} data - Current coaching state.
+     * @param {string} asOf - Date string representing the snapshot date.
+     * @param {object|null} [outcome=null] - Optional workout completion outcome to fold into the state.
+     * @returns {object} Derived athlete state used to generate or adapt a plan.
+     */
     snapshot(data, asOf, outcome = null) {
         const outcomes = data.plan?.workouts.filter(w => w.status !== 'scheduled').map(w =>
             ({date: w.date, status: w.status, quality: w.completionQuality})) || [];
@@ -71,6 +105,12 @@ export class CoachingService {
         data.snapshots.push(state);
         return state;
     }
+    /**
+     * Creates a fresh training plan from the configured athlete and goal.
+     *
+     * @param {string} startDate - Plan start date in YYYY-MM-DD format.
+     * @returns {Promise<object>} The generated plan object.
+     */
     async generate(startDate) {
         const next = JSON.parse(JSON.stringify(this.data));
         if(!next.profile || !next.goal) throw new Error('Configure an athlete and dated goal first.');
@@ -81,6 +121,11 @@ export class CoachingService {
         next.revisions.push(JSON.parse(JSON.stringify(next.plan)));
         return (await this.commit(next)).plan;
     }
+    /**
+     * Marks the current active plan as archived so it stops being considered live.
+     *
+     * @returns {Promise<object>} Updated coaching state with the plan moved to archived status.
+     */
     async archive() {
         if(!this.data.plan) throw new Error('No plan to archive.');
         const next = JSON.parse(JSON.stringify(this.data));
@@ -88,6 +133,12 @@ export class CoachingService {
         next.revisions.push(JSON.parse(JSON.stringify(next.plan)));
         return this.commit(next);
     }
+    /**
+     * Imports raw provider activity data and normalizes it into Auuki's internal activity model.
+     *
+     * @param {Array<object>} rawActivities - Raw ride records from a provider like Intervals.icu.
+     * @returns {Promise<object>} Updated coaching state with the imported activities applied.
+     */
     async importActivities(rawActivities) {
         if(!Array.isArray(rawActivities)) throw new Error('Activity import must be a JSON array.');
         // Validate the entire batch before committing any of it.
@@ -127,6 +178,14 @@ export class CoachingService {
         }
         return this.commit(next);
     }
+    /**
+     * Applies a completed ride to the active plan and updates the plan adaptation state.
+     *
+     * @param {object} next - Coaching state being mutated.
+     * @param {object} activity - Normalized ride being applied.
+     * @param {string} asOf - Date when the ride was considered complete.
+     * @param {string|null} [explicitId=null] - Optional workout ID when the rider explicitly matches a workout.
+     */
     applyActivity(next, activity, asOf, explicitId = null) {
         if(activity.sport !== 'cycling' || activity.day > asOf || activity.day < next.plan.startDate) return;
         const match = matchWorkout(activity, next.plan.workouts, explicitId);
@@ -138,6 +197,13 @@ export class CoachingService {
             match: match.workoutId ? match : null});
         next.revisions.push(JSON.parse(JSON.stringify(next.plan)));
     }
+    /**
+     * Records a freshly created ride and tries to map it to the active coaching plan.
+     *
+     * @param {object} raw - Ride payload from the app or a provider.
+     * @param {string|null} [explicitId=null] - Optional explicit workout ID when the rider matched a planned session.
+     * @returns {Promise<object|null>} The active plan after the ride is recorded.
+     */
     async recordRide(raw, explicitId = null) {
         const existing = this.data.activities.find(a => a.id === String(raw.id));
         if(existing) {

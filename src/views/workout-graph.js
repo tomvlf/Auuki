@@ -23,6 +23,17 @@ import { g } from './graph.js';
 
 
 
+/**
+ * Converts a power value to a bar height in the workout graph.
+ *
+ * The graph is normalized against the session maximum so riders can see the intensity
+ * curve without needing to mentally interpret raw power values from a busy interval block.
+ *
+ * @param {number} power - Current power in watts.
+ * @param {number} powerMax - Maximum power used to define the visual scale.
+ * @param {{height: number}} viewPort - Rendering viewport dimensions.
+ * @returns {number} Bar height in pixels.
+ */
 function powerToHeight(power, powerMax, viewPort) {
     const height = translate(power, 0, powerMax, 0, viewPort.height * 0.90);
     // console.log(`${viewPort.height} -> ${height}`);
