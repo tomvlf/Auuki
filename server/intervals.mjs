@@ -107,6 +107,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     let stopped = false;
     const connecting = new Map();
 
+    /**
+     * Encrypts a plaintext API key with a server-managed AES-256-GCM key.
+     *
+     * The user ID is used as associated data so every account's stored key is bound
+     * to that rider's integration record rather than a global bucket.
+     *
+     * @param {string} value - Plaintext Intervals.icu API key.
+     * @param {number|string} id - Account ID used as the encryption AAD value.
+     * @returns {string} Base64-encoded ciphertext plus authentication tag and nonce.
+     */
     function encrypt(value, id) {
         const nonce = randomBytes(12);
         const cipher = createCipheriv('aes-256-gcm', key, nonce);
@@ -114,6 +124,13 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
         return Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString('base64');
     }
+    /**
+     * Decrypts a stored Intervals.icu API key for the given account.
+     *
+     * @param {string} value - Base64-encoded encrypted credential.
+     * @param {number|string} id - Account ID that originally encrypted the value.
+     * @returns {string} Decrypted API key.
+     */
     function decrypt(value, id) {
         try {
             const bytes = Buffer.from(value, 'base64');
@@ -125,6 +142,14 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             throw new IntegrationError('Stored Intervals.icu credentials cannot be decrypted. Restore the server encryption key or reconnect in Settings.', 503);
         }
     }
+    /**
+     * Returns the current connection state for a user account.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {{configured: boolean, connected: boolean, status: string, athleteId: string|null,
+     *   oldest: string|null, nextDate: string|null, through: string|null, lastSuccess: string|null,
+     *   error: string|null, retryAt: string|null}} The persisted integration state.
+     */
     function status(id) {
         const current = row(id);
         return {configured: Boolean(key), connected: Boolean(current),
@@ -133,9 +158,24 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             through: current?.newest ?? null, lastSuccess: current?.last_success ?? null,
             error: current?.error ?? null, retryAt: current?.retry_at ? new Date(current.retry_at).toISOString() : null};
     }
+    /**
+     * Builds the athlete-specific Intervals API endpoint used for all provider calls.
+     *
+     * @param {string} [athleteId='0'] - Athlete number to call; defaults to the root account endpoint.
+     * @returns {string} URL for the athlete resource.
+     */
     function athleteEndpoint(athleteId = '0') {
         return `${API}/athlete/${encodeURIComponent(String(athleteId))}`;
     }
+    /**
+     * Executes a provider request against Intervals.icu with the rider's API key.
+     *
+     * @param {string} apiKey - Intervals.icu API key for the current user.
+     * @param {string} path - API path relative to the athlete endpoint.
+     * @param {{query?: Record<string,string|number|boolean>, body?: BodyInit, method?: string,
+     *   athleteId?: string}} [options] - Request customisation.
+     * @returns {Promise<any>} Parsed JSON response body.
+     */
     async function remote(apiKey, path, {query, body, method = 'GET', athleteId = '0'} = {}) {
         let response;
         try {
@@ -163,21 +203,50 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         catch { throw new IntegrationError('Intervals.icu returned an invalid response.', 502); }
         return result;
     }
+    /**
+     * Downloads a bounded activity range for a rider and athlete combination.
+     *
+     * @param {string} apiKey - API key for the rider.
+     * @param {string} oldest - Start date in ISO YYYY-MM-DD format.
+     * @param {string} newest - End date in ISO YYYY-MM-DD format.
+     * @param {string} [athleteId='0'] - Athlete number used for the API call.
+     * @returns {Promise<Array<object>>} Raw activities from Intervals.icu.
+     */
     async function download(apiKey, oldest, newest, athleteId = '0') {
         const activities = await remote(apiKey, '/activities', {query: {oldest, newest}, athleteId});
         if(!Array.isArray(activities)) throw new IntegrationError('Intervals.icu returned an unexpected activity list.', 502);
         return activities;
     }
+    /**
+     * Returns the decrypted API key for a connected user account.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {string} Decrypted credential stored in the SQLite integration row.
+     */
     function credential(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu in Settings > Integrations first.');
         return decrypt(current.credential, id);
     }
+    /**
+     * Reads the configured athlete profile from Intervals.icu.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {Promise<object>} Raw athlete profile from the provider.
+     */
     async function athlete(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu in Settings > Integrations first.');
         return remote(credential(id), '', {athleteId: current.athlete_id || '0'});
     }
+    /**
+     * Fetches planned workouts in a bounded date window for the rider's athlete.
+     *
+     * @param {number|string} id - User account identifier.
+     * @param {string} oldest - Start date of the workout window.
+     * @param {string} newest - End date of the workout window.
+     * @returns {Promise<Array<object>>} Raw Intervals.icu workout events.
+     */
     async function events(id, oldest, newest) {
         try { date(oldest); date(newest); } catch { throw new IntegrationError('Choose valid calendar dates.'); }
         if(oldest > newest || newest > addDays(oldest, 62)) throw new IntegrationError('Request at most 63 days of planned workouts.');
@@ -187,6 +256,13 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         if(!Array.isArray(result)) throw new IntegrationError('Intervals.icu returned an unexpected event list.', 502);
         return result;
     }
+    /**
+     * Uploads a FIT file to the rider's athlete account.
+     *
+     * @param {number|string} id - User account identifier.
+     * @param {{file: string, id: string, name: string}} body - FIT payload and metadata.
+     * @returns {Promise<{success: boolean}>} Empty success payload on upload.
+     */
     async function upload(id, body) {
         if(typeof body.file !== 'string' || body.file.length > 24 * 1024 * 1024 ||
            !/^[A-Za-z0-9+/]+={0,2}$/.test(body.file) || typeof body.id !== 'string' ||
@@ -205,6 +281,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             query: {name: body.name, external_id: `auuki:${body.id}`}, athleteId});
         return {success: true};
     }
+    /**
+     * Connects a rider to Intervals.icu and stores their encrypted API key and athlete ID.
+     *
+     * The request must validate the API key, resolve the athlete profile, and persist a
+     * matching athlete number so future imports stay tied to the correct account.
+     *
+     * @param {number|string} id - User account identifier.
+     * @param {{apiKey: string, oldest: string}} body - Connection payload including API key and history start date.
+     * @returns {Promise<object>} The persisted connection state.
+     */
     async function connect(id, body) {
         if(!key) throw new IntegrationError('The operator must configure AUUKI_INTEGRATION_KEY before connecting.', 503);
         if(typeof body.apiKey !== 'string' || !body.apiKey.trim() || body.apiKey.length > 1024) {
@@ -244,17 +330,39 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             if(connecting.get(id) === operation) connecting.delete(id);
         }
     }
+    /**
+     * Validates an existing connection by downloading the current day's activities.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {Promise<{success: boolean}>} Success signal when the saved credential still works.
+     */
     async function test(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu first.');
         await download(decrypt(current.credential, id), nowDay(), nowDay(), current.athlete_id || '0');
         return {success: true};
     }
+    /**
+     * Removes the saved Intervals connection for a user account.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {{configured: boolean, connected: boolean, status: string, athleteId: string|null,
+     *   oldest: string|null, nextDate: string|null, through: string|null, lastSuccess: string|null,
+     *   error: string|null, retryAt: string|null}} Reset state after disconnect.
+     */
     function disconnect(id) {
         connecting.delete(id);
         db.prepare('DELETE FROM integrations WHERE user_id = ?').run(id);
         return status(id);
     }
+    /**
+     * Schedules a new import batch for the user's configured athlete.
+     *
+     * @param {number|string} id - User account identifier.
+     * @returns {{configured: boolean, connected: boolean, status: string, athleteId: string|null,
+     *   oldest: string|null, nextDate: string|null, through: string|null, lastSuccess: string|null,
+     *   error: string|null, retryAt: string|null}} The queued status after scheduling.
+     */
     function sync(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu first.');
@@ -265,6 +373,14 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             attempts=0, retry_at=0 WHERE user_id=?`).run(cursor, nowDay(), id);
         return status(id);
     }
+    /**
+     * Runs one queued import cycle and persists progress back to the account row.
+     *
+     * The worker is intentionally serialized so stale batches cannot overwrite newer
+     * connection state after a user reconnects or disconnects.
+     *
+     * @returns {Promise<void>} Resolves when the current queue item is processed or explicitly skipped.
+     */
     async function tick() {
         if(active || stopped || !key) return;
         const current = db.prepare(`SELECT * FROM integrations WHERE status='queued' AND retry_at <= ? ORDER BY retry_at, user_id LIMIT 1`).get(clock());
