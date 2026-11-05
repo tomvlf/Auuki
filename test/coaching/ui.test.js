@@ -101,3 +101,12 @@ test('coaching forms create a persistent plan that appears and adapts in the exi
         calendar.remove();
     }
 });
+
+test('goal date follows the chosen time frame unless an event date is entered', () => {
+    const values = entries => ({get: key => entries[key] ?? ''});
+    const panel = new CoachingPanel();
+    const base = {start: '2026-01-01', name: 'Goal', type: 'general_fitness', priority: 'A', horizon: '182'};
+    expect(panel.goalFrom(values(base)).date).toBe('2026-07-02');
+    expect(panel.goalFrom(values({...base, date: '2026-03-01'})).date).toBe('2026-03-01');
+    expect(() => panel.goalFrom(values({...base, date: '2025-12-01'}))).toThrow('after the plan start');
+});

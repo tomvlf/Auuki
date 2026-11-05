@@ -350,7 +350,7 @@ export async function launchPlatform(root, account) {
                         : route === 'devices' ? `<p class="muted">Select your trainer and sensors below, then choose which device supplies each measurement.
                             Connections and controls use the existing BLE / ANT+ engine.</p>
                             ${!navigator.bluetooth ? '<p role="alert">Web Bluetooth is unavailable in this browser. Use Chrome/Edge on a supported platform and HTTPS or localhost. ANT+ requires Web Serial or WebUSB.</p>' : ''}`
-                            : route === 'coach' ? `<p class="muted">Your ${authenticated ? 'private server' : 'on-device'} Coach uses your normalized activity history. Configure your profile and dated goal below.</p>` : '';
+                            : route === 'coach' ? `<p class="muted">Your ${authenticated ? 'private' : 'on-device'} Coach plans around your goal, schedule and ride history.</p>` : '';
         if(route === 'player') updateRide();
     }
     function navigate() {

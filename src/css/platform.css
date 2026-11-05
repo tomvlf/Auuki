@@ -188,13 +188,67 @@ body[data-route="editor"] #workouts-page, body[data-route="devices"] #settings-p
 body[data-route="coach"] #view--workouts-calendar, body[data-route="calendar"] #view--workouts-calendar,
 body[data-route="editor"] #view--workouts-editor, body[data-route="devices"] #view--settings-settings { display: block !important; }
 body[data-route="coach"] training-calendar, body[data-route="calendar"] coaching-panel { display: none !important; }
-#legacy-slot coaching-panel { display: block; padding: 28px; border: 1px solid var(--platform-border); border-radius: 16px; background: var(--platform-panel); }
-#legacy-slot coaching-panel input, #legacy-slot coaching-panel textarea { color: #eef4fa; }
-#legacy-slot coaching-panel form { max-width: 700px; }
-.availability { border: 1px solid var(--platform-border); border-radius: 12px; padding: 18px; margin: 20px 0; }
-.availability legend { color: var(--platform-accent); padding: 0 8px; }
-.availability-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; }
-#legacy-slot .availability input { width: 100%; }
+#legacy-slot coaching-panel { display: block; max-width: 1000px; margin: 0; font-size: 15px; line-height: 1.6; }
+#legacy-slot coaching-panel input, #legacy-slot coaching-panel textarea, #legacy-slot coaching-panel select { color: #eef4fa; }
+#legacy-slot coaching-panel form, #legacy-slot coaching-panel label { display: block; gap: 0; }
+#legacy-slot coaching-panel h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; font-size: 18px; }
+#legacy-slot coaching-panel h4 { margin: 18px 0 6px; font-size: 14px; color: var(--platform-muted); }
+#legacy-slot coaching-panel ul, #legacy-slot coaching-panel ol { padding-left: 20px; }
+#legacy-slot coaching-panel label small { display: block; margin-top: 4px; font-weight: 400; }
+.coach-intro, .coach-step, .coach-card, .coach-hero { padding: 24px 28px; margin-bottom: 20px; border: 1px solid var(--platform-border); border-radius: 16px; background: var(--platform-panel); min-width: 0; }
+.coach-intro { background: linear-gradient(135deg, #213e3b, #172834 70%); }
+#platform .coach-intro h2, #platform .coach-hero h2 { font-size: 24px; margin: 0 0 6px; }
+#platform .coach-intro p { margin: 6px 0; max-width: 700px; }
+.coach-step-number { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--platform-accent); color: #10251e; font-size: 15px; font-weight: 800; }
+.coach-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 20px; }
+#platform .coach-fields label { margin: 12px 0; }
+.coach-checklist { list-style: none; padding: 0 !important; margin: 0 0 8px; display: grid; gap: 6px; }
+.coach-checklist li::before { display: inline-block; width: 24px; font-weight: 800; }
+.coach-checklist li.ok::before { content: "✓"; color: var(--platform-accent); }
+.coach-checklist li.warn::before { content: "!"; color: #ffcb6b; }
+.coach-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin: 14px 0 8px; }
+.coach-day { padding: 10px; border: 1px solid var(--platform-border); border-radius: 10px; background: #121c27; }
+#platform .coach-day label { margin: 0; text-align: center; }
+#platform .coach-day input, #platform .coach-day select { padding: 8px; text-align: center; font-size: 14px; }
+#platform .coach-day select { margin-top: 6px; font-size: 12px; min-height: 36px; }
+.coach-submit { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 18px; }
+#platform .coach-submit button[value="generate"] { font-size: 17px; padding: 12px 28px; }
+#platform .coach-submit p { margin: 0; flex: 1 1 250px; }
+.coach-alert, .coach-notice, .coach-callout { padding: 14px 20px; border-radius: 10px; margin: 0 0 20px !important; }
+.coach-alert { background: #4a2d32; border: 1px solid #a35b64; }
+.coach-notice { background: #213b3a; border: 1px solid #3b6962; }
+.coach-callout { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: #3d3622; border: 1px solid #8a7440; }
+#platform .coach-callout p { margin: 0; flex: 1 1 300px; }
+.coach-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 24px; background: linear-gradient(135deg, #213e3b, #172834 70%); }
+#platform .coach-hero p { margin: 0; }
+.coach-stats { display: flex; gap: 28px; text-align: center; }
+.coach-stats strong { display: block; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.coach-stats span { color: var(--platform-muted); font-size: 12px; }
+.coach-progress { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: #0e1925; overflow: hidden; }
+.coach-progress i { display: block; height: 100%; background: var(--platform-accent); }
+.coach-phase { grid-column: 1 / -1; color: var(--platform-muted); font-size: 13px; }
+.coach-badge { display: inline-block; margin-right: 6px; padding: 2px 10px; border-radius: 99px; background: #213831; color: var(--platform-accent); font-weight: 700; }
+.coach-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.coach-grid > .coach-card { margin-bottom: 20px; }
+#platform .coach-card p { margin: 6px 0 12px; }
+.coach-next-date { color: var(--platform-accent); font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: .08em; }
+#platform .coach-next-title { margin: 0; font-size: 22px; font-weight: 700; }
+.coach-upcoming { list-style: none; padding: 0 !important; margin: 0 0 12px; }
+.coach-upcoming li { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; padding: 8px 0; border-top: 1px solid var(--platform-border); }
+.coach-upcoming li:first-child { border-top: 0; }
+.coach-upcoming li > span:first-child { color: var(--platform-muted); font-size: 13px; }
+.coach-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+#platform .coach-actions p { margin: 8px 0 0; }
+#platform .coach-actions button + button { margin-left: 8px; }
+#legacy-slot coaching-panel details.coach-card > summary { font-weight: 650; font-size: 16px; padding: 0; min-height: 0; }
+#legacy-slot coaching-panel details.coach-card[open] > summary { margin-bottom: 10px; }
+#legacy-slot coaching-panel details.coach-card { margin: 0 0 20px; }
+#legacy-slot coaching-panel details.coach-card > form + button, #legacy-slot coaching-panel details.coach-card form button { margin-top: 10px; }
+#platform .coach-disclaimer { color: var(--platform-muted); font-size: 12px; text-align: center; }
+@media (max-width: 900px) {
+    .coach-days { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
+    .coach-grid, .coach-hero { grid-template-columns: minmax(0, 1fr); }
+}
 #legacy-slot details { margin: 16px 0; }
 #legacy-slot summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
 #legacy-slot button { min-height: 44px; }

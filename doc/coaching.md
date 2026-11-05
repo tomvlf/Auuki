@@ -12,26 +12,40 @@ the [backend guide](backend.md) for storage, recovery and integration details.
 
 ## Using the coach
 
-1. Set FTP, body mass and units in the existing application profile.
-2. Save availability and a dated goal in **Coach**. Set a session limit in
-   minutes for each available weekday, and zero for rest days.
-3. Connect **Settings > Intervals.icu** or import ride history using the JSON
-   form, then generate a plan. The existing
-   Athlima activity summaries seed the history automatically; they contain only
-   duration, and the application's existing FIT cache retains only seven rides.
-   Import a longer history for better-informed targets.
-4. Start generated sessions from the calendar, or export individual ZWO files.
+**Coach** guides you through four numbered steps:
+
+1. **Check your rider profile.** FTP and body weight come from **Settings**;
+   body weight is required, and without FTP sessions use effort (RPE) guidance.
+2. **What are you training for?** Goal name, type, priority and a time frame
+   (about 6 weeks, 3 months, 6 months or a year). Event details such as an exact
+   event date, distance, climbing and targets are optional; an event date
+   replaces the time frame.
+3. **When can you ride?** The longest ride per weekday in minutes (0 for rest
+   days), an indoor/outdoor preference per day, a long-ride day, weekly hours
+   and experience.
+4. **Create your plan.** Recorded Athlima rides are included automatically; for
+   better targets connect **Settings > Intervals.icu** first, or import rides
+   later under **Ride history and backup**. The existing Athlima activity
+   summaries contain only duration, and the FIT cache retains only seven rides.
+   **More options** holds the start date, time zone, heart-rate values and
+   equipment.
+
+Once a plan is active, Coach shows the goal countdown, current phase, next
+session and upcoming sessions, plus post-ride feedback, plan adjustments and a
+**Why this plan?** explanation. Day to day:
+
+- Start generated sessions from the calendar, or export individual ZWO files.
    Day preferences, purpose, expected RPE and the reason for each session are
    recorded. ZWO powers are fractions of FTP, not absolute watts.
    In-app Start is available only for today's unresolved sessions in the active
    plan; future/archived sessions cannot accidentally be executed as today's
    prescription. Without FTP, follow the duration/RPE guidance instead of
    executing power targets.
-5. Recorded Athlima rides update the coach automatically. Imported rides can match
+- Recorded Athlima rides update the coach automatically. Imported rides can match
    sessions too. Confirm a duration-only ride with **Use substitute**; duration
    alone is intentionally insufficient for automatic matching.
-6. Submit post-ride feedback, mark unsuccessful sessions **Not completed**, mark
-   missed sessions, or request easier training. Overdue sessions are reviewed
+- Submit post-ride feedback, mark unsuccessful sessions **Not completed**, mark
+   missed sessions, or choose **Make upcoming training easier**. Overdue sessions are reviewed
    when the app opens, after a recording, or with **Review missed sessions**.
    The server's Intervals.icu import worker can continue while the browser is closed.
 

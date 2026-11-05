@@ -107,7 +107,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(document.querySelector('.wrapper').hidden).toBe(false);
     expect(calendar.loadPlannedMonth).toHaveBeenCalled();
     await go('coach');
-    expect(root.textContent).toContain('normalized activity history');
+    expect(root.textContent).toContain('private Coach');
     await go('devices');
     expect(root.textContent).toContain('BLE / ANT+ engine');
     await go('editor');
