@@ -36,7 +36,21 @@ session and upcoming sessions, plus post-ride feedback, plan adjustments and a
 progress towards the goal and the next session, a colour-coded phase timeline
 with a plain-language legend, and the plan week by week (this week open, the next
 four weeks listed, earlier and later weeks folded away). Recent plan changes and
-the technical planning rationale are kept in collapsed sections. Day to day:
+the technical planning rationale are kept in collapsed sections.
+
+Sessions come from the built-in workout library where possible. For every day
+the Coach decides what kind of session is needed (endurance, long ride,
+recovery, threshold or VO2 max), its length and its level, and then picks the
+library workout that fits best, preferring variety over repeating the same
+workout. It adapts the workout to the slot: early in the plan only part of the
+interval set is kept, easy riding is shortened or extra endurance riding is
+added, and time above threshold stays within safe limits. These adjustments are
+listed under the session ("Adjusted for you: …"). When the plan is adjusted later
+(missed sessions, fatigue), the same library workout is kept but made shorter or
+easier where possible. Library workouts with free-ride sections, targets the
+Coach cannot follow (above 150% FTP), tests and technique drills are never
+prescribed. When nothing fits, for example sprint sessions or very short slots,
+the Coach builds a simple session itself. Day to day:
 
 - Start generated sessions from the calendar, or export individual ZWO files.
    Day preferences, purpose, expected RPE and the reason for each session are

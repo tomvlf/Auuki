@@ -45,6 +45,8 @@ const hours = seconds => {
     const h = Math.floor(total / 60), m = total % 60;
     return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
 };
+const sessionName = workout => workout.libraryName || FAMILY_LABELS[workout.family] || workout.title;
+const sessionKind = workout => workout.libraryName && FAMILY_LABELS[workout.family] ? `${FAMILY_LABELS[workout.family]} &middot; ` : '';
 const badge = (text, kind = '') => `<span class="plan-chip ${kind}">${escape(text)}</span>`;
 
 function sessionRow(workout, day) {
@@ -55,11 +57,12 @@ function sessionRow(workout, day) {
     return `<li class="plan-session ${isToday ? 'today' : ''} ${isDone(workout) ? 'is-done' : ''}">
         <div class="plan-session-day"><strong>${isToday ? 'Today' : escape(dateLabel(workout.date, {weekday: 'short'}))}</strong>
             <span>${escape(dateLabel(workout.date, {day: 'numeric', month: 'short'}))}</span></div>
-        <div class="plan-session-body"><strong>${escape(FAMILY_LABELS[workout.family] || workout.title)}</strong>
-            <span>${hours(workout.duration)} &middot; ${hard ? 'Hard effort' : 'Easy effort'}${workout.expectedRpe ? ` &middot; RPE ${workout.expectedRpe}/10` : ''}</span></div>
+        <div class="plan-session-body"><strong>${escape(sessionName(workout))}</strong>
+            <span>${sessionKind(workout)}${hours(workout.duration)} &middot; ${hard ? 'Hard effort' : 'Easy effort'}${workout.expectedRpe ? ` &middot; RPE ${workout.expectedRpe}/10` : ''}</span>
+            ${workout.libraryAdjustments?.length ? `<span class="plan-session-note">Adjusted for you: ${escape(workout.libraryAdjustments.join(', '))}</span>` : ''}</div>
         <div class="plan-session-status">${overdue ? badge('Not yet logged', 'missed') : workout.status !== 'scheduled' ? badge(status, kind) : ''}${hard ? badge('Key session', 'hard') : ''}</div>
         <a class="button ${isToday && workout.status === 'scheduled' ? '' : 'secondary'}" href="#/workout/${encodeURIComponent(workout.id)}"
-            aria-label="${isToday ? 'Ride' : 'View'} ${escape(FAMILY_LABELS[workout.family] || workout.title)} on ${escape(dateLabel(workout.date))}">${isToday && workout.status === 'scheduled' ? 'Ride' : 'View'}</a>
+            aria-label="${isToday ? 'Ride' : 'View'} ${escape(sessionName(workout))} on ${escape(dateLabel(workout.date))}">${isToday && workout.status === 'scheduled' ? 'Ride' : 'View'}</a>
     </li>`;
 }
 
@@ -147,7 +150,7 @@ export function renderPlan(data, day) {
             ${phase ? `<p class="plan-phase-now">Now: ${badge(phaseName(phase.type), `phase-${escape(phase.type)}`)} ${escape(PHASES[phase.type]?.[1] || '')}
                 <span class="muted">Until ${escape(dateLabel(phase.endDate))}.</span></p>` : ''}
             ${next && !archived ? `<div class="plan-next"><div><span class="eyebrow">${next.date === day ? 'Today' : 'Next session'}</span>
-                <strong>${escape(FAMILY_LABELS[next.family] || next.title)} &middot; ${hours(next.duration)}</strong>
+                <strong>${escape(sessionName(next))} &middot; ${hours(next.duration)}</strong>
                 <span class="muted">${escape(dateLabel(next.date, {weekday: 'long', day: 'numeric', month: 'long'}))}</span></div>
                 <a class="button" href="#/workout/${encodeURIComponent(next.id)}">${next.date === day ? 'Prepare to ride' : 'View session'}</a></div>` : ''}
         </section>

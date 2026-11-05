@@ -299,6 +299,7 @@ body[data-route="coach"] training-calendar, body[data-route="calendar"] coaching
 .plan-session.is-done .plan-session-body strong { color: var(--platform-muted); }
 .plan-session-day, .plan-session-body { display: grid; gap: 1px; }
 .plan-session-day span, .plan-session-body span { color: var(--platform-muted); font-size: 12px; }
+.plan-session-body .plan-session-note { color: var(--platform-text, inherit); font-style: italic; }
 .plan-session-status { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 #platform .plan-session .button { min-height: 36px; padding: 6px 16px; }
 .plan-past { margin-top: 22px; }

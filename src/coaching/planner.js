@@ -20,6 +20,7 @@ import { DEFAULTS, VERSION, GOALS, addDays, daysBetween, weekday, sum, round,
     validateProfile, validateGoal } from './domain.js';
 import { modelGoalDemand, analyzeGaps } from './demands.js';
 import { progressWorkout, FAMILIES, stepLoad } from './workouts.js';
+import { prescribeWorkout } from './library.js';
 import { explainPhase, explainWeek } from './explanations.js';
 
 /**
@@ -171,12 +172,19 @@ export function scheduleWorkouts(weeks, phases, profile, state, gaps, planId) {
             const family = phase.type === 'recovery' || phase.type === 'taper' || state.readiness.status === 'caution'
                 ? 'recovery' : canHard ? focus : weekday(day) === profile.longRideDay ? 'durability' : 'endurance';
             const level = Math.min(5, 1 + Math.floor(workouts.filter(w => w.family === family).length / 3));
-            let workout = progressWorkout({id: `${planId}:${day}`, date: day, minutes, family, level,
-                phaseId: phase.id, weekId: week.id, phaseType: phase.type, profile});
-            // First reduce intensity, then duration; never force the target into an unavailable day.
+            const slot = {id: `${planId}:${day}`, date: day, minutes, family, level,
+                phaseId: phase.id, weekId: week.id, phaseType: phase.type, profile};
+            let workout = prescribeWorkout(slot, {history: workouts});
+            // First use a lighter version of the same session, then reduce intensity, then duration;
+            // never force the target into an unavailable day.
+            if(weekLoad + workout.targetLoad > loadBudget && workout.libraryWorkoutId) {
+                workout = progressWorkout(slot);
+            }
             if(weekLoad + workout.targetLoad > loadBudget) {
-                workout = progressWorkout({id: workout.id, date: day, minutes, family: 'recovery',
-                    phaseId: phase.id, weekId: week.id, phaseType: phase.type, profile});
+                workout = prescribeWorkout({...slot, family: 'recovery', level: 1}, {history: workouts});
+            }
+            if(weekLoad + workout.targetLoad > loadBudget && workout.libraryWorkoutId) {
+                workout = progressWorkout({...slot, family: 'recovery', level: 1});
             }
             if(weekLoad + workout.targetLoad > loadBudget) {
                 const fitMinutes = Math.floor((loadBudget - weekLoad) / (0.5 ** 2 * 100) * 60);

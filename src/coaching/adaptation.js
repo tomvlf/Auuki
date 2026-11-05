@@ -18,6 +18,7 @@
 
 import { VERSION, sum, round } from './domain.js';
 import { progressWorkout } from './workouts.js';
+import { prescribeWorkout } from './library.js';
 import { validatePlan } from './planner.js';
 import { explainAdaptation } from './explanations.js';
 
@@ -107,11 +108,17 @@ export function adaptPlan({plan, profile, state, trigger, date, timestamp, worko
                 changes.push({id: workout.id, action: 'removed', previous, current: null});
                 continue;
             }
-            const modified = progressWorkout({
+            const slot = {
                 id: workout.id, date: workout.date, minutes: fitMinutes, family,
                 level: forceEasy ? 1 : workout.progressionLevel, phaseId: workout.phaseId,
                 weekId: workout.weekId, phaseType: week.phaseType, profile,
+            };
+            // Keep the planned library workout and shorten it rather than swapping the session.
+            const unchanged = fitMinutes * 60 === workout.duration && family === workout.family;
+            let modified = unchanged ? {...workout} : prescribeWorkout(slot, {
+                history: next.workouts.filter(w => w.date < workout.date), prefer: workout.libraryWorkoutId,
             });
+            if(usedLoad + modified.targetLoad > loadCap + 0.01 && modified.libraryWorkoutId) modified = progressWorkout(slot);
             // Same interval family can have a slightly larger relative dose in a shorter session.
             if(usedLoad + modified.targetLoad > loadCap + 0.01) {
                 modified.family = 'recovery';

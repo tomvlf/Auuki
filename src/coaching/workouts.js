@@ -37,11 +37,45 @@ export function stepLoad(steps) {
     return sum(steps.map(s => s.duration)) / 3600 * expectedIntensity ** 2 * 100;
 }
 
-export function progressWorkout({id, date, minutes, family, level = 1, phaseId, weekId, phaseType, profile}) {
-    const spec = FAMILIES[family];
-    if(!spec || !Number.isInteger(minutes) || minutes < 10 || !Number.isInteger(level) || level < 1 || level > 5) {
+function validateSlot({minutes, family, level = 1}) {
+    if(!FAMILIES[family] || !Number.isInteger(minutes) || minutes < 10 || !Number.isInteger(level) || level < 1 || level > 5) {
         throw new Error('Invalid workout family, duration or progression level.');
     }
+}
+
+/**
+ * Wraps prescribed steps in the planner's workout record.
+ *
+ * @param {object} args - Slot fields plus `steps`, and optionally `title`, `description` and `library`.
+ * @returns {object} A scheduled coaching workout.
+ */
+export function buildWorkout({id, date, family, steps, level = 1, phaseId, weekId, phaseType, profile, title, description, library = null}) {
+    const spec = FAMILIES[family];
+    const seconds = sum(steps.map(s => s.duration));
+    const reason = explainWorkout(family, phaseType, level);
+    return {
+        id, externalId: id, date, family, type: spec.hard ? 'intervals' : 'steady',
+        title: title || `${family[0].toUpperCase()}${family.slice(1)} ${Math.round(seconds / 60)} min`,
+        description: description || reason, reason,
+        purpose: family, duration: seconds, targetLoad: round(stepLoad(steps)),
+        targetIntensity: Math.sqrt(stepLoad(steps) / (seconds / 3600 * 100)),
+        steps, suitability: ['indoor', 'outdoor'],
+        environment: profile.dayPreferences?.[new Date(`${date}T00:00:00Z`).getUTCDay()] || 'either',
+        priority: spec.hard || family === 'durability' ? 'high' : 'normal',
+        required: spec.hard || family === 'durability',
+        phaseId, weekId, progressionLevel: level, expectedRpe: spec.rpe,
+        libraryWorkoutId: library?.id ?? null, libraryName: library?.name ?? null,
+        libraryAdjustments: library?.adjustments ?? [],
+        status: 'scheduled', matchedActivity: null, matchConfidence: null, completionQuality: null,
+        adaptationNotes: [], plannerVersion: VERSION,
+    };
+}
+
+export function progressWorkout(args) {
+    validateSlot(args);
+    const {minutes, level = 1} = args;
+    let {family} = args;
+    const spec = FAMILIES[family];
     const seconds = minutes * 60;
     let steps;
     if(spec.hard && minutes >= 25) {
@@ -60,27 +94,13 @@ export function progressWorkout({id, date, minutes, family, level = 1, phaseId, 
         family = spec.hard ? 'endurance' : family;
         steps = [{duration: seconds, power: FAMILIES[family].power}];
     }
-    const actualSpec = FAMILIES[family];
-    const title = `${family[0].toUpperCase()}${family.slice(1)} ${minutes} min`;
-    return {
-        id, externalId: id, date, family, type: actualSpec.hard ? 'intervals' : 'steady',
-        title, description: explainWorkout(family, phaseType, level),
-        purpose: family, duration: seconds, targetLoad: round(stepLoad(steps)),
-        targetIntensity: Math.sqrt(stepLoad(steps) / (seconds / 3600 * 100)),
-        steps, suitability: ['indoor', 'outdoor'],
-        environment: profile.dayPreferences?.[new Date(`${date}T00:00:00Z`).getUTCDay()] || 'either',
-        priority: actualSpec.hard || family === 'durability' ? 'high' : 'normal',
-        required: actualSpec.hard || family === 'durability',
-        phaseId, weekId, progressionLevel: level, expectedRpe: actualSpec.rpe,
-        status: 'scheduled', matchedActivity: null, matchConfidence: null, completionQuality: null,
-        adaptationNotes: [], plannerVersion: VERSION,
-    };
+    return buildWorkout({...args, family, steps});
 }
 
 export function toAppWorkout(workout) {
     return {
         id: workout.id, coachingWorkoutId: workout.id,
-        meta: {name: workout.title, description: workout.description, author: 'Athlima deterministic coach',
+        meta: {name: workout.title, description: workout.description, author: workout.libraryName ? 'Athlima workout library, adjusted by the Coach' : 'Athlima deterministic coach',
             category: workout.family, startDateLocal: workout.date, duration: workout.duration},
         intervals: workout.steps.map(step => ({duration: step.duration, steps: [{...step}]})),
     };
