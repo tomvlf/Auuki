@@ -227,6 +227,10 @@ export function createApp({database = 'athlima.sqlite', origin = 'http://localho
         if(path === '/api/server/integrations/intervals/athlete' && request.method === 'GET') {
             return send(200, await intervals.athlete(account.id));
         }
+        if(path === '/api/server/integrations/intervals/activity-data' && request.method === 'GET') {
+            const params = new URL(request.url, origin).searchParams;
+            return send(200, await intervals.activityData(account.id, params.get('activityId')));
+        }
         if(path === '/api/server/integrations/intervals/events' && request.method === 'GET') {
             const params = new URL(request.url, origin).searchParams;
             return send(200, await intervals.events(account.id, params.get('oldest'), params.get('newest')));

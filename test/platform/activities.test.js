@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 
 import {
-    activityLists, historyActivityRow, localActivityRow, renderActivityOverview, summarizeActivityPeriods,
+    activityLists, historyActivityRow, localActivityRow, renderActivityOverview,
+    renderActivityStreamData, summarizeActivityPeriods,
 } from '../../src/platform/activities.js';
 
 const ride = (id, day, overrides = {}) => ({
@@ -188,4 +189,26 @@ test('includes every sport in totals and shows type icons and all imported metri
     expect(value('Pace')).toBe('5:00 /km');
     expect(value('Heart-rate zones')).toBe('Z1 10:00 · Z2 20:00');
     expect(value('Gear')).toBe('Trail shoes');
+});
+
+test('offers on-demand route and renders full-resolution stream previews', () => {
+    const activity = ride('intervals:i123', '2026-03-01', {
+        source: 'intervals', externalId: 'i123',
+    });
+    const row = document.createElement('table');
+    row.innerHTML = `<tbody>${historyActivityRow(activity, null, true)}</tbody>`;
+    expect(row.querySelector('[data-load-activity]').dataset.loadActivity).toBe('i123');
+    expect(row.querySelector('.activity-stream-panel').hidden).toBe(true);
+
+    const root = document.createElement('div');
+    root.innerHTML = renderActivityStreamData({
+        streams: {watts: [100, 200, null, 300], heartrate: [120, 130, 140, 150],
+            cadence: [80, 82, 84, 86]},
+        map: {latlngs: [[52.1, 5.1], [52.2, 5.2], [52.15, 5.3]]},
+    });
+    expect(root.querySelector('.activity-route path').getAttribute('d')).toMatch(/^M /);
+    expect(root.querySelectorAll('.activity-stream-chart')).toHaveLength(3);
+    expect(root.textContent).toContain('4 samples');
+    expect(root.querySelector('[data-download-activity-csv]')).not.toBeNull();
+    expect(renderActivityStreamData({streams: {}, map: null})).toContain('No route is available');
 });

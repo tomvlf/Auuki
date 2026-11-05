@@ -55,6 +55,10 @@ Only cycling activities feed the coach's fitness, fatigue and plan adaptation; o
 
 This is designed to be resumable. If the app restarts or the sync is interrupted, the process continues from the saved cursor instead of starting over from the beginning.
 
+### On-demand activity data
+
+For an imported Intervals.icu activity, choose **Route & data** in Activity history to fetch its full-resolution power, heart-rate and cadence streams, plus route geometry. Athlima requests these from the authenticated server only when opened; it keeps the full arrays in browser memory for that session and offers a CSV download. The server does not persist the large stream or route payloads. Intervals.icu may not provide streams or route data for some activities, including some third-party synced or indoor activities.
+
 ### 4. Sync worker
 
 The `tick()` function is the background importer. It runs when the server decides there is a queued job.
@@ -93,6 +97,8 @@ The code uses explicit error messages instead of silent failures:
 - malformed server responses
 
 This makes it easier for a user to understand what needs to be fixed without debugging the code itself.
+
+Individual activities that cannot be imported (missing ID, start time or duration, or failing validation) do not block the sync. They are skipped, the rest of the batch is imported, and the skipped activities are listed under the Intervals.icu status in Settings. Starting a new sync clears that list.
 
 ## Why athlete ID matters
 

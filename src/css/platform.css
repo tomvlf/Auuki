@@ -137,6 +137,23 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 #platform .activity-details dt { color: var(--platform-muted); }
 #platform .activity-file-actions { min-width: 0; margin: 0; }
 #platform .activity-file-actions button { max-width: 96px; padding: 8px; white-space: normal; font-size: 12px; }
+#platform .activity-stream-panel { width: min(74vw, 680px); max-width: calc(100vw - 48px); margin-top: 12px; }
+#platform .activity-stream-data { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--platform-border); border-radius: 10px; background: var(--platform-surface); }
+#platform .activity-route, #platform .activity-stream-chart { min-width: 0; margin: 0; }
+#platform .activity-route figcaption, #platform .activity-stream-chart figcaption { display: flex; justify-content: space-between; gap: 8px; color: var(--platform-text); font-size: 12px; font-weight: 600; }
+#platform .activity-route figcaption span, #platform .activity-stream-chart figcaption span,
+#platform .activity-stream-chart small, #platform .activity-stream-note { color: var(--platform-muted); font-size: 11px; }
+#platform .activity-route svg, #platform .activity-stream-chart svg { display: block; width: 100%; height: auto; margin-top: 6px; border-radius: 6px; background: #101820; }
+#platform .activity-route svg { max-height: 180px; }
+#platform .activity-route path, #platform .activity-stream-chart path { fill: none; stroke: var(--platform-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#platform .activity-route circle { stroke: #101820; stroke-width: 1.5; }
+#platform .activity-route-start { fill: #8bd4a8; }
+#platform .activity-route-finish { fill: #f27b75; }
+#platform .activity-stream-chart--heart-rate path { stroke: #f27b75; }
+#platform .activity-stream-chart--cadence path { stroke: #d3a9ff; }
+#platform .activity-stream-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+#platform .activity-route-empty, #platform .activity-stream-note { margin: 0; }
+#platform .activity-stream-data > button { justify-self: start; }
 .device-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 #platform .device-buttons button { flex: 1; min-width: 125px; flex-direction: column; font-size: 13px; }
 .device-buttons span { font-size: 11px; font-weight: 400; }

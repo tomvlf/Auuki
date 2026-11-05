@@ -113,8 +113,8 @@ test('provider adapter maps every activity type and retains provenance without f
     assert.equal(intervalsActivity({...activity, type: 'VirtualRide'}).indoor, true);
     assert.equal(intervalsActivity({...activity, external_id: 'athlima:recording-123'}).id, 'recording-123');
     assert.equal(intervalsActivity({...activity, icu_weighted_avg_watts: null}).normalizedPower, null);
-    assert.throws(() => intervalsActivity({...activity, start_date: null}), /missing/);
-    assert.throws(() => intervalsActivity({...activity, moving_time: 0}), /missing/);
+    assert.equal(intervalsActivity({...activity, start_date: null}), null);
+    assert.equal(intervalsActivity({...activity, moving_time: 0, elapsed_time: 0}), null);
 });
 
 test('provider adapter keeps Intervals summary details while dropping internal and invalid values', () => {
@@ -174,6 +174,41 @@ test('imports power and heart-rate profiles from streams and reuses them until I
     await f.sync(cookie);
     await f.tick();
     assert.equal(streamCalls().length, 3);
+});
+
+test('activity data endpoint returns full on-demand streams and account-scoped route data', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    await f.connect(cookie);
+    f.remote(async url => {
+        const path = new URL(url).pathname;
+        if(path.endsWith('/activities')) return json([activity]);
+        if(path.endsWith('/streams.json')) return json([
+            {type: 'watts', data: [180, 0, 220]},
+            {type: 'heartrate', data: [120, 121, 122]},
+            {type: 'cadence', data: [80, 82, 84]},
+            {type: 'time', data: [0, 1, 2]},
+        ]);
+        if(path.endsWith('/map')) return json({latlngs: [[52.1, 5.1], [52.2, 5.2]]});
+        return json({id: 42});
+    });
+    await f.sync(cookie);
+    await f.tick();
+    const result = await f.request(`${endpoint}/activity-data?activityId=i123`, {cookie});
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data.streams, {
+        watts: [180, 0, 220], heartrate: [120, 121, 122], cadence: [80, 82, 84], time: [0, 1, 2],
+    });
+    assert.deepEqual(result.data.map, {latlngs: [[52.1, 5.1], [52.2, 5.2]]});
+    const streamCall = f.calls.find(call => call.url.endsWith('/streams.json?types=watts%2Cheartrate%2Ccadence%2Ctime'));
+    assert.ok(streamCall);
+    assert.match(streamCall.args.headers.Authorization, /^Basic /);
+
+    const other = await f.register('other@example.com');
+    await f.connect(other);
+    const denied = await f.request(`${endpoint}/activity-data?activityId=i123`, {cookie: other});
+    assert.equal(denied.status, 404);
+    assert.equal((await f.request(`${endpoint}/activity-data?activityId=unknown`, {cookie})).status, 404);
 });
 
 test('integration endpoints require authentication, CSRF headers, encryption configuration and valid inputs', async t => {
@@ -340,21 +375,27 @@ test('repeated and incremental syncs update provider rides, preserve feedback, a
     assert.equal(new URL(f.calls.at(-1).url).searchParams.get('oldest'), '2026-03-13');
 });
 
-test('imports are atomic on malformed cycling data and retries resume the same date batch', async t => {
+test('malformed activities are skipped with a notice instead of blocking the import', async t => {
     const f = await fixture(t);
     const cookie = await f.register();
     await f.connect(cookie);
-    f.remote(async () => json([activity, {...activity, id: 'broken', start_date: 'not-an-iso-date'}]));
-    await f.sync(cookie);
-    await f.tick();
-    assert.equal((await f.history(cookie)).data.activities.length, 0);
-    assert.equal((await f.status(cookie)).data.status, 'error');
-    assert.equal((await f.status(cookie)).data.nextDate, '2026-03-01');
-    f.remote(async () => json([activity]));
+    f.remote(async () => json([activity,
+        {...activity, id: 'broken', name: 'Broken ride', start_date: 'not-an-iso-date'},
+        {...activity, id: 'no-time', name: 'No time', moving_time: 0, elapsed_time: 0}]));
     await f.sync(cookie);
     await f.tick();
     assert.equal((await f.history(cookie)).data.activities.length, 1);
-    assert.equal((await f.status(cookie)).data.status, 'connected');
+    const synced = (await f.status(cookie)).data;
+    assert.equal(synced.status, 'connected');
+    assert.equal(synced.error, null);
+    const notice = synced.skipped;
+    assert.equal(notice.length, 2);
+    assert.ok(notice.some(label => label.includes('Broken ride')));
+    assert.ok(notice.some(label => label.includes('No time')));
+    f.remote(async () => json([activity]));
+    await f.sync(cookie);
+    await f.tick();
+    assert.deepEqual((await f.status(cookie)).data.skipped, []);
 });
 
 test('rate limits honor Retry-After, retry transient failures, and bound attempts', async t => {

@@ -15,6 +15,7 @@ The app is built around a single idea: training should work without friction, wh
 - supports session planning and direct launch from a multi-week calendar, with weekly ride totals and power profiles when data is available
 - reviews cycling activities with weekly and monthly totals, available training-load indicators, and recorded power previews when samples exist
 - imports and syncs activity history (all sports, with type icons) from Intervals.icu
+- fetches full-resolution power, heart-rate and cadence streams plus route previews on demand, with CSV export
 - uploads new FIT recordings back to Intervals.icu
 - includes an adaptive coaching engine for goal-based planning and ride review
 - supports a desktop web app and a dedicated `/mobile` training companion

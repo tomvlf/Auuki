@@ -18,6 +18,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { CoachingService } from '../src/coaching/service.js';
+import { normalizeActivity } from '../src/coaching/normalizer.js';
 import { addDays, date } from '../src/coaching/domain.js';
 import { sportForType } from '../src/coaching/activity-types.js';
 
@@ -129,10 +130,7 @@ export function intervalsActivity(activity, syncedAt) {
     const type = typeof activity.type === 'string' && activity.type ? activity.type : 'Other';
     const sport = sportForType(type);
     const duration = finite(activity.moving_time, 1) ?? finite(activity.elapsed_time, 1);
-    if(!activity.id || !activity.start_date || !duration) {
-        if(sport !== 'cycling' && activity.id && activity.start_date) return null;
-        throw new IntegrationError('A cycling activity is missing its ID, UTC start or moving time. Retry after correcting it in Intervals.icu.');
-    }
+    if(!activity.id || !activity.start_date || !duration) return null;
     const externalId = activity.external_id || '';
     const legacyId = /^(?:athlima|auuki):([\w-]{1,100})$/.exec(externalId);
     const details = {};
@@ -215,6 +213,9 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     if(!columns.some(column => column.name === 'athlete_id')) {
         db.exec('ALTER TABLE integrations ADD COLUMN athlete_id TEXT NOT NULL DEFAULT "0"');
     }
+    if(!columns.some(column => column.name === 'notice')) {
+        db.exec('ALTER TABLE integrations ADD COLUMN notice TEXT');
+    }
     db.exec("UPDATE integrations SET athlete_id = '0' WHERE athlete_id IS NULL OR athlete_id = ''");
     const row = id => db.prepare('SELECT * FROM integrations WHERE user_id = ?').get(id);
     const nowDay = () => new Date(clock()).toISOString().slice(0, 10);
@@ -271,7 +272,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             status: current?.status || 'disconnected', athleteId: current?.athlete_id ?? null,
             oldest: current?.oldest ?? null, nextDate: current?.cursor ?? null,
             through: current?.newest ?? null, lastSuccess: current?.last_success ?? null,
-            error: current?.error ?? null, retryAt: current?.retry_at ? new Date(current.retry_at).toISOString() : null};
+            error: current?.error ?? null, skipped: current?.notice ? JSON.parse(current.notice) : [], retryAt: current?.retry_at ? new Date(current.retry_at).toISOString() : null};
     }
     /**
      * Builds the athlete-specific Intervals API endpoint used for all provider calls.
@@ -307,11 +308,13 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             const retry = response.headers.get('retry-after');
             const retryAt = retry && Number.isFinite(seconds) ? clock() + Math.max(0, seconds) * 1000
                 : retry && Number.isFinite(Date.parse(retry)) ? Date.parse(retry) : null;
-            throw new IntegrationError(response.status === 401 || response.status === 403
+            const error = new IntegrationError(response.status === 401 || response.status === 403
                 ? 'Intervals.icu rejected the API key. Reconnect with a valid key.'
                 : response.status === 429 ? 'Intervals.icu rate limited this import; it will retry later.'
                     : `Intervals.icu returned HTTP ${response.status}. Retry the synchronization.`,
             response.status === 429 ? 429 : response.status >= 500 ? 502 : 400, retryAt);
+            error.providerStatus = response.status;
+            throw error;
         }
         let result;
         try { result = await response.json(); }
@@ -406,6 +409,59 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         return remote(credential(id), '', {athleteId: current.athlete_id || '0'});
     }
     /**
+     * Loads full-resolution streams and route geometry for an activity already imported
+     * into this account. The payload is returned on demand and is not persisted.
+     *
+     * @param {number|string} id - User account identifier.
+     * @param {string} activityId - Intervals.icu activity ID.
+     * @returns {Promise<{streams: object, map: object|null}>} Full stream arrays and optional route.
+     */
+    async function activityData(id, activityId) {
+        const current = row(id);
+        if(!current || !key) throw new IntegrationError('Connect Intervals.icu in Settings > Integrations first.');
+        if(typeof activityId !== 'string' || !/^[\w-]{1,100}$/.test(activityId)) {
+            throw new IntegrationError('Invalid Intervals.icu activity ID.');
+        }
+        const activities = document(id, 'coaching').data?.activities || [];
+        if(!activities.some(activity => activity.source === 'intervals' && activity.externalId === activityId)) {
+            throw new IntegrationError("That activity is not in this account's imported history.", 404);
+        }
+        const apiKey = credential(id);
+        const [receivedStreams, map] = await Promise.all([
+            remote(apiKey, `/activity/${encodeURIComponent(activityId)}/streams.json`, {
+                base: API, query: {types: 'watts,heartrate,cadence,time'},
+            }).catch(error => {
+                if([400, 404].includes(error.providerStatus)) return [];
+                throw error;
+            }),
+            remote(apiKey, `/activity/${encodeURIComponent(activityId)}/map`, {base: API})
+                .catch(error => {
+                    if([400, 404].includes(error.providerStatus)) return null;
+                    throw error;
+                }),
+        ]);
+        if(!Array.isArray(receivedStreams)) {
+            throw new IntegrationError('Intervals.icu returned invalid activity streams.', 502);
+        }
+        const streams = {};
+        for(const type of ['watts', 'heartrate', 'cadence', 'time']) {
+            const values = receivedStreams.find(stream => stream?.type === type)?.data;
+            if(values == null) continue;
+            if(!Array.isArray(values) || values.length > 200000 ||
+               values.some(value => value != null && !Number.isFinite(value))) {
+                throw new IntegrationError('Intervals.icu returned invalid activity stream data.', 502);
+            }
+            streams[type] = values;
+        }
+        if(!map || !Array.isArray(map.latlngs)) return {streams, map: null};
+        if(map.latlngs.length > 200000 || map.latlngs.some(point =>
+            !Array.isArray(point) || point.length < 2 || !Number.isFinite(point[0]) ||
+            !Number.isFinite(point[1]) || Math.abs(point[0]) > 90 || Math.abs(point[1]) > 180)) {
+            throw new IntegrationError('Intervals.icu returned invalid activity route data.', 502);
+        }
+        return {streams, map: {latlngs: map.latlngs}};
+    }
+    /**
      * Fetches planned workouts in a bounded date window for the rider's athlete.
      *
      * @param {number|string} id - User account identifier.
@@ -489,7 +545,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             db.prepare(`INSERT INTO integrations (user_id, athlete_id, credential, oldest, status)
             VALUES (?, ?, ?, ?, 'connected') ON CONFLICT(user_id) DO UPDATE SET
             athlete_id=excluded.athlete_id, credential=excluded.credential, oldest=excluded.oldest,
-            cursor=NULL, newest=NULL, status='connected', error=NULL, attempts=0, retry_at=0, last_success=NULL`)
+            cursor=NULL, newest=NULL, status='connected', error=NULL, notice=NULL, attempts=0, retry_at=0, last_success=NULL`)
                 .run(id, resolvedAthleteId, encrypt(body.apiKey.trim(), id), oldest);
             return status(id);
         } finally {
@@ -535,8 +591,10 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         if(['running', 'queued'].includes(current.status)) return status(id);
         const cursor = current.cursor || (current.last_success
             ? [current.oldest, addDays(current.last_success.slice(0, 10), -7)].sort().at(-1) : current.oldest);
+        // A fresh run reports only its own skipped activities; a resumed run keeps earlier ones.
         db.prepare(`UPDATE integrations SET status='queued', cursor=?, newest=?, error=NULL,
-            attempts=0, retry_at=0 WHERE user_id=?`).run(cursor, nowDay(), id);
+            notice=CASE WHEN ? THEN notice ELSE NULL END, attempts=0, retry_at=0 WHERE user_id=?`)
+            .run(cursor, nowDay(), current.cursor ? 1 : 0, id);
         return status(id);
     }
     /**
@@ -561,7 +619,20 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             const received = await download(apiKey, current.cursor, newest, athleteId);
             if(stopped || row(current.user_id)?.credential !== current.credential) return;
             const syncedAt = new Date(clock()).toISOString();
-            const pairs = received.map(item => ({item, raw: intervalsActivity(item, syncedAt)})).filter(pair => pair.raw);
+            const coachingProfile = document(current.user_id, 'coaching').data?.profile || undefined;
+            const skipped = [];
+            const pairs = received.flatMap(item => {
+                const label = `${item?.start_date_local?.slice(0, 10) || item?.start_date?.slice(0, 10) || 'undated'} ${item?.name || item?.type || item?.id || 'activity'}`;
+                try {
+                    const raw = intervalsActivity(item, syncedAt);
+                    if(!raw) { skipped.push(label); return []; }
+                    normalizeActivity(raw, coachingProfile);
+                    return [{item, raw}];
+                } catch {
+                    skipped.push(label);
+                    return [];
+                }
+            });
             const known = new Map((document(current.user_id, 'coaching').data?.activities || [])
                 .map(activity => [activity.id, activity]));
             await attachStreams(apiKey, pairs, known);
@@ -579,10 +650,13 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             try {
                 save(current.user_id, 'coaching', staged, stored.revision);
                 const done = newest >= current.newest;
+                const previousSkipped = current.notice ? JSON.parse(current.notice) : [];
+                const allSkipped = [...previousSkipped, ...skipped];
                 db.prepare(`UPDATE integrations SET cursor=?, status=?, last_success=?,
-                    error=NULL, attempts=0, retry_at=? WHERE user_id=?`).run(
+                    error=NULL, notice=?, attempts=0, retry_at=? WHERE user_id=?`).run(
                     done ? null : addDays(newest, 1), done ? 'connected' : 'queued',
                     done ? new Date(clock()).toISOString() : current.last_success,
+                    allSkipped.length ? JSON.stringify(allSkipped.slice(-50)) : null,
                     clock() + 1000, current.user_id);
                 db.exec('COMMIT');
             } catch(error) { db.exec('ROLLBACK'); throw error; }
@@ -599,6 +673,6 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     }
     const timer = startWorker ? setInterval(() => { void tick(); }, 1000) : null;
     timer?.unref();
-    return {status, connect, test, disconnect, sync, tick, athlete, events, upload,
+    return {status, connect, test, disconnect, sync, tick, athlete, activityData, events, upload,
         close() { stopped = true; connecting.clear(); clearInterval(timer); }};
 }

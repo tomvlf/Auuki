@@ -22,7 +22,7 @@ import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
 import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
-import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview } from './activities.js';
+import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview, renderActivityStreamData } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
 import { mountVersions, versionMarkup } from './version.js';
 
@@ -93,6 +93,7 @@ export async function launchPlatform(root, account) {
     let selectedId = '';
     let integration;
     let integrationLoading = false;
+    const activityDataCache = new Map();
     let syncTimer;
     let busy = false;
     let ready = false;
@@ -304,6 +305,7 @@ export async function launchPlatform(root, account) {
         return `<p class="eyebrow">${escape(integration.status)}</p><p>Last successful sync: ${integration.lastSuccess ? escape(new Date(integration.lastSuccess).toLocaleString()) : 'Not yet synced'}</p>
             ${integration.nextDate ? `<p>Importing ${escape(integration.nextDate)} through ${escape(integration.through)} in 31-day batches.</p>` : ''}
             ${integration.error ? `<p role="alert">${escape(integration.error)}</p>` : ''}
+            ${integration.skipped?.length ? `<details class="muted"><summary>${integration.skipped.length} activit${integration.skipped.length === 1 ? 'y' : 'ies'} skipped (missing ID, start time or duration)</summary><ul>${integration.skipped.map(label => `<li>${escape(label)}</li>`).join('')}</ul></details>` : ''}
             ${integration.retryAt && integration.status === 'queued' ? `<p>Retry after ${escape(new Date(integration.retryAt).toLocaleString())}</p>` : ''}
             <p class="muted">${athleteIdText}</p>
             <div class="button-row"><button data-action="sync" ${['running', 'queued'].includes(integration.status) ? 'disabled' : ''}>${integration.lastSuccess ? 'Sync now' : 'Import history'}</button>
@@ -499,6 +501,52 @@ export async function launchPlatform(root, account) {
                 if(result !== ':success') throw new Error('Intervals.icu upload failed. Check the connection and retry.');
                 report('Recording sent to Intervals.icu. Run Sync to refresh provider metadata.');
             });
+            return;
+        }
+        const activityButton = event.target.closest('[data-load-activity]');
+        if(activityButton) {
+            const activityId = activityButton.dataset.loadActivity;
+            const panel = activityButton.closest('tr')?.querySelector('.activity-stream-panel');
+            if(!panel || !activityId) return;
+            if(!panel.hidden) {
+                panel.hidden = true;
+                activityButton.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            void run(async () => {
+                activityButton.disabled = true;
+                activityButton.textContent = 'Loading...';
+                try {
+                    const data = activityDataCache.get(activityId) ??
+                        await serverRequest(`integrations/intervals/activity-data?${new URLSearchParams({activityId})}`);
+                    activityDataCache.set(activityId, data);
+                    if(!panel.isConnected) return;
+                    panel.innerHTML = renderActivityStreamData(data);
+                    panel.hidden = false;
+                    activityButton.setAttribute('aria-expanded', 'true');
+                } finally {
+                    activityButton.disabled = false;
+                    activityButton.innerHTML = 'Route &amp; data';
+                }
+            });
+            return;
+        }
+        if(event.target.closest('[data-download-activity-csv]')) {
+            const row = event.target.closest('tr');
+            const activityId = row?.querySelector('[data-load-activity]')?.dataset.loadActivity;
+            const streams = activityDataCache.get(activityId)?.streams;
+            if(!streams) return;
+            const names = ['time', 'watts', 'heartrate', 'cadence'];
+            const count = Math.max(0, ...names.map(name => streams[name]?.length || 0));
+            const csv = ['sample_index,time_seconds,watts,heartrate_bpm,cadence_rpm',
+                ...Array.from({length: count}, (_, index) =>
+                    [index, ...names.map(name => streams[name]?.[index] ?? '')].join(','))].join('\n');
+            const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `activity-${activityId}-streams.csv`;
+            anchor.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             return;
         }
         const action = event.target.closest('[data-action]')?.dataset.action;
