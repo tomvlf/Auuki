@@ -32,7 +32,11 @@ the [backend guide](backend.md) for storage, recovery and integration details.
 
 Once a plan is active, Coach shows the goal countdown, current phase, next
 session and upcoming sessions, plus post-ride feedback, plan adjustments and a
-**Why this plan?** explanation. Day to day:
+**Why this plan?** explanation. The **Training plan** page shows the whole plan:
+progress towards the goal and the next session, a colour-coded phase timeline
+with a plain-language legend, and the plan week by week (this week open, the next
+four weeks listed, earlier and later weeks folded away). Recent plan changes and
+the technical planning rationale are kept in collapsed sections. Day to day:
 
 - Start generated sessions from the calendar, or export individual ZWO files.
    Day preferences, purpose, expected RPE and the reason for each session are

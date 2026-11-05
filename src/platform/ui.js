@@ -24,6 +24,7 @@ import { addDays } from '../coaching/domain.js';
 import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
 import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview, renderActivityStreamData } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
+import { renderPlan } from './plan-view.js';
 import { mountVersions, versionMarkup } from './version.js';
 
 const routes = {
@@ -204,18 +205,7 @@ export async function launchPlatform(root, account) {
                 ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}</li>`).join('')}</ol>`);
     }
     function plan(data) {
-        const plan = data?.plan;
-        if(!plan) return empty('A plan built for your goal, availability and recent training.', 'coach', 'Create your training plan');
-        return `${card(escape(data.goal?.name || 'Your plan'), `<p class="eyebrow">${escape(plan.status)} / revision ${plan.revision}</p>
-            <p>${escape(plan.startDate)} - ${escape(plan.endDate)}</p><p>${escape(plan.rationale)}</p>
-            <div class="phase-track">${plan.phases.map(phase => `<div><strong>${escape(phase.type)}</strong>
-                <small>${escape(phase.startDate)} - ${escape(phase.endDate)}</small><p>${escape(phase.rationale)}</p></div>`).join('')}</div>`)}
-            ${card('Scheduled sessions', plan.workouts.length ? `<ul class="session-list">${plan.workouts.map(workoutRow).join('')}</ul>` :
-                `<p>No sessions fit the current training-load and availability limits. Review the warnings in Coach,
-                check your imported history and profile, then archive and regenerate the plan if needed.</p>${link('coach', 'Review Coach', 'button secondary')}`)}
-            ${card('Plan changes', plan.adaptations.length ? plan.adaptations.slice(-10).reverse().map(adaptation =>
-                `<p><span class="eyebrow">${escape(adaptation.timestamp)}</span><br>${escape(adaptation.reasoning)}</p>`).join('') :
-                '<p>Adaptations will appear after recorded rides, feedback or missed-session reviews.</p>')}`;
+        return renderPlan(data, today(data));
     }
     function activities(data) {
         const lists = activityLists(data, db.activity, authenticated);
