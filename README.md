@@ -85,6 +85,18 @@ To build from a local checkout instead of using published images:
 ATHLIMA_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
+### Deployed versions
+
+The app and sign-in screen show separate frontend and backend versions. Published
+images display the GitHub Actions build number and attempt, followed by the
+first 12 characters of the Git revision; hover over a version for the full
+revision. Use **Refresh** to check the backend again. An older backend may show
+“Not reported”, while an unreachable backend shows “Unavailable”.
+
+Local development and local image builds show `development` unless build metadata
+is supplied. The frontend label identifies the code currently loaded in the
+browser, so reload the app after deploying a new frontend.
+
 ## Self-hosted accounts and integrations
 
 The app is usable without an account for workouts, device control, recovery, local training calendar work, and on-device coaching.

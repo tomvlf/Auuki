@@ -78,6 +78,15 @@ test('static hosts report unavailable backend rather than a JSON parsing error',
     await expect(serverRequest('session')).rejects.toThrow('Athlima backend is unavailable');
 });
 
+test('optional public requests can be aborted without sending an account identifier', async () => {
+    const controller = new AbortController();
+    serverAccount.email = 'rider@example.com';
+    fetch.mockResolvedValue(response({available: true}));
+    await serverRequest('health', {account: null, signal: controller.signal});
+    expect(fetch.mock.calls[0][1].signal).toBe(controller.signal);
+    expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('X-Athlima-Account');
+});
+
 test('authentication expiry triggers the protected shell without silently switching to local mode', async () => {
     const expired = jest.fn();
     window.addEventListener('session:expired', expired);

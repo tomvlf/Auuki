@@ -191,6 +191,16 @@ Email/password authentication has no OAuth callback/redirect URL; the session
 cookie is scoped to `/api/server`. Intervals.icu uses the signed-in account's
 server-stored API key, not the former OAuth proxy.
 
+Published images embed the GitHub Actions build number and commit revision in
+each image separately. The public `health` endpoint reports the backend's own
+build, while the browser displays the frontend build loaded in that page.
+Docker builds accept `ATHLIMA_BUILD_VERSION` and `ATHLIMA_BUILD_REVISION` as
+build arguments; local builds without them are labeled `development`. These
+are build-time identifiers, not runtime configuration or secrets.
+Direct Parcel builds use `src/platform/build-info.json`; non-Docker build
+systems can run `scripts/write-build-info.mjs` with that file as its argument
+and the same two environment variables before building.
+
 If login reports an origin rejection, compare the browser URL with the backend
 startup log, correct the origin variables and recreate/restart the backend
 (`docker compose up -d` after changing Compose's environment or `.env`).
@@ -241,7 +251,7 @@ contain `error`. Authenticated requests use the session cookie. Writes require
 
 | Route | Method | Body / response |
 |---|---|---|
-| `health` | GET | `{available: true}` |
+| `health` | GET | `{available: true, version, revision}`; public, uncached build metadata (`revision` is null for unversioned local builds) |
 | `register`, `login` | POST | `{email, password}`; sets session cookie |
 | `session` | GET | `{email}` |
 | `logout` | POST | `{}`; revokes current session |

@@ -6,7 +6,10 @@ COPY package.json ./
 RUN npm install --no-audit --no-fund
 
 COPY . .
-RUN npm run build
+ARG ATHLIMA_BUILD_VERSION=development
+ARG ATHLIMA_BUILD_REVISION=
+RUN node scripts/write-build-info.mjs src/platform/build-info.json \
+    && npm run build
 
 FROM nginx:alpine
 

@@ -71,9 +71,13 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     calendar.loadPlannedMonth = jest.fn().mockResolvedValue();
     const root = document.querySelector('#platform');
     coachingData.mockReturnValue({activities: [], plan: null, profile: null});
-    serverRequest.mockResolvedValue({configured: true, connected: false, status: 'disconnected'});
+    serverRequest.mockImplementation(path => Promise.resolve(path === 'health'
+        ? {available: true, version: 'build-42.1', revision: '0123456789abcdef'}
+        : {configured: true, connected: false, status: 'disconnected'}));
     await launchPlatform(root, {email: 'rider@example.com'});
     await settle();
+    expect(root.querySelector('[data-frontend-version]').textContent).toBe('development');
+    expect(root.querySelector('[data-backend-version]').textContent).toBe('build-42.1 (0123456789ab)');
     expect(root.textContent).toContain('Your next ride starts here.');
     expect(root.querySelector('[aria-current="page"]').textContent).toBe('Overview');
     expect(root.querySelector('.skip-link')).not.toBeNull();

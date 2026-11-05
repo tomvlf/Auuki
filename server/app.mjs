@@ -23,6 +23,7 @@ import { promisify } from 'node:util';
 import { CoachingService } from '../src/coaching/service.js';
 import { createIntervals } from './intervals.mjs';
 import { trustedOrigins } from './origins.mjs';
+import buildInfo from './build-info.json' with {type: 'json'};
 
 const scrypt = promisify(deriveKey);
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -150,7 +151,7 @@ export function createApp({database = 'athlima.sqlite', origin = 'http://localho
         response.setHeader('X-Content-Type-Options', 'nosniff');
         const path = new URL(request.url, origin).pathname;
         const send = (status, data) => { response.writeHead(status); response.end(JSON.stringify(data)); };
-        if(path === '/api/server/health' && request.method === 'GET') return send(200, {available: true});
+        if(path === '/api/server/health' && request.method === 'GET') return send(200, {available: true, ...buildInfo});
         if(!path.startsWith('/api/server/')) throw new HttpError(404, 'Not found.');
         if(!['GET', 'POST', 'PUT', 'DELETE'].includes(request.method)) throw new HttpError(405, 'Method not allowed.');
         let body;

@@ -31,8 +31,12 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 #platform .sidebar nav a[aria-current="page"] { color: var(--platform-accent); background: #213831; font-weight: 700; }
 .sidebar-bottom { margin-top: auto; display: grid; gap: 10px; font-size: 12px; color: var(--platform-muted); padding: 20px 10px 0; }
 #main-content { margin-left: 230px; max-width: 1800px; padding: 38px 44px 70px; }
-.platform-header { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 36px; }
+.platform-header { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 12px; }
 .account-menu { display: flex; gap: 16px; align-items: center; color: var(--platform-muted); font-size: 12px; }
+#platform .app-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 24px; color: var(--platform-muted); font-size: 12px; overflow-wrap: anywhere; }
+#platform .app-versions strong { color: var(--platform-text); font-weight: 600; }
+#platform .app-versions button { min-height: 44px; padding: 2px 6px; border: 0; background: transparent; color: var(--platform-accent); font-size: 12px; font-weight: 500; text-decoration: underline; }
+#platform .auth-card .app-versions { border-top: 1px solid var(--platform-border); padding-top: 14px; margin-bottom: 0; }
 #platform-message:not(:empty) { padding: 14px 20px; background: #213b3a; border: 1px solid #3b6962; border-radius: 8px; margin-bottom: 20px; }
 #platform-message.error { background: #4a2d32; border-color: #a35b64; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; }
@@ -185,7 +189,8 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
 .mobile-app .sidebar nav { display: flex; justify-content: space-around; margin: 0; gap: 2px; }
 .mobile-app #platform .sidebar nav a { font-size: 11px; padding: 10px 8px; min-height: 44px; }
 .mobile-app #main-content { margin: 0 auto; max-width: 900px; padding: 20px 16px 100px; }
-.mobile-app .platform-header { margin-bottom: 22px; }
+.mobile-app .platform-header { margin-bottom: 8px; }
+.mobile-app #platform .app-versions { margin-bottom: 14px; }
 .mobile-app .account-menu span { display: none; }
 .mobile-app .platform-header .eyebrow { display: none; }
 .mobile-app .panel { padding: 22px; }
@@ -234,7 +239,7 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
     .auth-card { padding: 24px; }
 }
 @media (orientation: landscape) and (max-height: 600px) {
-    .mobile-app[data-route="player"] .platform-header, .mobile-app[data-route="player"] .ride-heading,
+    .mobile-app[data-route="player"] .platform-header, .mobile-app[data-route="player"] .app-versions, .mobile-app[data-route="player"] .ride-heading,
     .mobile-app[data-route="player"] .ride-sensors, .mobile-app[data-route="player"] #ride-recovery,
     .mobile-app[data-route="player"] #legacy-slot { display: none; }
     .mobile-app .ride-metrics { grid-template-columns: repeat(6, 1fr); }

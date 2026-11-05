@@ -20,13 +20,14 @@ export const SERVER_MODE_KEY = 'athlima-server-mode';
 export const serverAccount = {email: null};
 export const serverEnabled = () => window.localStorage.getItem(SERVER_MODE_KEY) === '1';
 
-export async function serverRequest(path, {method = 'GET', body, account = serverAccount.email} = {}) {
+export async function serverRequest(path, {method = 'GET', body, account = serverAccount.email, signal} = {}) {
     let response;
     try { response = await fetch(`/api/server/${path}`, {
         method, credentials: 'same-origin', cache: 'no-store',
         headers: {'Content-Type': 'application/json', 'X-Athlima-Client': '1',
             ...(account ? {'X-Athlima-Account': account} : {})},
         ...(body === undefined ? {} : {body: JSON.stringify(body)}),
+        ...(signal ? {signal} : {}),
     }); } catch(error) {
         throw new Error('Cannot reach the Athlima server. Check your connection and try again.', {cause: error});
     }

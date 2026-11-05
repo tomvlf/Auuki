@@ -52,7 +52,9 @@ const go = async route => {
     await settle();
 };
 
-test('mobile guests can ride, browse workouts, configure devices and use local coaching without server calls', async () => {
+test('mobile guests can ride and use local features when the optional backend version check fails', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    serverRequest.mockRejectedValue(new Error('Offline'));
     window.history.replaceState({}, '', '/mobile');
     document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar></div>';
     const calendar = document.querySelector('training-calendar');
@@ -62,6 +64,7 @@ test('mobile guests can ride, browse workouts, configure devices and use local c
     const root = document.querySelector('#platform');
     await launchPlatform(root, null);
     await settle();
+    expect(root.querySelector('[data-backend-version]').textContent).toBe('Unavailable');
     expect(root.textContent).toContain('Guest / on-device only');
     expect(root.querySelector('[data-action="signin"]')).not.toBeNull();
     expect(root.querySelector('#platform-content a[href="#/library"]')).not.toBeNull();
@@ -97,5 +100,7 @@ test('mobile guests can ride, browse workouts, configure devices and use local c
     window.dispatchEvent(new Event('focus'));
     await settle();
     expect(coachingService).toHaveBeenCalled();
-    expect(serverRequest).not.toHaveBeenCalled();
+    expect(serverRequest).toHaveBeenCalledTimes(1);
+    expect(serverRequest).toHaveBeenCalledWith('health', {account: null, signal: expect.any(AbortSignal)});
+    warning.mockRestore();
 });

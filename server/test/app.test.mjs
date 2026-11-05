@@ -62,6 +62,14 @@ async function register(request, data = credentials) {
     return result.headers.get('set-cookie').split(';')[0];
 }
 
+test('public health reports the backend build without caching or authentication', async t => {
+    const {request} = await fixture(t);
+    const health = await request('health', {headers: {Origin: ''}});
+    assert.equal(health.status, 200);
+    assert.equal(health.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(health.data, {available: true, version: 'development', revision: null});
+});
+
 test('accounts use protected cookies, validate credentials, and revoke sessions', async t => {
     const {request} = await fixture(t);
     assert.equal((await request('session')).status, 401);

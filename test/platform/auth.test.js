@@ -30,7 +30,12 @@ beforeEach(() => {
     localStorage.clear();
     window.history.replaceState({}, '', '/#/account');
     document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden></div>';
-    global.fetch = jest.fn();
+    global.fetch = jest.fn(url => {
+        if(url === '/api/server/health') {
+            return Promise.resolve(response({available: true, version: 'build-42.1', revision: '0123456789abcdef'}));
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
     listeners = jest.spyOn(window, 'addEventListener');
 });
 afterEach(() => {
@@ -63,13 +68,16 @@ test.each(['/', '/mobile'])('guest startup at %s preserves local data and never 
 test.each(['login', 'register'])('%s submits to the current backend and restores an isolated account scope', async operation => {
     const launch = await start();
     expect(launch).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-frontend-version]').textContent).toBe('development');
+    expect(document.querySelector('[data-backend-version]').textContent).toBe('build-42.1 (0123456789ab)');
     const form = fill();
     fetch.mockResolvedValueOnce(response({email: 'rider@example.com'}))
         .mockResolvedValueOnce(response({email: 'rider@example.com'}));
     form.querySelector(`[value="${operation}"]`).click();
     await settle();
-    expect(fetch.mock.calls[0][0]).toBe(`/api/server/${operation}`);
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    const request = fetch.mock.calls.find(([url]) => url === `/api/server/${operation}`);
+    expect(request).toBeDefined();
+    expect(JSON.parse(request[1].body)).toEqual({
         email: 'rider@example.com', password: 'a long test password'});
     expect(launch).toHaveBeenCalledWith(document.querySelector('#platform'), {email: 'rider@example.com'});
     expect(require('../../src/storage/account.js').accountDatabase()).toContain('rider%40example.com');
@@ -89,7 +97,7 @@ test('implicit submission, duplicate registration and network failures show erro
     fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
     await settle();
-    expect(fetch.mock.calls[1][0]).toBe('/api/server/login');
+    expect(fetch.mock.calls.some(([url]) => url === '/api/server/login')).toBe(true);
     expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Athlima server');
 });
 

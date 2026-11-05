@@ -19,6 +19,7 @@
 import { authenticate, serverAccount, serverRequest, serverEnabled, SERVER_MODE_KEY } from '../server/client.js';
 import { setAccountScope } from '../storage/account.js';
 import { escape } from './format.js';
+import { mountVersions, versionMarkup } from './version.js';
 
 const root = document.querySelector('#platform');
 let launched = false;
@@ -43,7 +44,9 @@ function login(message = '', unavailable = false) {
         <p class="muted">Guest rides, workouts and local coaching stay on this device. Sign in for server coaching, private backups and integrations.</p>
         ${unavailable ? '<p>Account features need the Athlima backend. You can still train as a guest.</p>' : ''}
         <p class="muted">Trainer connections require Chrome or Edge with Bluetooth support, on HTTPS or localhost. iOS browsers do not support Web Bluetooth.</p>
+        ${versionMarkup()}
     </section></main>`;
+    mountVersions(root);
     root.querySelector('form').addEventListener('submit', async event => {
         event.preventDefault();
         const form = event.target;

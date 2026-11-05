@@ -24,6 +24,7 @@ import { addDays } from '../coaching/domain.js';
 import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
 import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
+import { mountVersions, versionMarkup } from './version.js';
 
 const routes = {
     dashboard: ['Overview', 'Your training, in focus'],
@@ -76,9 +77,10 @@ export async function launchPlatform(root, account) {
         <main id="main-content" tabindex="-1"><header class="platform-header">
             <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title" tabindex="-1"></h1></div>
             <div class="account-menu"><span>${escape(account?.email || 'Guest / on-device only')}</span><button class="secondary" data-action="${authenticated ? 'logout' : 'signin'}">${authenticated ? 'Sign out' : 'Sign in / Create account'}</button></div>
-        </header><div id="platform-message" role="status" aria-live="polite"></div>
+        </header>${versionMarkup()}<div id="platform-message" role="status" aria-live="polite"></div>
         <div id="platform-content"><p role="status">Loading your training...</p></div>
         <div id="legacy-slot"></div></main>`;
+    mountVersions(root);
     const legacy = document.querySelector('.wrapper');
     root.querySelector('#legacy-slot').append(legacy);
     const content = root.querySelector('#platform-content');

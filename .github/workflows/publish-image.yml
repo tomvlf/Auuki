@@ -35,6 +35,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ATHLIMA_BUILD_VERSION=build-${{ github.run_number }}.${{ github.run_attempt }}
+            ATHLIMA_BUILD_REVISION=${{ github.sha }}
 
       - name: Backend image metadata
         id: backend_meta
@@ -53,3 +56,6 @@ jobs:
           push: true
           tags: ${{ steps.backend_meta.outputs.tags }}
           labels: ${{ steps.backend_meta.outputs.labels }}
+          build-args: |
+            ATHLIMA_BUILD_VERSION=build-${{ github.run_number }}.${{ github.run_attempt }}
+            ATHLIMA_BUILD_REVISION=${{ github.sha }}
