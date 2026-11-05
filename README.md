@@ -87,10 +87,11 @@ ATHLIMA_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml
 
 ### Deployed versions
 
-The app and sign-in screen show separate frontend and backend versions. Published
-images display the GitHub Actions build number and attempt, followed by the
-first 12 characters of the Git revision; hover over a version for the full
-revision. Use **Refresh** to check the backend again. An older backend may show
+The desktop app shows separate frontend and backend versions at the bottom of the
+left-hand menu. The mobile app and sign-in screen show them as well. Published
+images display the GitHub Actions build number and attempt. The mobile app and
+sign-in screen also show the first 12 characters of the Git revision; hover over
+a version in any view for the full revision. An older backend may show
 “Not reported”, while an unreachable backend shows “Unavailable”.
 
 Local development and local image builds show `development` unless build metadata

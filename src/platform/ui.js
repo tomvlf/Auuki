@@ -73,11 +73,12 @@ export async function launchPlatform(root, account) {
                 .map(route => link(route, routes[route][0])).join('')}</nav>
             <div class="sidebar-bottom"><span>Train with intention.</span>
                 <a href="${mobile ? '/' : '/mobile'}">${mobile ? 'Desktop platform' : 'Mobile ride companion'}</a></div>
+            ${mobile ? '' : versionMarkup({showRevision: false})}
         </aside>
         <main id="main-content" tabindex="-1"><header class="platform-header">
             <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title" tabindex="-1"></h1></div>
             <div class="account-menu"><span>${escape(account?.email || 'Guest / on-device only')}</span><button class="secondary" data-action="${authenticated ? 'logout' : 'signin'}">${authenticated ? 'Sign out' : 'Sign in / Create account'}</button></div>
-        </header>${versionMarkup()}<div id="platform-message" role="status" aria-live="polite"></div>
+        </header>${mobile ? versionMarkup() : ''}<div id="platform-message" role="status" aria-live="polite"></div>
         <div id="platform-content"><p role="status">Loading your training...</p></div>
         <div id="legacy-slot"></div></main>`;
     mountVersions(root);

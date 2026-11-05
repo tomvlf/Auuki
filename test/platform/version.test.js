@@ -3,10 +3,13 @@ import { mountVersions, versionMarkup } from '../../src/platform/version.js';
 import { serverRequest } from '../../src/server/client.js';
 
 jest.mock('../../src/server/client.js', () => ({serverRequest: jest.fn()}));
+jest.mock('../../src/platform/build-info.json', () => ({
+    version: 'build-17.1', revision: 'fedcba9876543210',
+}));
 
 const settle = async () => { for(let i = 0; i < 10; i++) await Promise.resolve(); };
-const mount = () => {
-    document.body.innerHTML = `<div id="versions">${versionMarkup()}</div>`;
+const mount = options => {
+    document.body.innerHTML = `<div id="versions">${versionMarkup(options)}</div>`;
     const root = document.querySelector('#versions');
     mountVersions(root);
     return root;
@@ -25,13 +28,27 @@ afterEach(() => {
 test('shows frontend and independently reported backend build identifiers', async () => {
     serverRequest.mockResolvedValue({available: true, version: 'build-18.2', revision: '0123456789abcdef0123'});
     const root = mount();
-    expect(root.querySelector('[data-frontend-version]').textContent).toBe('development');
+    const frontend = root.querySelector('[data-frontend-version]');
+    expect(frontend.textContent).toBe('build-17.1 (fedcba987654)');
+    expect(frontend.title).toBe('build-17.1 / fedcba9876543210');
     expect(root.querySelector('[data-backend-version]').textContent).toBe('Checking...');
     await settle();
     const backend = root.querySelector('[data-backend-version]');
     expect(backend.textContent).toBe('build-18.2 (0123456789ab)');
     expect(backend.title).toBe('build-18.2 / 0123456789abcdef0123');
     expect(serverRequest).toHaveBeenCalledWith('health', {account: null, signal: expect.any(AbortSignal)});
+});
+
+test('compact versions omit visible revisions while retaining full revisions in tooltips', async () => {
+    serverRequest.mockResolvedValue({available: true, version: 'build-18.2', revision: '0123456789abcdef0123'});
+    const root = mount({showRevision: false});
+    await settle();
+    const frontend = root.querySelector('[data-frontend-version]');
+    const backend = root.querySelector('[data-backend-version]');
+    expect(frontend.textContent).toBe('build-17.1');
+    expect(frontend.title).toBe('build-17.1 / fedcba9876543210');
+    expect(backend.textContent).toBe('build-18.2');
+    expect(backend.title).toBe('build-18.2 / 0123456789abcdef0123');
 });
 
 test('identifies an older backend that does not report a version', async () => {
@@ -66,20 +83,13 @@ test('backend version text is not interpreted as markup', async () => {
     expect(backend.querySelector('img')).toBeNull();
 });
 
-test('refresh aborts an older check and ignores its late result', async () => {
-    let firstSignal, firstResult, secondResult;
-    serverRequest.mockImplementationOnce((path, {signal}) => {
-        firstSignal = signal;
-        return new Promise(resolve => { firstResult = resolve; });
-    }).mockImplementationOnce(() => new Promise(resolve => { secondResult = resolve; }));
+test('version display has no refresh control and checks the backend once', async () => {
+    serverRequest.mockResolvedValue({available: true, version: 'build-2'});
     const root = mount();
-    root.querySelector('[data-refresh-version]').click();
-    expect(firstSignal.aborted).toBe(true);
-    secondResult({available: true, version: 'build-2'});
-    await settle();
-    firstResult({available: true, version: 'build-1'});
     await settle();
     expect(root.querySelector('[data-backend-version]').textContent).toBe('build-2');
+    expect(root.querySelector('[data-refresh-version]')).toBeNull();
+    expect(serverRequest).toHaveBeenCalledTimes(1);
 });
 
 test('a stalled backend check times out without blocking the interface', async () => {
@@ -88,7 +98,7 @@ test('a stalled backend check times out without blocking the interface', async (
         signal.addEventListener('abort', () => reject(new Error('Aborted')));
     }));
     const root = mount();
-    expect(root.querySelector('[data-frontend-version]').textContent).toBe('development');
+    expect(root.querySelector('[data-frontend-version]').textContent).toBe('build-17.1 (fedcba987654)');
     jest.advanceTimersByTime(8000);
     await settle();
     const backend = root.querySelector('[data-backend-version]');

@@ -7,28 +7,22 @@ const frontendRevision = frontendBuildInfo.revision?.trim() || '';
 const label = (version, revision) => revision ? `${version} (${revision.slice(0, 12)})` : version;
 const fullLabel = (version, revision) => revision ? `${version} / ${revision}` : version;
 
-export function versionMarkup() {
-    return `<div class="app-versions" role="group" aria-label="Deployed versions">
-        <span>Frontend: <strong data-frontend-version title="${escape(fullLabel(frontendVersion, frontendRevision))}">${escape(label(frontendVersion, frontendRevision))}</strong></span>
+export function versionMarkup({showRevision = true} = {}) {
+    return `<div class="app-versions" role="group" aria-label="Deployed versions" data-show-revision="${showRevision}">
+        <span>Frontend: <strong data-frontend-version title="${escape(fullLabel(frontendVersion, frontendRevision))}">${escape(label(frontendVersion, showRevision ? frontendRevision : ''))}</strong></span>
         <span>Backend: <strong data-backend-version role="status" aria-live="polite">Checking...</strong></span>
-        <button type="button" data-refresh-version aria-label="Refresh backend version">Refresh</button>
     </div>`;
 }
 
 export function mountVersions(root) {
     const area = root.querySelector('.app-versions');
     const backend = area.querySelector('[data-backend-version]');
-    let active;
-    const refresh = async () => {
-        active?.abort();
-        const controller = new AbortController();
-        active = controller;
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        backend.textContent = 'Checking...';
-        backend.removeAttribute('title');
+    const showRevision = area.dataset.showRevision === 'true';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const loadBackendVersion = async () => {
         try {
             const result = await serverRequest('health', {account: null, signal: controller.signal});
-            if(active !== controller) return;
             if(result?.available !== true) throw new Error('The backend health response is invalid.');
             if(result.version === undefined) {
                 backend.textContent = 'Not reported';
@@ -41,10 +35,9 @@ export function mountVersions(root) {
             }
             const version = result.version.trim();
             const revision = result.revision?.trim() || '';
-            backend.textContent = label(version, revision);
+            backend.textContent = label(version, showRevision ? revision : '');
             backend.title = fullLabel(version, revision);
         } catch(error) {
-            if(active !== controller) return;
             backend.textContent = 'Unavailable';
             backend.title = controller.signal.aborted ? 'The backend version request timed out.' :
                 error?.message || 'The backend version could not be retrieved.';
@@ -53,6 +46,5 @@ export function mountVersions(root) {
             clearTimeout(timeout);
         }
     };
-    area.querySelector('[data-refresh-version]').addEventListener('click', () => { void refresh(); });
-    void refresh();
+    void loadBackendVersion();
 }

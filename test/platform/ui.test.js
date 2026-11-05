@@ -76,8 +76,14 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
         : {configured: true, connected: false, status: 'disconnected'}));
     await launchPlatform(root, {email: 'rider@example.com'});
     await settle();
-    expect(root.querySelector('[data-frontend-version]').textContent).toBe('development');
-    expect(root.querySelector('[data-backend-version]').textContent).toBe('build-42.1 (0123456789ab)');
+    const versions = root.querySelector('.sidebar > .app-versions');
+    expect(versions).not.toBeNull();
+    expect(root.querySelector('#main-content .app-versions')).toBeNull();
+    expect(versions.querySelector('[data-frontend-version]').textContent).toBe('development');
+    expect(versions.querySelector('[data-backend-version]').textContent).toBe('build-42.1');
+    expect(versions.querySelector('[data-backend-version]').title).toBe('build-42.1 / 0123456789abcdef');
+    expect(versions.querySelector('[data-refresh-version]')).toBeNull();
+    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(1);
     expect(root.textContent).toContain('Your next ride starts here.');
     expect(root.querySelector('[aria-current="page"]').textContent).toBe('Overview');
     expect(root.querySelector('.skip-link')).not.toBeNull();

@@ -55,7 +55,10 @@ test('mobile has a dedicated ride-first navigation, recovered ride controls, gla
     await launchPlatform(root, {email: 'rider@example.com'});
     await new Promise(resolve => setTimeout(resolve, 5));
     expect(document.body.classList.contains('mobile-app')).toBe(true);
+    expect(root.querySelector('#main-content > .app-versions')).not.toBeNull();
+    expect(root.querySelector('.sidebar .app-versions')).toBeNull();
     expect(root.querySelector('[data-backend-version]').textContent).toBe('build-42.1 (0123456789ab)');
+    expect(root.querySelector('[data-refresh-version]')).toBeNull();
     expect(root.querySelector('nav').textContent).not.toContain('Progress');
     expect(root.querySelector('nav').textContent).not.toContain('Training calendar');
     expect(document.body.dataset.route).toBe('player');
