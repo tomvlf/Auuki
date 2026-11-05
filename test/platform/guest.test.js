@@ -52,7 +52,7 @@ const go = async route => {
     await settle();
 };
 
-test('mobile guests can ride and use local features when the optional backend version check fails', async () => {
+test('mobile guests can ride and use local features without a backend version display', async () => {
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
     serverRequest.mockRejectedValue(new Error('Offline'));
     window.history.replaceState({}, '', '/mobile');
@@ -64,7 +64,7 @@ test('mobile guests can ride and use local features when the optional backend ve
     const root = document.querySelector('#platform');
     await launchPlatform(root, null);
     await settle();
-    expect(root.querySelector('[data-backend-version]').textContent).toBe('Unavailable');
+    expect(root.querySelector('.app-versions')).toBeNull();
     expect(root.textContent).toContain('Guest / on-device only');
     expect(root.querySelector('[data-action="signin"]')).not.toBeNull();
     expect(root.querySelector('#platform-content a[href="#/library"]')).not.toBeNull();
@@ -100,7 +100,6 @@ test('mobile guests can ride and use local features when the optional backend ve
     window.dispatchEvent(new Event('focus'));
     await settle();
     expect(coachingService).toHaveBeenCalled();
-    expect(serverRequest).toHaveBeenCalledTimes(1);
-    expect(serverRequest).toHaveBeenCalledWith('health', {account: null, signal: expect.any(AbortSignal)});
+    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(0);
     warning.mockRestore();
 });

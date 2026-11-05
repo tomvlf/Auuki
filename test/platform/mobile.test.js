@@ -20,6 +20,7 @@
 import { launchPlatform } from '../../src/platform/ui.js';
 import { xf } from '../../src/functions.js';
 import { db } from '../../src/db.js';
+import { serverRequest } from '../../src/server/client.js';
 
 jest.mock('../../src/index.js', () => {
     queueMicrotask(() => globalThis.window.dispatchEvent(new CustomEvent('app:ready')));
@@ -55,10 +56,9 @@ test('mobile has a dedicated ride-first navigation, recovered ride controls, gla
     await launchPlatform(root, {email: 'rider@example.com'});
     await new Promise(resolve => setTimeout(resolve, 5));
     expect(document.body.classList.contains('mobile-app')).toBe(true);
-    expect(root.querySelector('#main-content > .app-versions')).not.toBeNull();
+    expect(root.querySelector('.app-versions')).toBeNull();
     expect(root.querySelector('.sidebar .app-versions')).toBeNull();
-    expect(root.querySelector('[data-backend-version]').textContent).toBe('build-42.1 (0123456789ab)');
-    expect(root.querySelector('[data-refresh-version]')).toBeNull();
+    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(0);
     expect(root.querySelector('nav').textContent).not.toContain('Progress');
     expect(root.querySelector('nav').textContent).not.toContain('Training calendar');
     expect(document.body.dataset.route).toBe('player');
