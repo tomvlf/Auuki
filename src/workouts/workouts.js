@@ -512,6 +512,376 @@ let workouts = [
         <SteadyState Duration="60" Power="2.02" />
     </workout>
 </workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>2x20 Threshold</name>
+    <category>Threshold</category>
+    <description>The classic FTP builder: two 20 minute blocks at 96% of FTP with 8 minutes easy between. Settle into a steady, controlled rhythm rather than starting hard.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <SteadyState Duration="1200" Power="0.96"/>
+        <SteadyState Duration="480" Power="0.5"/>
+        <SteadyState Duration="1200" Power="0.96"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Over-Unders</name>
+    <category>Threshold</category>
+    <description>Three sets alternating 2 minutes just above FTP (105%) with 2 minutes just below (88%). Teaches you to recover while still riding hard, like surges in a race. 6 minutes easy between sets.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="3" OnDuration="120" OffDuration="120" OnPower="1.05" OffPower="0.88"/>
+        <SteadyState Duration="360" Power="0.5"/>
+        <IntervalsT Repeat="3" OnDuration="120" OffDuration="120" OnPower="1.05" OffPower="0.88"/>
+        <SteadyState Duration="360" Power="0.5"/>
+        <IntervalsT Repeat="3" OnDuration="120" OffDuration="120" OnPower="1.05" OffPower="0.88"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Sweet Spot 3x15</name>
+    <category>Sweet Spot</category>
+    <description>Three 15 minute blocks at 90% of FTP with 5 minutes easy between. A lot of aerobic work for moderate fatigue; a staple for time-crunched riders.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <SteadyState Duration="900" Power="0.9"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="900" Power="0.9"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="900" Power="0.9"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Tempo 2x30</name>
+    <category>Tempo</category>
+    <description>Two 30 minute blocks at 82% of FTP with 10 minutes easy between. Builds fatigue resistance for long rides and events. Comfortably hard: you can still speak in short sentences.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <SteadyState Duration="1800" Power="0.82"/>
+        <SteadyState Duration="600" Power="0.55"/>
+        <SteadyState Duration="1800" Power="0.82"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>VO2 Max 5x5</name>
+    <category>VO2 Max</category>
+    <description>Five 5 minute efforts at 112% of FTP with 5 minutes easy between. Raises your aerobic ceiling. Pace the first rep so you can match it on the last.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <SteadyState Duration="300" Power="1.12"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="300" Power="1.12"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="300" Power="1.12"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="300" Power="1.12"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <SteadyState Duration="300" Power="1.12"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Seiler 4x8</name>
+    <category>VO2 Max</category>
+    <description>Four 8 minute efforts at 105% of FTP with 4 minutes easy between, based on research by Stephen Seiler showing longer high-intensity intervals are very effective. Hard but sustainable for all four reps.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <SteadyState Duration="480" Power="1.05"/>
+        <SteadyState Duration="240" Power="0.5"/>
+        <SteadyState Duration="480" Power="1.05"/>
+        <SteadyState Duration="240" Power="0.5"/>
+        <SteadyState Duration="480" Power="1.05"/>
+        <SteadyState Duration="240" Power="0.5"/>
+        <SteadyState Duration="480" Power="1.05"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Billat 30/30</name>
+    <category>VO2 Max</category>
+    <description>Three sets of 10 x 30 seconds at 130% of FTP with 30 seconds easy. Short on/off intervals, after Veronique Billat, keep oxygen uptake high for a long time. 5 minutes easy between sets.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="10" OnDuration="30" OffDuration="30" OnPower="1.3" OffPower="0.5"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <IntervalsT Repeat="10" OnDuration="30" OffDuration="30" OnPower="1.3" OffPower="0.5"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <IntervalsT Repeat="10" OnDuration="30" OffDuration="30" OnPower="1.3" OffPower="0.5"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Ronnestad 30/15</name>
+    <category>VO2 Max</category>
+    <description>Three sets of 13 x 30 seconds at 125% of FTP with 15 seconds easy, based on research by Bent Ronnestad. The short recoveries make this one of the most demanding VO2 max sessions. 3 minutes easy between sets.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="13" OnDuration="30" OffDuration="15" OnPower="1.25" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.5"/>
+        <IntervalsT Repeat="13" OnDuration="30" OffDuration="15" OnPower="1.25" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.5"/>
+        <IntervalsT Repeat="13" OnDuration="30" OffDuration="15" OnPower="1.25" OffPower="0.5"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Tabata</name>
+    <category>HIIT</category>
+    <description>Two sets of 8 x 20 seconds very hard (170% of FTP) with 10 seconds easy. Short and brutal anaerobic work; 5 minutes easy between sets. Only for well-rested legs.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="8" OnDuration="20" OffDuration="10" OnPower="1.7" OffPower="0.45"/>
+        <SteadyState Duration="300" Power="0.5"/>
+        <IntervalsT Repeat="8" OnDuration="20" OffDuration="10" OnPower="1.7" OffPower="0.45"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Sprints 8x12s</name>
+    <category>Sprint</category>
+    <description>Eight all-out 12 second sprints with almost 5 minutes easy between. The sprints are free-ride (no power target): shift up, stand and go full gas. Full recovery keeps every sprint at top quality.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <SteadyState Duration="288" Power="0.5"/>
+        <FreeRide Duration="12"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Cadence Drills</name>
+    <category>Technique</category>
+    <description>Five 4 minute blocks at 80% of FTP alternating 1 minute low cadence (60 rpm) and 1 minute high cadence (105 rpm), 3 minutes easy between. Improves pedalling efficiency and strength on the bike.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.8" OffPower="0.8" Cadence="60" CadenceResting="105"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.8" OffPower="0.8" Cadence="60" CadenceResting="105"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.8" OffPower="0.8" Cadence="60" CadenceResting="105"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.8" OffPower="0.8" Cadence="60" CadenceResting="105"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.8" OffPower="0.8" Cadence="60" CadenceResting="105"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 90</name>
+    <category>Base</category>
+    <description>90 minutes of steady endurance riding at 65-70% of FTP with a short cadence lift every 15 minutes. The foundation of every training plan: easy enough to chat, long enough to build aerobic fitness.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="300" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="840" Power="0.67"/>
+        <SteadyState Duration="60" Power="0.7" Cadence="100"/>
+        <SteadyState Duration="840" Power="0.67"/>
+        <SteadyState Duration="60" Power="0.7" Cadence="100"/>
+        <SteadyState Duration="840" Power="0.67"/>
+        <SteadyState Duration="60" Power="0.7" Cadence="100"/>
+        <SteadyState Duration="840" Power="0.67"/>
+        <SteadyState Duration="60" Power="0.7" Cadence="100"/>
+        <SteadyState Duration="1200" Power="0.67"/>
+        <Cooldown Duration="300" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Openers</name>
+    <category>Race Prep</category>
+    <description>A short session for the day before an event: easy riding with three 1 minute efforts at 110% of FTP and three short free-ride sprints. Wakes up the legs without adding fatigue.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="60" OffDuration="180" OnPower="1.1" OffPower="0.55"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <FreeRide Duration="10"/>
+        <SteadyState Duration="170" Power="0.5"/>
+        <FreeRide Duration="10"/>
+        <SteadyState Duration="170" Power="0.5"/>
+        <FreeRide Duration="10"/>
+        <SteadyState Duration="300" Power="0.55"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>20 Minute FTP Test</name>
+    <category>Test</category>
+    <description>The classic field test: warm up, a 5 minute hard effort to clear fresh legs, 10 minutes easy, then 20 minutes as hard as you can sustain. The 20 minute block is free-ride, so pace it yourself. FTP is about 95% of your 20 minute average power.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.75"/>
+        <SteadyState Duration="180" Power="0.6"/>
+        <IntervalsT Repeat="3" OnDuration="30" OffDuration="60" OnPower="1.05" OffPower="0.5"/>
+        <SteadyState Duration="180" Power="0.55"/>
+        <SteadyState Duration="300" Power="1.05"/>
+        <SteadyState Duration="600" Power="0.5"/>
+        <FreeRide Duration="1200"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 2h30</name>
+    <category>Base</category>
+    <description>A steady 2 hour 30 minute aerobic ride: settle into an easy endurance pace, build gently through the middle, and finish with a short controlled lift. Keep it conversational and fuel regularly.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="2400" Power="0.65"/>
+        <SteadyState Duration="2400" Power="0.67"/>
+        <SteadyState Duration="2400" Power="0.68"/>
+        <SteadyState Duration="600" Power="0.7"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 3h</name>
+    <category>Base</category>
+    <description>A three-hour aerobic foundation ride with long, even endurance blocks and a gentle progression near the end. Stay relaxed, keep the effort conversational, and plan food and fluids before you start.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="3600" Power="0.65"/>
+        <SteadyState Duration="3600" Power="0.67"/>
+        <SteadyState Duration="1800" Power="0.68"/>
+        <SteadyState Duration="600" Power="0.7"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 3h30 Progressive</name>
+    <category>Base</category>
+    <description>A 3 hour 30 minute endurance ride that gradually builds from easy aerobic riding to a steady finish. Keep every block controlled rather than turning the progression into a threshold effort; fuel regularly throughout.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="900" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="3600" Power="0.64"/>
+        <SteadyState Duration="3600" Power="0.66"/>
+        <SteadyState Duration="2400" Power="0.68"/>
+        <SteadyState Duration="1200" Power="0.7"/>
+        <Cooldown Duration="900" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 4h</name>
+    <category>Base</category>
+    <description>A four-hour steady endurance ride for experienced riders building long-ride durability. Keep the effort easy and consistent, take advantage of the easier mid-ride block, and fuel and hydrate regularly.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="900" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="3600" Power="0.65"/>
+        <SteadyState Duration="3600" Power="0.66"/>
+        <SteadyState Duration="3600" Power="0.65"/>
+        <SteadyState Duration="1800" Power="0.67"/>
+        <Cooldown Duration="900" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
 ];
 
 export { workouts };
