@@ -42,13 +42,16 @@ The athlete ID matters because Intervals.icu uses account-specific identifiers, 
 
 ### 3. Import flow
 
-After a successful connection, the app can import historical rides:
+After a successful connection, the app imports historical activities of every type (rides, runs, swims, strength, and so on):
 
 1. It chooses a date window to fetch.
 2. It requests activity data from Intervals.icu.
-3. It converts the raw provider data into Athlima's normalized activity format.
-4. It saves the data into the user's coaching history.
-5. It moves the date cursor forward so the next sync can continue from where it left off.
+3. For activities with power or heart-rate recordings, it downloads those streams once and stores a compact profile for the mini graphs.
+4. It converts the raw provider data into Athlima's normalized activity format, keeping the activity type, Intervals.icu summary metrics (power, heart rate, load, zones, RPE, weather, device and more) and the activity time zone.
+5. It saves the data into the user's coaching history.
+6. It moves the date cursor forward so the next sync can continue from where it left off.
+
+Only cycling activities feed the coach's fitness, fatigue and plan adaptation; other sports are shown in the activity list, calendar and weekly/monthly totals with their own icon.
 
 This is designed to be resumable. If the app restarts or the sync is interrupted, the process continues from the saved cursor instead of starting over from the beginning.
 

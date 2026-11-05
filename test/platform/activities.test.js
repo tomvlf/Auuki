@@ -54,13 +54,13 @@ test('summarizes Monday-start weeks and calendar months without double-counting 
     }, date);
     const week = root.querySelector('[aria-label="This week activity totals"]');
     const month = root.querySelector('[aria-label="This month activity totals"]');
-    expect(metric(week, 'Rides')).toBe('4');
+    expect(metric(week, 'Activities')).toBe('4');
     expect(metric(week, 'Time')).toBe('1h 45m');
     expect(metric(week, 'Known distance')).toBe('17 km');
     expect(metric(week, 'Known power load')).toBe('75');
-    expect(metric(month, 'Rides')).toBe('2');
+    expect(metric(month, 'Activities')).toBe('2');
     expect(metric(month, 'Time')).toBe('40m');
-    expect(root.textContent).toContain('1 undated ride is excluded');
+    expect(root.textContent).toContain('1 undated activity is excluded');
     expect(root.textContent).toContain('Device-only rides are not included in the model');
     expect(root.querySelector('[aria-label="Current training load"]').textContent).toContain('Fitness 26');
 });
@@ -120,7 +120,7 @@ test('uses one load scale, identifies missing values, and does not invent totals
     expect(root.textContent).toContain('history is unavailable');
     expect(root.querySelector('.activity-period')).toBeNull();
     root.innerHTML = renderActivityOverview(data([]), activityLists(data([]), [], true), null, date);
-    expect(metric(root.querySelector('[aria-label="This week activity totals"]'), 'Rides')).toBe('0');
+    expect(metric(root.querySelector('[aria-label="This week activity totals"]'), 'Activities')).toBe('0');
     expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
 });
 
@@ -158,4 +158,34 @@ test('does not display training-state values from another day', () => {
         chronicLoad: 99, acuteLoad: 99, formBalance: 0, rampRate: 0,
     }, date);
     expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
+});
+
+test('includes every sport in totals and shows type icons and all imported metrics', () => {
+    const activities = [
+        ride('ride', '2026-03-01', {activityType: 'GravelRide', powerProfile: [150, 220, 180]}),
+        ride('run', '2026-03-01', {sport: 'running', activityType: 'TrailRun', distance: 8000,
+            movingTime: 2400, maximumHeartRate: 181, loadMetrics: {},
+            details: {trainingLoad: 61, calories: 640, description: '<b>Hills</b>',
+                heartRateZoneTimes: [600, 1200], gear: 'Trail shoes'}}),
+    ];
+    const lists = activityLists(data(activities), [], true);
+    expect(summarizeActivityPeriods(lists, {day: '2026-03-01', timeZone: 'UTC'}).week.count).toBe(2);
+
+    const root = document.createElement('div');
+    root.innerHTML = `<table><tbody>${lists.history.map(item => historyActivityRow(item, null, false)).join('')}</tbody></table>`;
+    const [gravel, run] = root.querySelectorAll('tr');
+    expect(gravel.querySelector('.activity-icon--cycling')).not.toBeNull();
+    expect(gravel.querySelector('.activity-type').getAttribute('aria-label')).toBe('Gravel ride');
+    expect(gravel.querySelector('.power-profile--recorded')).not.toBeNull();
+    expect(run.querySelector('.activity-icon--running')).not.toBeNull();
+    expect(run.textContent).toContain('Trail run');
+    const details = run.querySelector('details.activity-details');
+    expect(details.querySelector('b')).toBeNull();
+    expect(details.textContent).toContain('<b>Hills</b>');
+    const value = label => [...details.querySelectorAll('dt')].find(term => term.textContent === label)?.nextElementSibling.textContent;
+    expect(value('Training load (Intervals)')).toBe('61');
+    expect(value('Max heart rate')).toBe('181 bpm');
+    expect(value('Pace')).toBe('5:00 /km');
+    expect(value('Heart-rate zones')).toBe('Z1 10:00 · Z2 20:00');
+    expect(value('Gear')).toBe('Trail shoes');
 });

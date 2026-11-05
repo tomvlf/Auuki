@@ -37,7 +37,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp } from '../app.mjs';
-import { intervalsActivity } from '../intervals.mjs';
+import { compactProfile, intervalsActivity } from '../intervals.mjs';
 import { profile, goal } from '../../test/coaching/fixtures.js';
 
 const origin = 'http://localhost:1234';
@@ -90,7 +90,7 @@ async function fixture(t, options = {}) {
     };
 }
 
-test('provider adapter maps only cycling summaries and retains provenance without fabricating measurements', () => {
+test('provider adapter maps every activity type and retains provenance without fabricating measurements', () => {
     const raw = intervalsActivity(activity, '2026-03-20T12:00:00Z');
     assert.equal(raw.id, 'intervals:i123');
     assert.equal(raw.duration, 3600);
@@ -98,11 +98,82 @@ test('provider adapter maps only cycling summaries and retains provenance withou
     assert.equal(raw.externalId, 'i123');
     assert.deepEqual(raw.providerIds, {intervals: 'i123'});
     assert.equal(raw.start, activity.start_date);
-    assert.equal(intervalsActivity({...activity, type: 'Run'}), null);
+    const run = intervalsActivity({...activity, type: 'TrailRun', icu_rpe: 6, timezone: 'Europe/Brussels'});
+    assert.equal(run.sport, 'running');
+    assert.equal(run.activityType, 'TrailRun');
+    assert.equal(run.rpe, 6);
+    assert.equal(run.timeZone, 'Europe/Brussels');
+    assert.equal(intervalsActivity({...activity, type: 'Yoga'}).sport, 'mobility');
+    assert.equal(intervalsActivity({...activity, type: 'SomethingNew'}).sport, 'other');
+    assert.equal(intervalsActivity({...activity, type: 'GravelRide'}).sport, 'cycling');
+    assert.equal(intervalsActivity({...activity, timezone: 'Not/AZone'}).timeZone, undefined);
+    assert.equal(intervalsActivity({...activity, type: 'WeightTraining', moving_time: 0, elapsed_time: 1800}).duration, 1800);
+    assert.equal(intervalsActivity({...activity, type: 'WeightTraining', moving_time: 0}), null);
+    assert.equal(intervalsActivity({...activity, type: 'Ride', trainer: true}).indoor, true);
     assert.equal(intervalsActivity({...activity, type: 'VirtualRide'}).indoor, true);
     assert.equal(intervalsActivity({...activity, external_id: 'athlima:recording-123'}).id, 'recording-123');
     assert.equal(intervalsActivity({...activity, icu_weighted_avg_watts: null}).normalizedPower, null);
     assert.throws(() => intervalsActivity({...activity, start_date: null}), /missing/);
+    assert.throws(() => intervalsActivity({...activity, moving_time: 0}), /missing/);
+});
+
+test('provider adapter keeps Intervals summary details while dropping internal and invalid values', () => {
+    const raw = intervalsActivity({...activity, max_heartrate: 182, icu_joules: 650000, icu_training_load: 74,
+        calories: 900, decoupling: 3.2, icu_zone_times: [{id: 'Z1', secs: 600}, {id: 'Z2', secs: 1200}],
+        icu_hr_zone_times: [100, 200], gear: {id: 'b1', name: 'Gravel bike'}, tags: ['race'],
+        description: 'Felt good', icu_chat_id: 99, skyline_chart_bytes: ['AAA'], average_temp: Number.NaN,
+        interval_summary: ['2x 10m 250w']});
+    assert.equal(raw.maximumHeartRate, 182);
+    assert.equal(raw.workKj, 650);
+    assert.equal(raw.hasIntervals, true);
+    assert.equal(raw.details.trainingLoad, 74);
+    assert.equal(raw.details.gear, 'Gravel bike');
+    assert.deepEqual(raw.details.powerZoneTimes, [{id: 'Z1', secs: 600}, {id: 'Z2', secs: 1200}]);
+    assert.deepEqual(raw.details.heartRateZoneTimes, [100, 200]);
+    assert.equal(raw.details.description, 'Felt good');
+    assert.equal(raw.details.averageTemp, undefined);
+    assert.equal('icu_chat_id' in raw.details || 'skyline' in raw.details, false);
+});
+
+test('compact profiles average streams into short previews', () => {
+    assert.deepEqual(compactProfile([100, 200, null, 300], 2), [150, 300]);
+    assert.equal(compactProfile([null, 5]), null);
+    assert.equal(compactProfile('bad'), null);
+    assert.equal(compactProfile(Array.from({length: 3600}, () => 200)).length, 120);
+});
+
+test('imports power and heart-rate profiles from streams and reuses them until Intervals re-analyses', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    await f.connect(cookie);
+    const streamed = {...activity, stream_types: ['watts', 'heartrate', 'cadence'], analyzed: '2026-03-19T12:00:00Z'};
+    const watts = Array.from({length: 3600}, (_, i) => i === 10 ? 900 : 200);
+    f.remote(async url => url.includes('/streams') ? json([{type: 'watts', data: watts},
+        {type: 'heartrate', data: Array.from({length: 3600}, () => 140)}]) : json([streamed,
+        {...activity, id: 'swim', type: 'Swim', stream_types: ['heartrate']}]));
+    await f.sync(cookie);
+    await f.tick();
+    let history = await f.history(cookie);
+    const ride = history.data.activities.find(item => item.id === 'intervals:i123');
+    assert.equal(ride.powerProfile.length, 120);
+    assert.equal(ride.heartRateProfile[0], 140);
+    assert.equal(ride.maximumPower, 900);
+    assert.equal(history.data.activities.find(item => item.id === 'intervals:swim').sport, 'swimming');
+    const streamCalls = () => f.calls.filter(call => call.url.includes('/streams'));
+    assert.equal(streamCalls().length, 2);
+    assert.equal(new URL(streamCalls()[0].url).pathname, '/api/v1/activity/i123/streams.json');
+
+    f.advance(86400000);
+    await f.sync(cookie);
+    await f.tick();
+    assert.equal(streamCalls().length, 2);
+    assert.equal((await f.history(cookie)).data.activities.find(item => item.id === 'intervals:i123').maximumPower, 900);
+
+    streamed.analyzed = '2026-03-21T08:00:00Z';
+    f.advance(86400000);
+    await f.sync(cookie);
+    await f.tick();
+    assert.equal(streamCalls().length, 3);
 });
 
 test('integration endpoints require authentication, CSRF headers, encryption configuration and valid inputs', async t => {
@@ -237,9 +308,11 @@ test('historical imports run in bounded date ranges, persist progress, and norma
         return [params.get('oldest'), params.get('newest')];
     }), [['2026-01-01', '2026-01-31'], ['2026-02-01', '2026-03-03'], ['2026-03-04', '2026-03-20']]);
     const history = await f.history(cookie);
-    assert.equal(history.data.activities.length, 1);
-    assert.equal(history.data.activities[0].source, 'intervals');
-    assert.equal(history.data.activities[0].loadMetrics.power.value, 57.76);
+    assert.equal(history.data.activities.length, 2);
+    const ride = history.data.activities.find(item => item.id === 'intervals:i123');
+    assert.equal(ride.source, 'intervals');
+    assert.equal(ride.loadMetrics.power.value, 57.76);
+    assert.equal(history.data.activities.find(item => item.id === 'intervals:run').sport, 'running');
     assert.equal((await f.status(cookie)).data.status, 'connected');
     assert.ok((await f.status(cookie)).data.lastSuccess);
 });

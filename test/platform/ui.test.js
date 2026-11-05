@@ -100,7 +100,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await go('plan');
     expect(root.textContent).toContain('Create your training plan');
     await go('activities');
-    expect(root.textContent).toContain('Your rides will appear here');
+    expect(root.textContent).toContain('Your activities will appear here');
     await go('progress');
     expect(root.textContent).toContain('No inferred fitness score');
     await go('calendar');
@@ -308,7 +308,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     xf.dispatch('coaching:changed');
     await settle();
     const week = root.querySelector('[aria-label="This week activity totals"]');
-    const rideCount = [...week.querySelectorAll('dt')].find(item => item.textContent === 'Rides').nextElementSibling;
+    const rideCount = [...week.querySelectorAll('dt')].find(item => item.textContent === 'Activities').nextElementSibling;
     expect(rideCount.textContent).toBe('2');
     expect(root.querySelectorAll('.power-profile--recorded')).toHaveLength(2);
     expect(root.querySelector('.activity-history').textContent).toContain('RPE 6');

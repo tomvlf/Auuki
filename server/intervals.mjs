@@ -19,6 +19,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { CoachingService } from '../src/coaching/service.js';
 import { addDays, date } from '../src/coaching/domain.js';
+import { sportForType } from '../src/coaching/activity-types.js';
 
 // The Intervals.icu integration is a small server-side service. It is intentionally
 // separated from the browser code so a user can connect with a personal API key
@@ -49,41 +50,135 @@ class IntegrationError extends Error {
     }
 }
 
+// Intervals.icu summary fields kept as display details. Internal flags, sync bookkeeping and
+// large binary/chart payloads are intentionally omitted to keep the coaching document small.
+const detailFields = {
+    type: 'type', subType: 'sub_type', description: 'description', startLocal: 'start_date_local',
+    timeZone: 'timezone', provider: 'source', deviceName: 'device_name', powerMeter: 'power_meter',
+    gear: 'gear', tags: 'tags', commute: 'commute', race: 'race', trainer: 'trainer', analyzed: 'analyzed',
+    elapsedTime: 'elapsed_time', movingTime: 'moving_time', recordingTime: 'icu_recording_time',
+    coastingTime: 'coasting_time', warmupTime: 'icu_warmup_time', cooldownTime: 'icu_cooldown_time',
+    distance: 'distance', averageSpeed: 'average_speed', maxSpeed: 'max_speed', pace: 'pace', gap: 'gap',
+    elevationGain: 'total_elevation_gain', elevationLoss: 'total_elevation_loss',
+    averageAltitude: 'average_altitude', minAltitude: 'min_altitude', maxAltitude: 'max_altitude',
+    averagePower: 'icu_average_watts', normalizedPower: 'icu_weighted_avg_watts', ftp: 'icu_ftp',
+    intensity: 'icu_intensity', variabilityIndex: 'icu_variability_index',
+    efficiencyFactor: 'icu_efficiency_factor', powerHr: 'icu_power_hr', decoupling: 'decoupling',
+    work: 'icu_joules', workAboveFtp: 'icu_joules_above_ftp', wPrime: 'icu_w_prime',
+    maxWbalDepletion: 'icu_max_wbal_depletion', lrBalance: 'avg_lr_balance', crankLength: 'crank_length',
+    rollingFtp: 'icu_rolling_ftp', estimatedCp: 'icu_pm_cp', estimatedFtp: 'icu_pm_ftp',
+    averageHeartRate: 'average_heartrate', maxHeartRate: 'max_heartrate', lthr: 'lthr',
+    restingHeartRate: 'icu_resting_hr', athleteMaxHeartRate: 'athlete_max_hr', hrRecovery: 'icu_hrr',
+    averageCadence: 'average_cadence', averageStride: 'average_stride',
+    trainingLoad: 'icu_training_load', powerLoad: 'power_load', hrLoad: 'hr_load', paceLoad: 'pace_load',
+    hrLoadType: 'hr_load_type', trimp: 'trimp', strainScore: 'strain_score',
+    fitness: 'icu_ctl', fatigue: 'icu_atl', polarizationIndex: 'polarization_index',
+    rpe: 'icu_rpe', perceivedExertion: 'perceived_exertion', sessionRpe: 'session_rpe', feel: 'feel',
+    powerZoneTimes: 'icu_zone_times', heartRateZoneTimes: 'icu_hr_zone_times', paceZoneTimes: 'pace_zone_times',
+    powerZones: 'icu_power_zones', heartRateZones: 'icu_hr_zones',
+    calories: 'calories', carbsUsed: 'carbs_used', carbsIngested: 'carbs_ingested', weight: 'icu_weight',
+    averageTemp: 'average_temp', minTemp: 'min_temp', maxTemp: 'max_temp',
+    weatherTemp: 'average_weather_temp', feelsLike: 'average_feels_like', windSpeed: 'average_wind_speed',
+    windGust: 'average_wind_gust', windDirection: 'prevailing_wind_deg', headwindPercent: 'headwind_percent',
+    tailwindPercent: 'tailwind_percent', clouds: 'average_clouds', rain: 'max_rain', snow: 'max_snow',
+    lapCount: 'icu_lap_count', intervalSummary: 'interval_summary', streamTypes: 'stream_types',
+    lengths: 'lengths', poolLength: 'pool_length', kgLifted: 'kg_lifted', compliance: 'compliance',
+    pairedEventId: 'paired_event_id', stravaId: 'strava_id',
+};
+
+function detailValue(value) {
+    if(typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    if(typeof value === 'boolean') return value;
+    if(typeof value === 'string') return value ? value.slice(0, 2000) : undefined;
+    if(Array.isArray(value)) {
+        const items = value.slice(0, 60).map(item => item && typeof item === 'object'
+            ? Object.fromEntries(Object.entries(item).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v))
+                .map(([k, v]) => [k, typeof v === 'string' ? v.slice(0, 200) : v]))
+            : detailValue(item)).filter(item => item !== undefined);
+        return items.length ? items : undefined;
+    }
+    if(value && typeof value === 'object') {
+        const entries = Object.entries(value).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v))
+            .map(([k, v]) => [k, typeof v === 'string' ? v.slice(0, 200) : v]);
+        return entries.length ? Object.fromEntries(entries) : undefined;
+    }
+    return undefined;
+}
+
+function validTimeZone(zone) {
+    if(typeof zone !== 'string' || !zone) return null;
+    try { new Intl.DateTimeFormat('en', {timeZone: zone}); return zone; } catch { return null; }
+}
+
+const finite = (value, min = 0, max = Infinity) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
+
 // Provider objects stop here. All consumers, including the coach, use normalizeActivity.
 /**
  * Maps a raw Intervals.icu activity payload to Athlima's normalized activity format.
  *
- * The coach and history logic consume only the normalized model, so Intervals data
- * must be reduced to a stable internal shape before any planning logic runs.
+ * Every activity type is imported. The sport category drives coaching (cycling only),
+ * while the original type and the detail summary are kept for display.
  *
  * @param {object} activity - Raw activity payload returned from Intervals.icu.
  * @param {string} syncedAt - ISO timestamp when this import batch was processed.
- * @returns {{id: string, externalId: string, source: string, providerIds: object,
- *   name: string|null, start: string, duration: number, movingTime: number,
- *   distance: number|null, elevation: number|null, indoor: boolean,
- *   averagePower: number|null, normalizedPower: number|null, ftp: number|null,
- *   averageHeartRate: number|null, averageCadence: number|null, rawReference: string,
- *   syncedAt: string}|null} A normalized activity or null when the activity type is not a cycling ride.
+ * @returns {object|null} Raw activity input for normalizeActivity, or null when a
+ *   non-cycling activity has no duration and therefore cannot be represented.
  */
 export function intervalsActivity(activity, syncedAt) {
-    if(!['Ride', 'VirtualRide', 'EBikeRide', 'MountainBikeRide', 'GravelRide',
-        'EMountainBikeRide'].includes(activity.type)) return null;
-    if(!activity.id || !activity.start_date || !(activity.moving_time > 0)) {
+    const type = typeof activity.type === 'string' && activity.type ? activity.type : 'Other';
+    const sport = sportForType(type);
+    const duration = finite(activity.moving_time, 1) ?? finite(activity.elapsed_time, 1);
+    if(!activity.id || !activity.start_date || !duration) {
+        if(sport !== 'cycling' && activity.id && activity.start_date) return null;
         throw new IntegrationError('A cycling activity is missing its ID, UTC start or moving time. Retry after correcting it in Intervals.icu.');
     }
     const externalId = activity.external_id || '';
     const legacyId = /^(?:athlima|auuki):([\w-]{1,100})$/.exec(externalId);
+    const details = {};
+    for(const [key, field] of Object.entries(detailFields)) {
+        const value = detailValue(field === 'gear' ? activity.gear?.name : activity[field]);
+        if(value !== undefined) details[key] = value;
+    }
+    const joules = finite(activity.icu_joules);
     return {
         id: legacyId ? legacyId[1] : `intervals:${activity.id}`,
         externalId: String(activity.id), source: 'intervals', providerIds: {intervals: String(activity.id)},
-        name: activity.name, start: activity.start_date, duration: activity.moving_time,
-        movingTime: activity.moving_time, distance: activity.distance,
-        elevation: activity.total_elevation_gain, indoor: activity.type === 'VirtualRide',
+        name: activity.name, start: activity.start_date, duration,
+        movingTime: finite(activity.moving_time), elapsedTime: finite(activity.elapsed_time),
+        distance: finite(activity.distance) ?? finite(activity.icu_distance),
+        elevation: finite(activity.total_elevation_gain),
+        sport, activityType: type, timeZone: validTimeZone(activity.timezone) ?? undefined,
+        indoor: activity.trainer === true || /^Virtual/.test(type),
         averagePower: activity.icu_average_watts ?? activity.average_watts,
         normalizedPower: activity.icu_weighted_avg_watts, ftp: activity.icu_ftp,
-        averageHeartRate: activity.average_heartrate, averageCadence: activity.average_cadence,
-        rawReference: String(activity.id), syncedAt,
+        averageHeartRate: activity.average_heartrate, maximumHeartRate: activity.max_heartrate,
+        averageCadence: activity.average_cadence,
+        workKj: joules == null ? null : joules / 1000,
+        rpe: finite(activity.icu_rpe, 0, 10) ?? finite(activity.perceived_exertion, 0, 10),
+        hasIntervals: Array.isArray(activity.interval_summary) && activity.interval_summary.length > 0,
+        details, rawReference: String(activity.id), syncedAt,
     };
+}
+
+/**
+ * Reduces one-second stream samples to a short averaged profile for list previews.
+ *
+ * @param {Array<number|null>} values - Stream samples from Intervals.icu.
+ * @param {number} [buckets=120] - Maximum number of profile points.
+ * @returns {number[]|null} Rounded averages, or null without enough valid samples.
+ */
+export function compactProfile(values, buckets = 120) {
+    if(!Array.isArray(values)) return null;
+    const count = Math.min(buckets, values.length);
+    const profile = [];
+    for(let index = 0; index < count; index++) {
+        const slice = values.slice(Math.floor(index * values.length / count),
+            Math.max(Math.floor(index * values.length / count) + 1, Math.floor((index + 1) * values.length / count)))
+            .filter(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+        if(slice.length) profile.push(Math.round(slice.reduce((sum, value) => sum + value, 0) / slice.length));
+    }
+    return profile.length >= 2 ? profile : null;
 }
 
 /**
@@ -196,10 +291,10 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
      *   athleteId?: string}} [options] - Request customisation.
      * @returns {Promise<any>} Parsed JSON response body.
      */
-    async function remote(apiKey, path, {query, body, method = 'GET', athleteId = '0'} = {}) {
+    async function remote(apiKey, path, {query, body, method = 'GET', athleteId = '0', base} = {}) {
         let response;
         try {
-            response = await fetchImpl(`${athleteEndpoint(athleteId)}${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
+            response = await fetchImpl(`${base ?? athleteEndpoint(athleteId)}${path}${query ? `?${new URLSearchParams(query)}` : ''}`, {
                 method, ...(body ? {body} : {}),
                 headers: {Authorization: `Basic ${Buffer.from(`API_KEY:${apiKey}`).toString('base64')}`,
                     Accept: 'application/json'}, signal: AbortSignal.timeout(25000), redirect: 'error',
@@ -236,6 +331,57 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
         const activities = await remote(apiKey, '/activities', {query: {oldest, newest}, athleteId});
         if(!Array.isArray(activities)) throw new IntegrationError('Intervals.icu returned an unexpected activity list.', 502);
         return activities;
+    }
+    /**
+     * Adds compact power and heart-rate profiles plus stream-derived maximum power.
+     *
+     * Only activities that advertise watts or heart-rate streams are requested. Profiles are
+     * reused while Intervals.icu has not re-analysed the activity, which keeps repeat syncs cheap.
+     * A missing stream never fails the import; rate limiting does, so the batch is retried later.
+     *
+     * @param {string} apiKey - API key for the rider.
+     * @param {Array<{item: object, raw: object}>} pairs - Provider payloads with their mapped activity.
+     * @param {Map<string, object>} known - Previously stored activities by ID.
+     * @returns {Promise<void>} Resolves when every profile has been attached.
+     */
+    async function attachStreams(apiKey, pairs, known) {
+        const wanted = pairs.filter(({item}) => Array.isArray(item.stream_types) &&
+            item.stream_types.some(type => type === 'watts' || type === 'heartrate'));
+        const queue = [];
+        for(const {item, raw} of wanted) {
+            const previous = known.get(raw.id);
+            if(previous && previous.details?.analyzed === raw.details.analyzed &&
+               (previous.powerProfile || previous.heartRateProfile)) {
+                raw.powerProfile = previous.powerProfile ?? undefined;
+                raw.heartRateProfile = previous.heartRateProfile ?? undefined;
+                if(previous.original?.maximumPower != null) raw.maximumPower = previous.original.maximumPower;
+            } else queue.push({item, raw});
+        }
+        const worker = async () => {
+            for(let next = queue.shift(); next; next = queue.shift()) {
+                let streams;
+                try {
+                    streams = await remote(apiKey, `/activity/${encodeURIComponent(String(next.item.id))}/streams.json`,
+                        {base: API, query: {types: 'watts,heartrate'}});
+                } catch(error) {
+                    if(error.status === 429) throw error;
+                    continue;
+                }
+                if(!Array.isArray(streams)) continue;
+                const data = type => streams.find(stream => stream?.type === type)?.data;
+                const watts = data('watts');
+                const power = compactProfile(watts);
+                const heartRate = compactProfile(data('heartrate'));
+                if(power) {
+                    next.raw.powerProfile = power;
+                    const peak = watts.reduce((max, value) =>
+                        Number.isFinite(value) && value <= 3000 ? Math.max(max, value) : max, 0);
+                    if(peak > 0) next.raw.maximumPower = peak;
+                }
+                if(heartRate) next.raw.heartRateProfile = heartRate;
+            }
+        };
+        await Promise.all(Array.from({length: Math.min(3, queue.length)}, worker));
     }
     /**
      * Returns the decrypted API key for a connected user account.
@@ -411,9 +557,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             if(stopped || row(current.user_id)?.credential !== current.credential) return;
             const athleteId = current.athlete_id || '0';
             const newest = [addDays(current.cursor, 30), current.newest].sort()[0];
-            const received = await download(decrypt(current.credential, current.user_id), current.cursor, newest, athleteId);
+            const apiKey = decrypt(current.credential, current.user_id);
+            const received = await download(apiKey, current.cursor, newest, athleteId);
             if(stopped || row(current.user_id)?.credential !== current.credential) return;
-            const raw = received.map(a => intervalsActivity(a, new Date(clock()).toISOString())).filter(Boolean);
+            const syncedAt = new Date(clock()).toISOString();
+            const pairs = received.map(item => ({item, raw: intervalsActivity(item, syncedAt)})).filter(pair => pair.raw);
+            const known = new Map((document(current.user_id, 'coaching').data?.activities || [])
+                .map(activity => [activity.id, activity]));
+            await attachStreams(apiKey, pairs, known);
+            if(stopped || row(current.user_id)?.credential !== current.credential) return;
+            const raw = pairs.map(pair => pair.raw);
             const stored = document(current.user_id, 'coaching');
             let staged;
             const service = new CoachingService({

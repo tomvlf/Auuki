@@ -24,6 +24,8 @@ import { fileHandler } from '../file.js';
 import { accountStorage, accountKey, hasAccountScope } from '../storage/account.js';
 import { serverRequest } from '../server/client.js';
 import { renderPowerProfile } from './power-profile.js';
+import { activityIcon, activityTypeLabel } from './activity-icon.js';
+import { renderActivityDetails } from './activity-details.js';
 
 const storageKey = 'training-calendar';
 const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -420,20 +422,25 @@ class TrainingCalendar extends HTMLElement {
     }
 
     renderCalendarPreview(entry, date, index) {
-        const source = entry.source === 'activity' ? 'Ride'
+        const source = entry.source === 'activity' ? this.activityLabel(entry.activity)
             : entry.source === 'coaching' ? 'Coach'
                 : entry.source === 'planned' ? 'Intervals' : 'Planned';
         const metrics = this.workoutMetrics(entry);
         return `<li class="calendar-event ${entry.source === 'activity' ? 'is-activity' : ''}">
             <button type="button" class="calendar-event--select" data-date="${date}"
                     data-card-index="${index}" aria-label="View ${escapeHTML(entry.name || 'Workout')} on ${date}">
-                <span class="calendar-event--source">${source}</span>
+                <span class="calendar-event--source">${entry.source === 'activity'
+                    ? activityIcon(entry.activity) : ''}${escapeHTML(source)}</span>
                 <strong class="calendar-event--name">${escapeHTML(entry.name || 'Workout')}</strong>
                 <span class="calendar-event--metrics">${metrics.map(metric =>
                     `<span>${escapeHTML(metric)}</span>`).join('')}</span>
             </button>
             ${this.renderEntryProfile(entry)}
         </li>`;
+    }
+
+    activityLabel(activity) {
+        return activityTypeLabel(activity?.activityType, activity?.sport || 'cycling');
     }
 
     workoutMetrics(entry) {
@@ -448,7 +455,7 @@ class TrainingCalendar extends HTMLElement {
                 load != null ? `Load ${Math.round(load)}` : null,
                 activity.rpe != null ? `RPE ${activity.rpe}` : null,
             ].filter(Boolean);
-            return metrics.length ? metrics : ['Completed ride'];
+            return metrics.length ? metrics : ['Completed'];
         }
         const meta = entry.workout?.meta ?? {};
         const duration = typeof meta.duration === 'number' ? Math.round(meta.duration / 60) : null;
@@ -485,18 +492,21 @@ class TrainingCalendar extends HTMLElement {
         const metrics = this.workoutMetrics(entry);
         const source = entry.source === 'planned' ? 'Intervals'
             : entry.source === 'coaching' ? 'Coach'
-                : entry.source === 'activity' ? 'Completed ride' : 'Plan';
+                : entry.source === 'activity' ? `Completed ${this.activityLabel(entry.activity).toLowerCase()}` : 'Plan';
         const profile = this.renderEntryProfile(entry);
+        const details = entry.source === 'activity' ? renderActivityDetails(entry.activity) : '';
 
         return `
             <li class="training-calendar--entry ${entry.source === 'activity' ? 'is-activity' : ''}">
                 <div class="training-calendar--copy">
-                    <div class="training-calendar--eyebrow">${source}</div>
+                    <div class="training-calendar--eyebrow">${entry.source === 'activity'
+                        ? activityIcon(entry.activity) : ''}${escapeHTML(source)}</div>
                     <div class="training-calendar--name">${title}</div>
                     <div class="training-calendar--meta">
                         ${metrics.map(metric => `<span>${escapeHTML(metric)}</span>`).join('')}
                     </div>
                     ${profile}
+                    ${details}
                 </div>
                 <div class="training-calendar--entry-actions">
                     ${entry.workout &&
@@ -523,7 +533,7 @@ class TrainingCalendar extends HTMLElement {
             .map(activity => ({
                 id: activity.id,
                 date,
-                name: activity.name || activity.original?.name || 'Ride',
+                name: activity.name || activity.original?.name || 'Activity',
                 source: 'activity',
                 activity,
             }));
@@ -594,7 +604,7 @@ class TrainingCalendar extends HTMLElement {
         const minutes = Math.round(duration / 60);
         const durationText = `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
         const metrics = [
-            ['Rides', activities.length],
+            ['Activities', activities.length],
             ['Time', durationText],
             ['Distance', `${(distance / 1000).toFixed(1)} km`],
             loadMetrics.length ? [loadMetrics.length === activities.length ? 'Load' : 'Known load',

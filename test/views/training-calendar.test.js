@@ -137,7 +137,7 @@ describe('training calendar', () => {
         const nextDay = calendar.querySelector('.calendar-day--select[data-date="2026-11-04"]').closest('td');
         expect(nextDay.textContent).not.toContain('Evening ride');
         const summary = day.closest('tr').querySelector('.training-calendar--week-summary');
-        expect(summary.textContent).toMatch(/Rides\s*1/);
+        expect(summary.textContent).toMatch(/Activities\s*1/);
         expect(summary.textContent).toMatch(/Time\s*1h 0m/);
         expect(summary.textContent).toMatch(/Distance\s*30.0 km/);
     });
@@ -181,7 +181,7 @@ describe('training calendar', () => {
         calendar.render();
 
         const summary = calendar.querySelector('[data-week-start="2026-11-02"] .training-calendar--week-summary');
-        expect(summary.textContent).toMatch(/Rides\s*2/);
+        expect(summary.textContent).toMatch(/Activities\s*2/);
         expect(summary.textContent).toMatch(/Time\s*1h 30m/);
         expect(summary.textContent).toMatch(/Distance\s*40.0 km/);
         expect(summary.textContent).toMatch(/Known load\s*42/);
@@ -234,7 +234,7 @@ describe('training calendar', () => {
         const calendar = createCalendar();
         const summary = calendar.querySelector('[data-week-start="2026-11-02"] .training-calendar--week-summary');
 
-        expect(summary.textContent).toMatch(/Rides\s*1/);
+        expect(summary.textContent).toMatch(/Activities\s*1/);
         expect(summary.textContent).toMatch(/Load\s*100/);
         expect(summary.textContent).toMatch(/Fitness\s*2/);
         expect(summary.textContent).toMatch(/Fatigue\s*7/);

@@ -1,5 +1,7 @@
 import { addDays, localDay, weekday } from '../coaching/domain.js';
 import { renderPowerProfile } from '../views/power-profile.js';
+import { activityIcon, activityTypeLabel } from '../views/activity-icon.js';
+import { renderActivityDetails } from '../views/activity-details.js';
 import { escape, number, time } from './format.js';
 
 const loadLabels = {
@@ -67,7 +69,6 @@ export function summarizeActivityPeriods(lists, {day, timeZone, loadSource = 'po
     const weekStart = addDays(day, -((weekday(day) + 6) % 7));
     const monthStart = `${day.slice(0, 7)}-01`;
     const rides = [...lists.history, ...lists.pending, ...lists.cached]
-        .filter(activity => !activity.sport || activity.sport === 'cycling')
         .map(activity => ({activity, day: activityDay(activity, timeZone)}));
     const inRange = start => rides.filter(ride => ride.day && ride.day >= start && ride.day <= day)
         .map(ride => ride.activity);
@@ -93,7 +94,7 @@ function periodMarkup(label, values, loadSource) {
     return `<section class="activity-period" aria-label="${label} activity totals">
         <h3>${label}</h3>
         <dl class="activity-period-metrics">
-            <div><dt>Rides</dt><dd>${values.count}</dd></div>
+            <div><dt>Activities</dt><dd>${values.count}</dd></div>
             ${totalMetric('Time', values.duration, durationLabel)}
             ${totalMetric('Distance', values.distance, value => `${number(value / 1000, 1)} km`)}
             ${totalMetric(loadLabels[loadSource], values.load, value => number(value, 1))}
@@ -114,7 +115,7 @@ export function renderActivityOverview(data, lists, state, now = Date.now()) {
     const start = weekStart < monthStart ? weekStart : monthStart;
     const currentRides = [...lists.history, ...lists.pending, ...lists.cached].filter(activity => {
         const recordedDay = activityDay(activity, timeZone);
-        return (!activity.sport || activity.sport === 'cycling') && recordedDay && recordedDay >= start && recordedDay <= day;
+        return recordedDay && recordedDay >= start && recordedDay <= day;
     });
     const availableSource = ['power', 'sessionRpe', 'heartRate'].find(source =>
         currentRides.some(activity => Number.isFinite(activity.loadMetrics?.[source]?.value)));
@@ -136,9 +137,9 @@ export function renderActivityOverview(data, lists, state, now = Date.now()) {
             <span>Ramp <strong>${number(currentState.rampRate, 1)}</strong></span>
         </div>
         <p class="muted activity-overview-note">Modelled from coaching history using ${escape(loadLabels[loadSource])};
-            these are not direct measurements.${deviceOnly ? ' Device-only rides are not included in the model.' : ''}</p>` : ''}
-        <p class="muted activity-overview-note">The week starts on Monday. Totals include dated cycling activities${deviceOnly ? ' and device-only recordings' : ''}.
-            ${periods.undated ? `${periods.undated} undated ${periods.undated === 1 ? 'ride is' : 'rides are'} excluded.` : ''}</p>
+            these are not direct measurements. Only cycling activities are modelled.${deviceOnly ? ' Device-only rides are not included in the model.' : ''}</p>` : ''}
+        <p class="muted activity-overview-note">The week starts on Monday. Totals include all dated activities${deviceOnly ? ' and device-only recordings' : ''}.
+            ${periods.undated ? `${periods.undated} undated ${periods.undated === 1 ? 'activity is' : 'activities are'} excluded.` : ''}</p>
     </section>`;
 }
 
@@ -148,7 +149,7 @@ function profileMarkup(activity, local) {
     return renderPowerProfile({
         samples: samples || [],
         ftp: activity.ftp ?? local?.ftp,
-        label: activity.name || 'Cycling activity',
+        label: activity.name || 'Activity',
     }) || '<small class="activity-no-profile">No recorded power profile</small>';
 }
 
@@ -168,7 +169,7 @@ function loadAndFeedback(activity) {
 export function localActivityRow(activity, timeZone) {
     const day = activityDay(activity, timeZone);
     return `<li class="session-row activity-local">
-        <div class="activity-local-details"><strong>${escape(activity.name || 'Recorded ride')}</strong>
+        <div class="activity-local-details"><span class="activity-heading">${activityIcon(activity)}<strong>${escape(activity.name || 'Recorded ride')}</strong></span>
             <span>${day ? `${escape(day)} / ` : ''}${time(activity.duration)} / ${measurement(activity.distance == null ? null : activity.distance / 1000, 'km', 1)}</span>
             <span>${measurement(activity.averagePower, 'W')} / ${measurement(activity.averageHeartRate, 'bpm')}</span>
             ${profileMarkup(activity)}
@@ -183,8 +184,10 @@ export function historyActivityRow(activity, local, connected) {
         ${connected ? `<button class="secondary" data-upload-ride="${escape(activity.id)}">Send to Intervals.icu</button>` : ''}
     </div>` : '--';
     return `<tr>
-        <td data-label="Activity" class="activity-title"><strong>${escape(activity.name || 'Cycling activity')}</strong>
-            <small>${escape(activity.day)}</small>${profileMarkup(activity, local)}</td>
+        <td data-label="Activity" class="activity-title"><span class="activity-heading">${activityIcon(activity)}
+            <strong>${escape(activity.name || 'Activity')}</strong></span>
+            <small>${escape(activity.day)} · ${escape(activityTypeLabel(activity.activityType, activity.sport || 'cycling'))}</small>
+            ${profileMarkup(activity, local)}${renderActivityDetails(activity)}</td>
         <td data-label="Duration">${time(activity.duration)}</td>
         <td data-label="Distance">${measurement(activity.distance == null ? null : activity.distance / 1000, 'km', 1)}</td>
         <td data-label="Avg power">${measurement(activity.averagePower, 'W')}</td>

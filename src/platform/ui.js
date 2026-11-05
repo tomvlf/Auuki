@@ -228,11 +228,11 @@ export async function launchPlatform(root, account) {
                 <ul class="session-list">${lists.pending.map(activity => localActivityRow(activity, timeZone)).join('')}</ul><button data-action="retry-rides">Retry synchronization</button>`) : ''}
             ${lists.cached.length ? card('Device recordings', `<p>Recordings from earlier guest rides are still available on this device.</p>
                 <ul class="session-list">${lists.cached.map(activity => localActivityRow(activity, timeZone)).join('')}</ul>`) : ''}
-            ${card('Ride history', !lists.historyAvailable ? '<p role="status">Ride history is currently unavailable.</p>' :
+            ${card('Activity history', !lists.historyAvailable ? '<p role="status">Activity history is currently unavailable.</p>' :
                 lists.history.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
                 <th>Avg power</th><th>Avg HR</th><th>Load / feedback</th><th>Source</th><th>File</th></tr></thead><tbody>${lists.history.map(activity =>
                 historyActivityRow(activity, lists.localById.get(String(activity.id)), integration?.connected)).join('')}</tbody></table></div>` :
-                empty(authenticated ? 'Your rides will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'), 'activity-history')}
+                empty(authenticated ? 'Your activities will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'), 'activity-history')}
             <p class="muted">Missing measurements are shown as --, not estimated. FIT downloads are retained locally for the most recent seven rides.</p>`;
     }
     function progress(data) {

@@ -130,6 +130,11 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 #platform .activity-title .power-profile, #platform .activity-local .power-profile { min-width: 0; max-width: 230px; margin-top: 8px; }
 #platform .activity-title .power-profile svg, #platform .activity-local .power-profile svg { height: 45px; }
 #platform .activity-no-profile { margin-top: 6px; color: var(--platform-muted); }
+#platform .activity-heading { display: flex; align-items: center; gap: 8px; }
+#platform .activity-icon { width: 20px; height: 20px; color: var(--platform-accent); }
+#platform .activity-details { max-width: 520px; }
+#platform .activity-details summary { min-height: 32px; display: flex; align-items: center; color: var(--platform-accent); }
+#platform .activity-details dt { color: var(--platform-muted); }
 #platform .activity-file-actions { min-width: 0; margin: 0; }
 #platform .activity-file-actions button { max-width: 96px; padding: 8px; white-space: normal; font-size: 12px; }
 .device-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }

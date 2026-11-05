@@ -2840,6 +2840,58 @@ coaching-panel textarea {
     color: #83dcc5;
 }
 
+.activity-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    vertical-align: middle;
+}
+
+.activity-icon {
+    flex: 0 0 auto;
+    width: 1.35em;
+    height: 1.35em;
+    color: #83dcc5;
+}
+
+.calendar-event--source .activity-type,
+.training-calendar--eyebrow .activity-type {
+    margin-right: 0.35em;
+}
+
+.activity-details {
+    margin-top: 0.6em;
+    font-size: 0.85em;
+}
+
+.activity-details summary {
+    cursor: pointer;
+    color: #83dcc5;
+    font-weight: 600;
+}
+
+.activity-details dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.4em 1em;
+    margin: 0.6em 0 0;
+}
+
+.activity-details dt {
+    color: var(--foreground-color-inactive, #a4b4c5);
+    font-size: 0.85em;
+}
+
+.activity-details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.activity-details--description {
+    margin: 0.5em 0 0;
+    white-space: pre-line;
+}
+
 .calendar-event--name {
     overflow-wrap: anywhere;
     color: var(--foreground-color);

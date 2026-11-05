@@ -18,6 +18,7 @@
 
 import { VERSION, positive, mean, metric, localDay, date } from './domain.js';
 import { powerAccumulator } from './power.js';
+import { sports } from './activity-types.js';
 
 function optional(value, name, warnings, min = 0, max = Infinity) {
     if(value == null) return null;
@@ -39,7 +40,9 @@ export function normalizeActivity(raw, profile = {timeZone: 'UTC'}) {
     const timeZone = raw.timeZone || profile.timeZone;
     if(!timeZone) throw new Error('An activity or athlete time zone is required.');
     const day = localDay(raw.start, timeZone);
-    const ftp = optional(raw.ftp ?? profile.ftp, 'FTP', warnings, 1);
+    const sport = typeof raw.sport === 'string' && sports.includes(raw.sport) ? raw.sport : 'cycling';
+    // The athlete FTP is a cycling threshold; other sports only use a provider-supplied threshold.
+    const ftp = optional(raw.ftp ?? (sport === 'cycling' ? profile.ftp : null), 'FTP', warnings, 1);
     const rpe = optional(raw.rpe, 'RPE', warnings, 0, 10);
     let power = optional(raw.normalizedPower ?? raw.weightedPower, 'normalized power', warnings, 0, 3000);
     let avgPower = optional(raw.averagePower, 'average power', warnings, 0, 3000);
@@ -78,8 +81,8 @@ export function normalizeActivity(raw, profile = {timeZone: 'UTC'}) {
         powerSource = 'derived-30s-rolling-fourth-power';
     }
     const intensity = power != null && ftp ? power / ftp : null;
-    if(power == null) warnings.push('Normalized power unavailable; average power is not used as normalized power.');
-    if(!ftp) warnings.push('FTP unavailable; power load unavailable.');
+    if(power == null && sport === 'cycling') warnings.push('Normalized power unavailable; average power is not used as normalized power.');
+    if(!ftp && (sport === 'cycling' || power != null)) warnings.push('FTP unavailable; power load unavailable.');
     const tss = intensity == null ? null : raw.duration / 3600 * intensity ** 2 * 100;
     const hrReserve = hr && profile.maxHeartRate > profile.restingHeartRate &&
         positive(profile.restingHeartRate) ? (hr - profile.restingHeartRate) /
@@ -108,12 +111,23 @@ export function normalizeActivity(raw, profile = {timeZone: 'UTC'}) {
     const bestEfforts = (raw.bestEfforts || []).filter(e => positive(e.seconds) && positive(e.watts) &&
         e.watts <= 3000 && e.seconds <= raw.duration).map(e => ({...e}));
     if(bestEfforts.length !== (raw.bestEfforts || []).length) warnings.push('Invalid best-effort summaries excluded.');
+    const profileSamples = (values, name, max) => {
+        if(values == null) return null;
+        if(Array.isArray(values) && values.length >= 2 && values.length <= 500 &&
+           values.every(v => Number.isFinite(v) && v >= 0 && v <= max)) return [...values];
+        warnings.push(`Invalid ${name} profile excluded.`);
+        return null;
+    };
+    const details = raw.details && typeof raw.details === 'object' && !Array.isArray(raw.details)
+        ? JSON.parse(JSON.stringify(raw.details)) : null;
     return {
         id: String(raw.id), externalId: raw.externalId ?? raw.id, source: raw.source || 'manual',
-        name: typeof raw.name === 'string' ? raw.name : 'Cycling activity',
+        name: typeof raw.name === 'string' ? raw.name : sport === 'cycling' ? 'Cycling activity' : 'Activity',
         start: new Date(raw.start).toISOString(), day, timeZone,
-        sport: raw.sport || 'cycling', indoor: raw.indoor ?? null,
+        sport, activityType: typeof raw.activityType === 'string' ? raw.activityType : null,
+        indoor: raw.indoor ?? null,
         duration: raw.duration, movingTime: optional(raw.movingTime, 'moving time', warnings),
+        elapsedTime: optional(raw.elapsedTime, 'elapsed time', warnings),
         distance: optional(raw.distance, 'distance', warnings),
         elevation: optional(raw.elevation, 'elevation', warnings),
         averagePower: avgPower, normalizedPower: power,
@@ -134,7 +148,9 @@ export function normalizeActivity(raw, profile = {timeZone: 'UTC'}) {
             metric(derivedWork, 'low', 'Integrated available one-second power, otherwise average power x elapsed seconds / 1000.'),
         ftp, intensityFactor: intensity,
         rpe, feedback, streams,
-        bestEfforts,
+        bestEfforts, details,
+        powerProfile: profileSamples(raw.powerProfile, 'power', 3000),
+        heartRateProfile: profileSamples(raw.heartRateProfile, 'heart-rate', 255),
         hasPower: !!streams.power || power != null || avgPower != null,
         hasHeartRate: !!streams.heartRate || hr != null,
         hasPowerStream: !!streams.power, hasHeartRateStream: !!streams.heartRate,
