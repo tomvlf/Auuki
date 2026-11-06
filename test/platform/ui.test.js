@@ -21,9 +21,10 @@ import { launchPlatform } from '../../src/platform/ui.js';
 import { xf } from '../../src/functions.js';
 import { db } from '../../src/db.js';
 import { serverRequest } from '../../src/server/client.js';
-import { coachingData } from '../../src/coaching/service.js';
+import { coachingData, coachingService } from '../../src/coaching/service.js';
 import { normalizeActivity } from '../../src/coaching/normalizer.js';
 import { models } from '../../src/models/models.js';
+import { idb } from '../../src/storage/idb.js';
 import { profile as coachingProfile } from '../coaching/fixtures.js';
 
 jest.mock('../../src/index.js', () => {
@@ -42,8 +43,9 @@ jest.mock('../../src/db.js', () => ({db: {
 }}));
 jest.mock('../../src/server/client.js', () => ({serverAccount: {}, serverRequest: jest.fn()}));
 jest.mock('../../src/coaching/service.js', () => ({
-    coachingData: jest.fn(), coachingService: () => ({data: {}, revision: 1}),
+    coachingData: jest.fn(), coachingService: jest.fn(() => ({data: {}, revision: 1})),
 }));
+jest.mock('../../src/storage/idb.js', () => ({idb: {removeChecked: jest.fn()}}));
 jest.mock('../../src/models/models.js', () => ({models: {
     ftp: {toAbsolute: (value, ftp) => value < 9 ? Math.round(value * ftp) : value},
     activity: {},
@@ -183,6 +185,11 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(root.textContent).toContain('<script>not executable</script>');
     expect(root.querySelector('script')).toBeNull();
     expect(root.textContent).toContain('200 W');
+    expect(root.querySelector('.interval-list').textContent).toContain('Cadence: Self-selected');
+    db.workouts[0].intervals[0].steps[0].cadence = 95;
+    await go('workout/ride');
+    expect(root.querySelector('.interval-list').textContent).toContain('Cadence: 95 rpm');
+    delete db.workouts[0].intervals[0].steps[0].cadence;
     const dispatch = xf.dispatch;
     dispatch.mockClear();
     root.querySelector('[data-action="prepare"]').click();
@@ -191,7 +198,13 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
 
     db.workout.intervals[0].steps[0].cadence = 88;
     db.cadenceTarget = 88;
+    db.workouts.push({id: 'picker-test', meta: {name: 'Picker workout'}, intervals: []});
     await go('player');
+    const selector = root.querySelector('#ride-workout');
+    expect(selector.disabled).toBe(false);
+    selector.value = 'picker-test';
+    selector.dispatchEvent(new Event('change', {bubbles: true}));
+    expect(dispatch).toHaveBeenCalledWith('workout', expect.objectContaining({id: 'picker-test'}));
     expect(root.querySelector('#ride-power').textContent).toBe('180');
     expect(root.querySelector('#ride-target').textContent).toBe('200');
     expect(root.querySelector('#ride-cadence-target').textContent).toBe('88');
@@ -218,6 +231,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     db.elapsed = 30;
     db.lapTime = 30;
     xf.dispatch('db:elapsed', db);
+    expect(root.querySelector('#ride-workout').disabled).toBe(true);
     expect(root.querySelector('#ride-progress').value).toBe(.25);
     expect(root.querySelector('#ride-profile-cursor').style.left).toBe('25%');
     expect(root.querySelector('#ride-profile-completed').getAttribute('width')).toBe('250');
@@ -319,10 +333,11 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(root.textContent).toContain('Awaiting server synchronization');
     expect(root.querySelector('[data-action="retry-rides"]')).not.toBeNull();
     expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
+    expect(root.querySelector('[data-delete-ride="pending"]')).not.toBeNull();
 
     const profileData = {...coachingProfile, timeZone: 'UTC'};
     const synced = normalizeActivity({
-        id: 'synced', name: 'Synchronized ride', start: new Date().toISOString(), duration: 1800,
+        id: 'synced', source: 'athlima', name: 'Synchronized ride', start: new Date().toISOString(), duration: 1800,
         distance: 12000, normalizedPower: 210, averagePower: 190, averageHeartRate: 140, rpe: 6,
     }, profileData);
     db.activity = [
@@ -346,6 +361,35 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     root.querySelector('[data-download="synced"]').click();
     await settle();
     expect(models.activity.download).toHaveBeenCalledWith('synced');
+
+    const service = {data: {activities: []}, deleteRide: jest.fn()};
+    coachingService.mockReturnValue(service);
+    idb.removeChecked.mockResolvedValue();
+    jest.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
+    root.querySelector('[data-delete-ride="pending"]').click();
+    await settle();
+    expect(idb.removeChecked).not.toHaveBeenCalled();
+    root.querySelector('[data-delete-ride="pending"]').click();
+    await settle();
+    expect(idb.removeChecked).toHaveBeenCalledWith('activity', 'pending');
+    expect(db.activity.some(item => item.id === 'pending')).toBe(false);
+    expect(service.deleteRide).not.toHaveBeenCalled();
+    expect(root.querySelector('#platform-message').textContent).toContain('Activity deleted');
+    service.data.activities = [synced];
+    service.deleteRide.mockRejectedValueOnce(new Error('Server unavailable')).mockImplementationOnce(async () => {
+        service.data.activities = [];
+        coachingData.mockReturnValue({activities: [], plan: null, profile: null});
+    });
+    root.querySelector('[data-delete-ride="synced"]').click();
+    await settle();
+    expect(idb.removeChecked).toHaveBeenCalledWith('activity', 'synced');
+    expect(root.querySelector('#platform-message').textContent).toContain('retry');
+    expect(root.querySelector('[data-delete-ride="synced"]')).not.toBeNull();
+    root.querySelector('[data-delete-ride="synced"]').click();
+    await settle();
+    expect(service.deleteRide).toHaveBeenCalledTimes(2);
+    expect(root.querySelector('[data-delete-ride="synced"]')).toBeNull();
+    window.confirm.mockRestore();
 
     coachingData.mockReturnValue({activities: [], plan: null, profile: null});
     xf.dispatch('coaching:changed');

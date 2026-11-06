@@ -102,6 +102,7 @@ export class ServerCoachingService {
     archive(...args) { return this.call('archive', args); }
     importActivities(...args) { return this.call('importActivities', args); }
     recordRide(...args) { return this.call('recordRide', args); }
+    deleteRide(...args) { return this.call('deleteRide', args); }
     resolve(...args) { return this.call('resolve', args); }
     updateFeedback(...args) { return this.call('updateFeedback', args); }
     advance(...args) { return this.call('advance', args); }

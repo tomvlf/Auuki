@@ -207,6 +207,23 @@ test('server executes the shared coach, saves adaptations, and rejects stale or 
     assert.equal((await request('coaching', {cookie: otherCookie})).data.data.plan, null);
 });
 
+test('server deletes Athlima rides but not imported activities', async t => {
+    const {request} = await fixture(t);
+    const cookie = await register(request);
+    let revision = 0;
+    const call = async (method, args) => {
+        const response = await request('coaching', {method: 'POST', cookie, body: {method, args, revision}});
+        if(response.status === 200) revision = response.data.revision;
+        return response;
+    };
+    assert.equal((await call('recordRide', [{id: 'local', source: 'athlima', start: timestamp, duration: 60}])).status, 200);
+    assert.equal((await call('importActivities', [[{id: 'external', source: 'intervals', start: timestamp, duration: 60}]])).status, 200);
+    assert.equal((await call('deleteRide', ['external'])).status, 400);
+    assert.equal((await call('deleteRide', ['local'])).status, 200);
+    const history = (await request('coaching', {cookie})).data.data.activities;
+    assert.deepEqual(history.map(activity => activity.id), ['external']);
+});
+
 test('session expiry and authentication throttling', async t => {
     let now = Date.parse(timestamp);
     const {request} = await fixture(t, {clock: () => now, secureCookies: false});

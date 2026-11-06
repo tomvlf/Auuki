@@ -28,6 +28,13 @@ export const time = seconds => {
     const value = Math.max(0, Math.floor(seconds));
     return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
 };
+export function cadenceSummary(steps) {
+    const targets = steps.map(step => step.cadence).filter(value => Number.isFinite(value) && value > 0);
+    if(!targets.length) return 'Self-selected';
+    const min = Math.min(...targets), max = Math.max(...targets);
+    const range = min === max ? `${number(min)} rpm` : `${number(min)}–${number(max)} rpm`;
+    return targets.length < steps.length ? `${range} / self-selected` : range;
+}
 export const today = data => localDay(new Date().toISOString(),
     data?.profile?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone);
 

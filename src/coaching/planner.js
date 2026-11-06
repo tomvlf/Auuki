@@ -187,7 +187,7 @@ export function scheduleWorkouts(weeks, phases, profile, state, gaps, planId) {
                 1 + Math.floor(successful / config.progressionSuccessfulSessionsPerLevel));
             const slot = {id: `${planId}:${day}`, date: day, minutes, family, level,
                 phaseId: phase.id, weekId: week.id, phaseType: phase.type, profile, rules: config};
-            let workout = prescribeWorkout(slot, {history: workouts, rules: config});
+            let workout = prescribeWorkout(slot, {history: workouts, rules: config, allowTechnique: true});
             // First use a lighter version of the same session, then reduce intensity, then duration;
             // never force the target into an unavailable day.
             if(weekLoad + workout.targetLoad > loadBudget && workout.libraryWorkoutId) {

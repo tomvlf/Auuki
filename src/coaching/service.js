@@ -241,6 +241,14 @@ export class CoachingService {
         await this.commit(next);
         return next.plan;
     }
+    async deleteRide(id) {
+        const activity = this.data.activities.find(item => item.id === id);
+        if(!activity) throw new Error('Activity not found.');
+        if(activity.source !== 'athlima') throw new Error('Only Athlima recordings can be deleted here.');
+        const next = JSON.parse(JSON.stringify(this.data));
+        next.activities = next.activities.filter(item => item.id !== id);
+        return this.commit(next);
+    }
     async resolve({workoutId = null, trigger, activityId = null, feedback = null, asOf}) {
         const next = JSON.parse(JSON.stringify(this.data));
         if(!next.plan || next.plan.status !== 'active') throw new Error('No active plan to adapt.');

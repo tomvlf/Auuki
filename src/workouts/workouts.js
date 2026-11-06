@@ -985,6 +985,45 @@ let workouts = [
         <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
     </workout>
 </workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Cadence Foundations 30</name>
+    <category>Technique</category>
+    <description>Practice smooth pedalling with four one-minute lifts to 95 rpm at easy power, each followed by two minutes at 80 rpm. Stay seated and relaxed; return to a comfortable cadence if bouncing or uncomfortable. Stop if you feel pain.</description>
+    <sportType>bike</sportType>
+    <workout>
+        <Warmup Duration="360" PowerLow="0.4" PowerHigh="0.6"/>
+        <IntervalsT Repeat="4" OnDuration="60" OffDuration="120" OnPower="0.6" OffPower="0.55" Cadence="95" CadenceResting="80"/>
+        <SteadyState Duration="420" Power="0.6"/>
+        <Cooldown Duration="300" PowerLow="0.55" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Cadence Control 40</name>
+    <category>Technique</category>
+    <description>Five two-minute controlled spins at 95 rpm alternate with two minutes at 80 rpm, surrounded by easy endurance riding. Stay seated, smooth and relaxed; use a comfortable cadence if needed. Stop if you feel pain.</description>
+    <sportType>bike</sportType>
+    <workout>
+        <Warmup Duration="480" PowerLow="0.4" PowerHigh="0.6"/>
+        <IntervalsT Repeat="5" OnDuration="120" OffDuration="120" OnPower="0.6" OffPower="0.55" Cadence="95" CadenceResting="80"/>
+        <SteadyState Duration="420" Power="0.6"/>
+        <Cooldown Duration="300" PowerLow="0.55" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Cadence Endurance 50</name>
+    <category>Technique</category>
+    <description>Six easy two-minute spins at 100 rpm with two minutes at 85 rpm, followed by steady endurance riding. Keep your upper body quiet; use a comfortable cadence if you bounce or feel discomfort. Stop if you feel pain.</description>
+    <sportType>bike</sportType>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.4" PowerHigh="0.6"/>
+        <IntervalsT Repeat="6" OnDuration="120" OffDuration="120" OnPower="0.6" OffPower="0.55" Cadence="100" CadenceResting="85"/>
+        <SteadyState Duration="600" Power="0.65"/>
+        <Cooldown Duration="360" PowerLow="0.55" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
 ];
 
 export { workouts };

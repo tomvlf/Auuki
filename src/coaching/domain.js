@@ -46,7 +46,7 @@ export const DEFAULTS = Object.freeze({
     libraryRecoveryMaximumPower: 0.65, libraryEffortPowerThreshold: 0.88,
     libraryHardPowerThreshold: 0.9, libraryMaximumHardTimeShare: 0.18,
     libraryMinimumEfforts: 2, libraryMinimumEasyStepSeconds: 60, libraryProgressionBaseShare: 0.4,
-    libraryProgressionIncrement: 0.15,
+    libraryProgressionIncrement: 0.15, libraryTechniqueSeparationDays: 7, libraryTechniqueFitTolerance: 0.15,
     easyPower: 0.75, durabilityMinimumSeconds: 3600, durabilityWarmupSeconds: 600,
     durabilityMinimumPowerShare: 0.5, durabilityMaximumPowerShare: 0.75,
     durabilityMaximumPowerVariation: 0.1, durabilityMinimumHeartRate: 40,
@@ -91,7 +91,7 @@ export function validateCoachingConfig(overrides = {}) {
         'readinessWindowDays', 'minimumSessionMinutes', 'minimumHardSessionMinutes',
         'beginnerHardSessionsPerWeek', 'experiencedHardSessionsPerWeek',
         'minimumHardSeparationDays', 'progressionSuccessfulSessionsPerLevel', 'specificPhaseMinimumDays',
-        'progressionMaximumLevel', 'adaptationWindowDays',
+        'progressionMaximumLevel', 'adaptationWindowDays', 'libraryTechniqueSeparationDays',
         'recoveryWeekInterval', 'recoveryWeekOffset',
         'taperDaysPriorityA', 'taperDaysPriorityB', 'taperDaysPriorityC',
         'maxPlanDays',
@@ -107,7 +107,7 @@ export function validateCoachingConfig(overrides = {}) {
         'initialLoadPower', 'weeklyPlanningLoadPower',
         'longRideAllocationShare',
         'weeklyHardTimeShare', 'progressionMinimumQuality', 'libraryMaximumHardTimeShare',
-        'libraryProgressionBaseShare', 'libraryProgressionIncrement',
+        'libraryProgressionBaseShare', 'libraryProgressionIncrement', 'libraryTechniqueFitTolerance',
         'durabilityMinimumPowerShare', 'durabilityMaximumPowerShare',
         'durabilityMaximumPowerVariation', 'cpMinimumFitQuality'];
     if(shares.some(key => !bounded(config[key], 0, 1)) ||

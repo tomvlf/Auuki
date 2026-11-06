@@ -30,7 +30,7 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const MAX_BODY = 32 * 1024 * 1024;
 const SESSION_MS = 7 * 86400000;
 const methods = new Set(['configure', 'generate', 'archive', 'importActivities',
-    'recordRide', 'resolve', 'updateFeedback', 'advance']);
+    'recordRide', 'deleteRide', 'resolve', 'updateFeedback', 'advance']);
 
 class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }

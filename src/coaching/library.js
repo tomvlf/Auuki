@@ -5,19 +5,22 @@
  * much hard work fits. This module picks the library workout that best matches that need and
  * adjusts it to fit: fewer interval repetitions, shorter easy riding or extra endurance riding.
  * Workouts the Coach cannot follow safely (free-ride sections, targets above the planner's
- * power ceiling, tests and technique sessions) are never prescribed.
+ * power ceiling, tests and unapproved technique sessions) are never prescribed.
  */
 
 import { workouts as builtIn } from '../workouts/workouts.js';
 import { FAMILIES, buildWorkout, progressWorkout, stepLoad } from './workouts.js';
 import { explainWorkout } from './explanations.js';
-import { DEFAULTS, validateCoachingConfig } from './domain.js';
+import { DEFAULTS, addDays, validateCoachingConfig } from './domain.js';
 
 const CATEGORY_FAMILIES = {
     'VO2 Max': ['aerobic'], HIIT: ['aerobic'], Threshold: ['threshold'], 'Sweet Spot': ['threshold'],
     Sprint: ['sprint'], Base: ['endurance', 'durability'], Recovery: ['recovery'],
 };
 export const TEMPLATE_RULES = Object.freeze({});
+const TECHNIQUE_TEMPLATES = new Set([
+    'Cadence Foundations 30', 'Cadence Control 40', 'Cadence Endurance 50',
+]);
 const total = steps => steps.reduce((sum, s) => sum + s.duration, 0);
 const hardSeconds = (steps, rules) => total(steps.filter(s => s.power > rules.libraryHardPowerThreshold));
 const efforts = (steps, rules) => steps.filter(s => s.power >= rules.libraryEffortPowerThreshold).length;
@@ -109,8 +112,9 @@ export function coachCatalogue(source = builtIn, rules = DEFAULTS, templateRules
     return source.flatMap((zwo, index) => {
         const category = text(zwo, 'category');
         const {steps} = zwoTemplate(zwo, config);
-        if(!steps || !CATEGORY_FAMILIES[category]) return [];
         const name = text(zwo, 'name');
+        const technique = source === builtIn && category === 'Technique' && TECHNIQUE_TEMPLATES.has(name);
+        if(!steps || (!CATEGORY_FAMILIES[category] && !technique)) return [];
         const template = templateRules[index] || templateRules[name] || {};
         const minimumEfforts = template.minimumEfforts ?? config.libraryMinimumEfforts;
         const minimumWarmupSeconds = template.minimumWarmupSeconds ?? 0;
@@ -121,13 +125,14 @@ export function coachCatalogue(source = builtIn, rules = DEFAULTS, templateRules
             throw new Error(`Invalid minimum repetition count for library workout "${name}".`);
         }
         const peak = Math.max(...steps.map(s => s.power));
-        const families = CATEGORY_FAMILIES[category].filter(family => peak <=
+        const families = (technique ? ['endurance'] : CATEGORY_FAMILIES[category]).filter(family => peak <=
             (family === 'recovery' ? config.libraryRecoveryMaximumPower
                 : ['endurance', 'durability'].includes(family) ? config.libraryEnduranceMaximumPower
                     : config.libraryMaximumPower));
         if(!families.length) return [];
-        return [{id: `builtin-${index}`, name, category, families,
-            description: text(zwo, 'description').replace(/\\'/g, "'"), steps,
+        return [{id: `builtin-${index}`, name, category, families, technique,
+            description: text(zwo, 'description').replace(/\\'/g, "'"),
+            steps: technique ? steps.map(step => step.cadence == null ? step : {...step, protected: true}) : steps,
             minimumEfforts, minimumWarmupSeconds, minimumCooldownSeconds}];
     });
 }
@@ -199,22 +204,22 @@ export function fitWorkout(entry, {seconds, family, level = 1}, rules = DEFAULTS
     const original = entry.steps.map(s => ({...s}));
     if(total(original.filter(s => s.role === 'warmup')) < (entry.minimumWarmupSeconds || 0) ||
        total(original.filter(s => s.role === 'cooldown')) < (entry.minimumCooldownSeconds || 0)) return null;
-    const count = efforts(original, config);
+    const count = entry.technique ? 0 : efforts(original, config);
     const minEfforts = Math.min(count, entry.minimumEfforts ?? config.libraryMinimumEfforts);
     // Progression: early sessions use part of the set, later sessions the full set.
     const allowed = count ? Math.max(minEfforts, Math.ceil(count * Math.min(1,
         config.libraryProgressionBaseShare + config.libraryProgressionIncrement * (level - 1)))) : 0;
     let steps = original;
-    while(efforts(steps, config) > allowed) steps = dropLastEffort(steps, config);
+    while(!entry.technique && efforts(steps, config) > allowed) steps = dropLastEffort(steps, config);
     let fitted;
     for(;;) {
         fitted = hardSeconds(steps, config) <= seconds * config.libraryMaximumHardTimeShare
             ? shrinkEasy(steps, seconds, config) : null;
         if(fitted) break;
-        if(efforts(steps, config) <= minEfforts) return null;
+        if(entry.technique || efforts(steps, config) <= minEfforts) return null;
         steps = dropLastEffort(steps, config);
     }
-    const kept = efforts(fitted, config);
+    const kept = entry.technique ? 0 : efforts(fitted, config);
     const shortened = total(steps) - total(fitted);
     const added = seconds - total(fitted);
     const adjustments = [];
@@ -240,13 +245,19 @@ export function fitWorkout(entry, {seconds, family, level = 1}, rules = DEFAULTS
  * @returns {object|null} `{entry, steps, adjustments}` or null when no library workout fits.
  */
 export function chooseLibraryWorkout(slot, {history = [], prefer = null,
-    catalogue = defaultCatalogue(), rules = DEFAULTS, maxLoad = Infinity} = {}) {
+    catalogue = defaultCatalogue(), rules = DEFAULTS, maxLoad = Infinity, allowTechnique = false} = {}) {
     const config = validateCoachingConfig(rules);
     const uses = new Map();
     history.forEach(w => w.libraryWorkoutId && uses.set(w.libraryWorkoutId, (uses.get(w.libraryWorkoutId) || 0) + 1));
     const previous = history.filter(w => w.family === slot.family).at(-1)?.libraryWorkoutId;
+    const techniqueAllowed = slot.family === 'endurance' && ['assessment', 'base', 'build'].includes(slot.phaseType);
+    const recentTechnique = slot.date && history.some(w => w.date < slot.date &&
+        w.date > addDays(slot.date, -config.libraryTechniqueSeparationDays) &&
+        catalogue.some(entry => entry.technique && entry.id === w.libraryWorkoutId));
     const candidates = [];
     for(const entry of catalogue) {
+        if(entry.technique && (!techniqueAllowed ||
+            (entry.id !== prefer && (!allowTechnique || !slot.date || recentTechnique)))) continue;
         const fit = fitWorkout(entry, slot, config);
         if(!fit || stepLoad(fit.steps) > maxLoad + 0.01) continue;
         candidates.push({entry, ...fit});
@@ -254,7 +265,10 @@ export function chooseLibraryWorkout(slot, {history = [], prefer = null,
     if(!candidates.length) return null;
     const bestFit = Math.min(...candidates.map(candidate => candidate.score));
     const preserved = candidates.find(candidate => candidate.entry.id === prefer);
-    const shortlist = preserved ? [preserved] : candidates.filter(candidate => candidate.score <= bestFit + 0.05);
+    const technique = candidates.filter(candidate => candidate.entry.technique &&
+        candidate.score <= bestFit + config.libraryTechniqueFitTolerance);
+    const shortlist = preserved ? [preserved] : technique.length ? technique :
+        candidates.filter(candidate => candidate.score <= bestFit + 0.05);
     shortlist.sort((a, b) => (uses.get(a.entry.id) || 0) - (uses.get(b.entry.id) || 0) ||
         Number(a.entry.id === previous) - Number(b.entry.id === previous) ||
         a.score - b.score || a.entry.name.localeCompare(b.entry.name));
@@ -277,13 +291,13 @@ function defaultCatalogue(rules = DEFAULTS) {
  * @returns {object} A scheduled coaching workout.
  */
 export function prescribeWorkout(args, {history = [], prefer = null, catalogue, library = true,
-    rules = DEFAULTS, maxLoad = Infinity} = {}) {
+    rules = DEFAULTS, maxLoad = Infinity, allowTechnique = false} = {}) {
     const config = validateCoachingConfig(rules);
     const level = args.level ?? 1;
     const family = FAMILIES[args.family]?.hard && args.minutes < 25 ? 'endurance' : args.family;
     const choice = library && Number.isInteger(args.minutes) && args.minutes >= 10 &&
-        chooseLibraryWorkout({seconds: args.minutes * 60, family, level}, {
-            history, prefer, maxLoad, catalogue: catalogue ?? defaultCatalogue(config), rules: config});
+        chooseLibraryWorkout({seconds: args.minutes * 60, family, level, phaseType: args.phaseType, date: args.date}, {
+            history, prefer, maxLoad, allowTechnique, catalogue: catalogue ?? defaultCatalogue(config), rules: config});
     if(!choice) {
         const generated = progressWorkout(args);
         if(library) {
@@ -293,7 +307,9 @@ export function prescribeWorkout(args, {history = [], prefer = null, catalogue, 
         return generated;
     }
     const {entry, steps, adjustments} = choice;
-    const rationale = `Selected from ${entry.category} after checking dose fit and safety; variety is only used to break near-equal fits.`;
+    const rationale = entry.technique
+        ? 'Selected for optional cadence practice in an endurance slot after checking fit and load, not because a cadence deficiency was detected.'
+        : `Selected from ${entry.category} after checking dose fit and safety; variety is only used to break near-equal fits.`;
     const note = adjustments.length ? ` Adjusted by the Coach: ${adjustments.join(', ')}.` : '';
     return buildWorkout({...args, family, level, steps, title: entry.name,
         description: `${explainWorkout(family, args.phaseType, level)} ${rationale} ${entry.description}${note}`.trim(),

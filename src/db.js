@@ -417,7 +417,14 @@ async function saveStoppedRide(_, db) {
     }
 
 }
-xf.reg('watch:stopped', saveStoppedRide);
+xf.reg('watch:stopped', (event, db) => {
+    if(event?.discard) {
+        models.session.reset(db);
+        xf.dispatch('activity:discarded');
+    } else {
+        void saveStoppedRide(event, db);
+    }
+});
 xf.reg('ui:activity:retry-save', saveStoppedRide);
 xf.reg('activity:save:success', (e, db) => {
     models.session.reset(db);

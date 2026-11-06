@@ -144,11 +144,15 @@ test('renders real profiles, safe labels, feedback, and retained FIT actions in 
     expect(root.querySelector('[data-upload-ride]').dataset.uploadRide).toBe(activity.id);
     expect(root.textContent).toContain(`Power load ${(33.25).toLocaleString(undefined, {maximumFractionDigits: 1})} / RPE 6`);
     expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
+    expect(root.querySelector('[data-delete-ride="pending"]')).not.toBeNull();
+    expect(root.querySelector('tr [data-delete-ride]')).toBeNull();
 
     root.innerHTML = `<table><tbody>${historyActivityRow({...activity, streams: {power: [100]}}, null, false)}</tbody></table>`;
     expect(root.querySelector('.power-profile--recorded')).toBeNull();
     expect(root.textContent).toContain('No recorded power profile');
     expect(root.querySelector('[data-upload-ride]')).toBeNull();
+    root.innerHTML = `<table><tbody>${historyActivityRow({...activity, source: 'athlima'}, null, false)}</tbody></table>`;
+    expect(root.querySelector('[data-delete-ride]').dataset.deleteRide).toBe(activity.id);
 });
 
 test('does not display training-state values from another day', () => {

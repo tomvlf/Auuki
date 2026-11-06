@@ -1,6 +1,7 @@
-import { sum } from '../../src/coaching/domain.js';
+import { addDays, sum } from '../../src/coaching/domain.js';
 import { workouts } from '../../src/workouts/workouts.js';
 import { generatePlan, validatePlan } from '../../src/coaching/planner.js';
+import { adaptPlan } from '../../src/coaching/adaptation.js';
 import { coachCatalogue, fitWorkout, prescribeWorkout, zwoSteps } from '../../src/coaching/library.js';
 import { FAMILIES, stepLoad, toAppWorkout, exportZwo } from '../../src/coaching/workouts.js';
 import { profile, goal, start, timestamp, state } from './fixtures.js';
@@ -74,8 +75,56 @@ describe('coach workout library', () => {
         expect(sum(fittedVo2.steps.filter(step => step.power > 0.9).map(step => step.duration)))
             .toBeLessThanOrEqual(45 * 60 * 0.18);
         expect(catalogue.find(entry => entry.id === 'builtin-0').name).toBe('Dijon');
-        expect(workouts.slice(-expected.size).map(source =>
-            source.match(/<name>([^<]+)<\/name>/)?.[1])).toEqual([...expected.keys()]);
+        const names = workouts.map(source => source.match(/<name>([^<]+)<\/name>/)?.[1]);
+        const first = names.indexOf('Endurance 2h Steady');
+        expect(names.slice(first, first + expected.size)).toEqual([...expected.keys()]);
+    });
+    test('approved cadence drills retain every prescribed work and recovery step when fitted', () => {
+        const catalogue = coachCatalogue();
+        expect(catalogue.some(entry => entry.name === 'Cadence Drills')).toBe(false);
+        for(const [name, minutes] of [['Cadence Foundations 30', 30], ['Cadence Control 40', 40], ['Cadence Endurance 50', 50]]) {
+            const entry = catalogue.find(candidate => candidate.name === name);
+            expect(entry.technique).toBe(true);
+            expect(entry.families).toEqual(['endurance']);
+            expect(sum(entry.steps.map(step => step.duration))).toBe(minutes * 60);
+            const drills = steps => steps.filter(step => step.cadence != null)
+                .map(({duration, power, cadence}) => ({duration, power, cadence}));
+            const fit = fitWorkout(entry, {seconds: (minutes - 5) * 60, family: 'endurance'});
+            expect(fit).not.toBeNull();
+            expect(drills(fit.steps)).toEqual(drills(entry.steps));
+            expect(fitWorkout(entry, {seconds: 10 * 60, family: 'endurance'})).toBeNull();
+            expect(fitWorkout(entry, {seconds: minutes * 60, family: 'recovery'})).toBeNull();
+            expect(entry.steps.every(step => step.power <= 0.65)).toBe(true);
+        }
+    });
+    test('cadence selection is optional, spaced, fit- and load-limited and excluded from easy adaptations', () => {
+        const first = prescribeWorkout(slot('endurance', 30), {allowTechnique: true});
+        expect(first.title).toBe('Cadence Foundations 30');
+        expect(first.description).toMatch(/optional cadence practice/);
+        expect(toAppWorkout(first).intervals.flatMap(interval => interval.steps)
+            .filter(step => step.cadence != null).map(step => step.cadence))
+            .toEqual([95, 80, 95, 80, 95, 80, 95, 80]);
+        expect(exportZwo(first)).toContain('Cadence="95"');
+        const catalogue = coachCatalogue();
+        const isTechnique = workout => catalogue.some(entry => entry.technique && entry.id === workout.libraryWorkoutId);
+        expect(isTechnique(prescribeWorkout(slot('endurance', 30)))).toBe(false);
+        expect(isTechnique(prescribeWorkout({...slot('endurance', 30), date: addDays(start, 6)},
+            {allowTechnique: true, history: [first]}))).toBe(false);
+        expect(isTechnique(prescribeWorkout({...slot('endurance', 30), date: addDays(start, 7)},
+            {allowTechnique: true, history: [first]}))).toBe(true);
+        expect(isTechnique(prescribeWorkout({...slot('endurance', 30), date: addDays(start, 7)},
+            {allowTechnique: true, history: [first], rules: {libraryTechniqueSeparationDays: 8}}))).toBe(false);
+        for(const phaseType of ['recovery', 'taper', 'specific', 'peak', 'event']) {
+            expect(isTechnique(prescribeWorkout({...slot('endurance', 30), phaseType},
+                {allowTechnique: true, prefer: first.libraryWorkoutId}))).toBe(false);
+        }
+        for(const family of ['recovery', 'durability', 'threshold', 'aerobic']) {
+            expect(isTechnique(prescribeWorkout(slot(family, 30),
+                {allowTechnique: true, prefer: first.libraryWorkoutId}))).toBe(false);
+        }
+        expect(isTechnique(prescribeWorkout(slot('endurance', 30), {prefer: first.libraryWorkoutId}))).toBe(true);
+        expect(isTechnique(prescribeWorkout(slot('endurance', 30),
+            {allowTechnique: true, maxLoad: 0}))).toBe(false);
     });
     test('fitting removes whole repetitions and preserves template-protected warm-up, recovery and cool-down', () => {
         const template = `<workout_file><name>Protected intervals</name><category>Threshold</category>
@@ -132,6 +181,25 @@ describe('coach workout library', () => {
         expect(library.length).toBeGreaterThan(p.workouts.length / 2);
         const hard = library.filter(w => FAMILIES[w.family].hard);
         expect(hard.length).toBeGreaterThan(0);
+        const techniques = p.workouts.filter(w => coachCatalogue().some(e => e.technique && e.id === w.libraryWorkoutId));
+        expect(techniques.length).toBeGreaterThan(0);
+        expect(techniques.every(w => w.family === 'endurance')).toBe(true);
+        for(let i = 1; i < techniques.length; i++) {
+            expect(techniques[i].date >= addDays(techniques[i - 1].date, 7)).toBe(true);
+        }
+        const affected = techniques.find(w => w.date > start);
+        const date = addDays(affected.date, -1);
+        const reduced = adaptPlan({plan: p, profile, state: state(), trigger: 'recovery', date, timestamp});
+        const inWindow = reduced.workouts.filter(w => w.date > date && w.date <= addDays(date, 7));
+        expect(inWindow.length).toBeGreaterThan(0);
+        expect(inWindow.every(w => w.family === 'recovery' &&
+            !coachCatalogue().some(entry => entry.technique && entry.id === w.libraryWorkoutId))).toBe(true);
+        expect(() => validatePlan(reduced, profile)).not.toThrow();
+        const cautious = state();
+        cautious.readiness = {...cautious.readiness, status: 'caution'};
+        const cautiousPlan = generatePlan({profile, goal, state: cautious, startDate: start, generatedAt: timestamp});
+        expect(cautiousPlan.workouts.length).toBeGreaterThan(0);
+        expect(cautiousPlan.workouts.every(w => w.family === 'recovery')).toBe(true);
         for(const workout of hard) {
             const scores = coachCatalogue().filter(e => e.families.includes(workout.family))
                 .map(e => fitWorkout(e, {seconds: workout.duration, family: workout.family,

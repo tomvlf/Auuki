@@ -10,7 +10,7 @@ The app is built around a single idea: training should work without friction, wh
 
 - runs `.zwo` workouts and built-in structured sessions
 - shows a live workout power timeline with a current-position marker, interval countdown, and separate target/actual power and cadence; unprescribed cadence is explicitly self-selected
-- searches and filters the workout library by category, type, and duration, with sorting and workout or course previews
+- searches and filters the workout library by category, type, and duration, with power profiles and cadence previews
 - controls smart trainers in ERG, resistance, and grade-simulation modes
 - records `.fit` files with power, cadence, heart rate, and RR intervals
 - supports session planning and direct launch from a multi-week calendar, with weekly ride totals and power profiles when data is available
@@ -32,6 +32,12 @@ separate from their targets, and disconnected sensors show unavailable readings.
 Cadence targets come from the workout; an unprescribed cadence is explicitly
 shown as self-selected. Device connections and trainer settings are available
 under "Devices & trainer settings" without hiding the profile.
+
+The library includes gentle cadence-practice sessions and shows target cadence
+ranges on workout cards and individual targets in workout details. The Coach
+may include approved drills in suitable endurance slots; cadence is optional,
+not a diagnosis or a universal target. Ride comfortably and stop or return to
+your natural cadence if a drill causes discomfort or bouncing.
 
 ## Current repo status
 

@@ -11,6 +11,13 @@ server, depending on the selected mode. The workout player and trainer engine
 run locally in the browser; see the [backend guide](backend.md) for server
 storage and recovery details.
 
+On the Ride screen, choose a library workout before starting. Finishing a ride
+shorter than one minute offers the choice to save or discard it. In Activities,
+delete an Athlima recording to remove its local FIT file and coaching history.
+Previous plan decisions and uploads to external services are not undone;
+an external copy may reappear when that service is synchronized. Existing
+server backups are not changed until you replace them.
+
 Consumer power meters, heart-rate sensors and other wearable data can be
 incomplete, noisy or inaccurate. Missing data is not evidence of rest or
 readiness. HRV is not currently used; neither HRV nor sleep quality should be
@@ -47,13 +54,15 @@ the technical planning rationale are kept in collapsed sections.
 Sessions come from the built-in workout library where possible. For each day,
 the Coach decides the session family, available duration and earned progression
 level, then selects a safe library workout that fits. Dose fit is ranked ahead
-of variety; variety breaks near-equal fits. During adaptation, an already
+of variety; variety breaks near-equal fits. Approved gentle cadence sessions
+may be selected for optional skill practice in suitable endurance slots when
+their fit is close to the best candidate. During adaptation, an already
 selected workout is retained when it can be fitted safely. Adjustments appear
 under the session ("Adjusted for you: …"). An interval template is reduced only
 by complete repetitions. Warm-up, interval recovery and cool-down steps marked
 as protected are not shortened to make a session fit. Library workouts with
 unsupported free-ride sections, targets above the configured power limit, tests
-and technique drills are not prescribed. When no safe template fits (for
+and unapproved technique drills are not prescribed. When no safe template fits (for
 example, a sprint slot), the Coach explains that it generated a conservative
 session instead.
 
@@ -154,7 +163,9 @@ higher one:
 4. **Fit eligible templates to the slot.** Candidates must match the session
    family and pass structural, duration, power and intensity-time checks before
    they are scored.
-5. **Minimize dose changes, then use variety as a tie-breaker.** During
+5. **Minimize dose changes, then use variety as a tie-breaker.** Approved
+   cadence practice is an optional exception in endurance slots when its fit
+   score is within the configured tolerance. During
    adaptation, preserve the current template if it still fits safely. If no
    template fits, use an explained conservative fallback; if even that cannot
    fit the weekly budget, omit the session.
@@ -437,7 +448,7 @@ automatically synchronized.
 1. Append a well-formed ZWO string to `src/workouts/workouts.js`; do not
    reorder existing templates because their built-in IDs are index based.
 2. Use elements the fitter understands: `Warmup`, `Cooldown`, `Ramp`,
-   `SteadyState`, and `IntervalsT`. Avoid `FreeRide`, tests and technique drills
+   `SteadyState`, and `IntervalsT`. Avoid `FreeRide` and tests
    for Coach-eligible templates. Power values are FTP fractions.
 3. Ensure interval work is represented as complete on/off repetitions.
    Warm-up, interval recovery and cool-down are protected when parsed; the
@@ -451,6 +462,10 @@ automatically synchronized.
    stricter minimums, add `minimumEfforts`, `minimumWarmupSeconds` and/or
    `minimumCooldownSeconds` to `TEMPLATE_RULES`, keyed by the exact template
    name. A template with missing structure or out-of-range power is rejected.
+   Technique sessions are excluded unless explicitly reviewed and added to
+   `TECHNIQUE_TEMPLATES`; do not approve a session solely because its category
+   is Technique. Its cadence steps must be suitable for gentle endurance
+   practice and are protected from shortening or repetition removal.
 5. Add parser, minimum-dose, exact-duration, power-limit and hard-time-share
    tests to `test/coaching/library.test.js`. Run that test file and the broader
    coaching suite before using the template in plans.
@@ -480,6 +495,34 @@ The Coach still selects and fits templates against each rider's available
 time, family, progression level, safety limits and load budget. A listed
 2-hour-or-longer template is not automatically prescribed at full length; the
 planned dose and the rider's current constraints take priority.
+
+### Cadence practice
+
+The original Cadence Foundations 30, Cadence Control 40 and Cadence Endurance 50
+templates alternate moderate cadence targets at easy power, with warm-up and
+cool-down. They are inspired by the general practice of varying cadence on easy
+rides, not copies of a specific workout. [TrainerRoad's cadence overview](https://www.trainerroad.com/blog/whats-the-most-efficient-cycling-cadence-and-how-cadence-drills-can-make-you-faster/)
+discusses individual and situational variation; its benefit claims should not be
+interpreted as proof that any particular drill is necessary or effective for a
+given rider.
+
+The Coach explicitly opts in only those three built-in templates, never the
+older, more demanding Cadence Drills. They are eligible only in endurance slots
+in assessment, base or build phases, not recovery, taper, hard or long-ride
+slots. Caution readiness schedules recovery instead. By default, new selections
+are at least seven days apart (`libraryTechniqueSeparationDays`), and their
+fitting score must be within 0.15 (`libraryTechniqueFitTolerance`) of the best
+eligible template. Existing time, power, intensity and weekly load constraints
+still apply. Adaptation can retain an already selected drill when it still fits,
+but does not introduce new technique sessions, and forced-easy adaptations do
+not use them. The cadence-targeted intervals, including recoveries, are never
+trimmed or removed; if they do not fit, another session is chosen.
+
+This is optional practice, not evidence that the rider has a cadence deficiency
+or a prescribed optimal cadence. Library cards show the target range and
+whether other parts are self-selected; details show each target. Keep the pedal
+stroke relaxed, choose a comfortable cadence if bouncing or uncomfortable, and
+stop for pain. Coaching support does not diagnose illness or injury.
 
 ## Adding a readiness rule
 

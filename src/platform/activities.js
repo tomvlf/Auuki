@@ -174,16 +174,18 @@ export function localActivityRow(activity, timeZone) {
             <span>${measurement(activity.averagePower, 'W')} / ${measurement(activity.averageHeartRate, 'bpm')}</span>
             ${profileMarkup(activity)}
         </div>
-        <button class="secondary" data-download="${escape(activity.id)}">Download FIT</button>
+        <div class="button-row"><button class="secondary" data-download="${escape(activity.id)}">Download FIT</button>
+        <button class="secondary" data-delete-ride="${escape(activity.id)}">Delete</button></div>
     </li>`;
 }
 
 export function historyActivityRow(activity, local, connected) {
     const intervalsId = activity.source === 'intervals' ? activity.externalId : null;
-    const actions = local || (connected && intervalsId) ? `<div class="button-row activity-file-actions">
+    const actions = local || activity.source === 'athlima' || (connected && intervalsId) ? `<div class="button-row activity-file-actions">
         ${local ? `<button class="secondary" data-download="${escape(activity.id)}">FIT</button>` : ''}
         ${local && connected ? `<button class="secondary" data-upload-ride="${escape(activity.id)}">Send to Intervals.icu</button>` : ''}
         ${connected && intervalsId ? `<button class="secondary" data-load-activity="${escape(intervalsId)}" aria-expanded="false">Route &amp; data</button>` : ''}
+        ${activity.source === 'athlima' ? `<button class="secondary" data-delete-ride="${escape(activity.id)}">Delete</button>` : ''}
     </div>` : '--';
     return `<tr>
         <td data-label="Activity" class="activity-title"><span class="activity-heading">${activityIcon(activity)}

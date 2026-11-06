@@ -19,8 +19,10 @@
 import { equals, exists, empty, first, last, xf, avg, max, toFixed, print, } from './functions.js';
 import { kphToMps, mpsToKph, timeDiff, pad } from './utils.js';
 import { models } from './models/models.js';
+import { idb } from './storage/idb.js';
 import { ControlMode, } from './ble/enums.js';
 import { TimerStatus, EventType, } from './activity/enums.js';
+import { stopRide } from './activity/stop.js';
 
 // const timer = new Worker('./timer.js');
 const timer = new Worker(new URL('./timer.js', import.meta.url), {type: 'module'});
@@ -106,10 +108,20 @@ class Watch {
         xf.sub('ui:watchResume',  e => { self.resume();         });
         xf.sub('ui:watchLap',     e => { self.lap();            });
         xf.sub('ui:watchBack',    e => { self.back();           });
-        xf.sub('ui:watchStop',    e => {
-            const stop = confirm('Confirm Stop?');
-            if(stop) {
-                self.stop();
+        xf.sub('ui:watchStop', async e => {
+            if(self.stopping) return;
+            self.stopping = true;
+            try {
+                await stopRide({
+                    elapsed: self.elapsed,
+                    confirmStop: message => confirm(message),
+                    clearCheckpoint: () => idb.putChecked('session', {id: 0, elapsed: 0}),
+                    stop: discard => self.stop(discard),
+                });
+            } catch(error) {
+                xf.dispatch('coaching:error', `Could not discard the ride: ${error.message}`);
+            } finally {
+                self.stopping = false;
             }
         });
     }
@@ -258,7 +270,7 @@ class Watch {
             type: EventType.stop,
         });
     }
-    stop() {
+    stop(discard = false) {
         const self = this;
         if(self.isStarted() || self.isPaused()) {
             timer.postMessage('stop');
@@ -276,7 +288,7 @@ class Watch {
             self.lap();
 
             // should be called after event and lap are created
-            xf.dispatch('watch:stopped');
+            xf.dispatch('watch:stopped', {discard});
 
             if(exists(self.intervals)) {
                 xf.dispatch('watch:intervalIndex', 0);

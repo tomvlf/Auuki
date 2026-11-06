@@ -1,4 +1,4 @@
-import { escape, minutes, number, profileGraph } from './format.js';
+import { cadenceSummary, escape, minutes, number, profileGraph } from './format.js';
 
 export const initialLibraryFilters = () => ({
     search: '', category: '', type: 'all', duration: 'all', sort: 'original',
@@ -46,6 +46,7 @@ function workoutCard(workout) {
     if(hasMetric(duration)) metrics.push(['Duration', minutes(duration)]);
     if(hasMetric(distance)) metrics.push(['Distance', `${number(distance / 1000, 1)} km`]);
     if(workout.intervals?.length) metrics.push(['Intervals', number(workout.intervals.length)]);
+    if(type === 'Workout') metrics.push(['Cadence', cadenceSummary((workout.intervals || []).flatMap(interval => interval.steps || []))]);
     metrics.push(['Type', type]);
 
     return `<article class="workout-card">

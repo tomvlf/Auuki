@@ -60,3 +60,15 @@ test('distinguishes an empty library from no matching results', () => {
     expect(renderLibrary(workouts, {...initialLibraryFilters(), search: 'unmatched'}))
         .toContain('No workouts match your search.');
 });
+
+test('shows cadence targets and explicitly marks unprescribed portions', () => {
+    const drill = {id: 'drill', meta: {name: 'Drill', category: 'Technique', duration: 1800},
+        intervals: [{steps: [{duration: 300, power: .5}, {duration: 60, power: .6, cadence: 95},
+            {duration: 120, power: .5, cadence: 80}]}]};
+    const container = document.createElement('div');
+    container.innerHTML = renderLibrary([drill, workouts[0], workouts[4]], initialLibraryFilters());
+    const cards = container.querySelectorAll('.workout-card');
+    expect(cards[0].textContent).toContain('80–95 rpm / self-selected');
+    expect(cards[1].textContent).toContain('CadenceSelf-selected');
+    expect(cards[2].textContent).not.toContain('Cadence');
+});

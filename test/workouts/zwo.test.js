@@ -22,6 +22,7 @@
 
 import { zwo } from '../../src/workouts/zwo.js';
 import { repeat } from '../../src/functions.js';
+import { workouts } from '../../src/workouts/workouts.js';
 
 import { JSDOM } from 'jsdom';
 
@@ -31,6 +32,14 @@ const removeWhiteSpace = (str) => str.replace(/\s/g,'');
 
 describe('Zwo', () => {
 
+    test('built-in cadence sessions retain work and recovery targets in playback intervals', () => {
+        const source = workouts.find(workout => workout.includes('<name>Cadence Foundations 30</name>'));
+        const workout = zwo.readToInterval(source);
+        expect(workout.meta.duration).toBe(1800);
+        expect(workout.intervals.flatMap(interval => interval.steps)
+            .filter(step => step.cadence != null).map(step => step.cadence))
+            .toEqual([95, 80, 95, 80, 95, 80, 95, 80]);
+    });
     test('Zwo.read without textevents', () => {
         const input = `
         <workout_file>

@@ -21,7 +21,7 @@ import { serverRequest, serverAccount, SERVER_MODE_KEY } from '../server/client.
 import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
-import { escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
+import { cadenceSummary, escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
 import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview, renderActivityStreamData } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
 import { renderPlan } from './plan-view.js';
@@ -205,7 +205,8 @@ export async function launchPlatform(root, account) {
             <div class="button-row">${canPrepare ? '<button data-action="prepare">Prepare workout</button>' :
                 '<p class="muted">Coach sessions can be ridden on their scheduled date while unresolved.</p>'}${link('devices', 'Connect devices', 'button secondary')}</div>
             <ol class="interval-list">${(workout.intervals || []).flatMap(interval => interval.steps || []).map(step => `<li>
-                ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}</li>`).join('')}</ol>`);
+                ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}
+                &middot; Cadence: ${escape(cadenceSummary([step]))}</li>`).join('')}</ol>`);
     }
     function plan(data) {
         return renderPlan(data, today(data));
@@ -246,6 +247,10 @@ export async function launchPlatform(root, account) {
         timeline = rideTimeline(db.workout, db.ftp, targetPower);
         return `<section class="ride-panel"><div class="ride-heading"><div><p class="eyebrow">Workout player</p><h2>${escape(db.workout?.meta?.name || 'Free ride')}</h2></div>
             <span id="ride-status" role="status"></span></div>
+            <label>Choose a workout<select id="ride-workout">
+                <option value="">Current: ${escape(db.workout?.meta?.name || 'Free ride')}</option>
+                ${db.workouts.map(workout => `<option value="${escape(workout.id)}">${escape(workout.meta.name)}</option>`).join('')}
+            </select></label>
             <div class="ride-metrics">
                 <div class="ride-metric primary"><span>Target power</span><div><strong id="ride-target">--</strong><small>W</small></div>
                     <span class="ride-reading">Actual <b id="ride-power">--</b> W</span></div>
@@ -443,6 +448,8 @@ export async function launchPlatform(root, account) {
         root.querySelector('[data-action="ride-skip"]').disabled = db.watchStatus !== 'started' || !intervals.length;
         root.querySelector('[data-action="ride-finish"]').disabled = !db.elapsed;
         root.querySelector('[data-action="ride-toggle"]').disabled = savingRide || Boolean(engineModels.activity?.pendingRecording);
+        root.querySelector('#ride-workout').disabled = db.watchStatus !== 'stopped' || db.elapsed > 0 ||
+            savingRide || Boolean(engineModels.activity?.pendingRecording);
         root.querySelector('#ride-unsaved').hidden = !engineModels.activity?.pendingRecording;
     }
 
@@ -470,6 +477,13 @@ export async function launchPlatform(root, account) {
             libraryFilters[libraryField] = event.target.value;
             render();
             root.querySelector(`#${event.target.id}`).focus();
+            return;
+        }
+        if(event.target.id === 'ride-workout') {
+            const workout = db.workouts.find(item => String(item.id) === event.target.value);
+            if(workout && db.watchStatus === 'stopped' && !db.elapsed && !savingRide && !engineModels.activity?.pendingRecording) {
+                xf.dispatch('workout', workout);
+            }
             return;
         }
         if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
@@ -534,6 +548,33 @@ export async function launchPlatform(root, account) {
         const download = event.target.closest('[data-download]')?.dataset.download;
         if(download) {
             void run(async () => { const {models} = await import('../models/models.js'); await models.activity.download(download); });
+            return;
+        }
+        const deleteRide = event.target.closest('[data-delete-ride]')?.dataset.deleteRide;
+        if(deleteRide) {
+            void run(async () => {
+                if(!confirm('Delete this Athlima activity and its local FIT recording? Existing plan decisions and external uploads are not removed.')) return;
+                const service = coachingService();
+                const activity = service.data?.activities?.find(item => String(item.id) === deleteRide);
+                if(activity && activity.source !== 'athlima') throw new Error('Only Athlima recordings can be deleted here.');
+                if(db.activity.some(item => String(item.id) === deleteRide)) {
+                    const {idb} = await import('../storage/idb.js');
+                    await idb.removeChecked('activity', deleteRide);
+                    db.activity = db.activity.filter(item => String(item.id) !== deleteRide);
+                }
+                if(activity) {
+                    try {
+                        await service.deleteRide(activity.id);
+                    } catch(error) {
+                        render();
+                        throw new Error(`Activity history could not be deleted; retry. Any local FIT recording has already been removed: ${error.message}`);
+                    }
+                }
+                if(lastRide && String(lastRide.id) === deleteRide) lastRide = null;
+                xf.dispatch('coaching:changed');
+                render();
+                report('Activity deleted. External uploads and previous plan decisions were not changed.');
+            });
             return;
         }
         const upload = event.target.closest('[data-upload-ride]')?.dataset.uploadRide;
@@ -734,6 +775,10 @@ export async function launchPlatform(root, account) {
         if(!['player', 'settings', 'coach'].includes(route)) render();
     });
     xf.sub('activity:saving', () => { savingRide = true; updateRide(); });
+    xf.sub('activity:discarded', () => {
+        report('Ride discarded.');
+        updateRide();
+    });
     xf.sub('activity:save:success', ride => {
         savingRide = false;
         lastRide = ride;

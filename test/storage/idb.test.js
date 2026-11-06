@@ -129,6 +129,13 @@ describe('IDB', () => {
         expect(await idb.get('activity', 'not-committed')).toBeUndefined();
         expect(await idb.get('session', 0)).toEqual({id: 0, elapsed: 90});
     });
+
+    test('checked deletion persists and reports invalid stores', async () => {
+        await idb.putChecked('activity', {id: 'delete-me'});
+        await idb.removeChecked('activity', 'delete-me');
+        expect(await idb.get('activity', 'delete-me')).toBeUndefined();
+        await expect(idb.removeChecked('missing', 'delete-me')).rejects.toThrow();
+    });
 });
 
 

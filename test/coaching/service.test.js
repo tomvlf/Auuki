@@ -33,6 +33,18 @@ async function setup() {
 }
 
 describe('persistent coaching loop', () => {
+    test('deletes only Athlima rides persistently without rewriting plan decisions', async () => {
+        const {service, storage, clock} = await setup();
+        await service.recordRide({id: 'app-ride', source: 'athlima', start: timestamp, duration: 60});
+        await service.importActivities([{id: 'external', source: 'intervals', start: timestamp, duration: 60}]);
+        const plan = JSON.parse(JSON.stringify(service.data.plan));
+        await expect(service.deleteRide('external')).rejects.toThrow('Only Athlima');
+        await expect(service.deleteRide('missing')).rejects.toThrow('not found');
+        await service.deleteRide('app-ride');
+        expect(service.data.plan).toEqual(plan);
+        expect(new CoachingService(storage, clock).data.activities.some(item => item.id === 'app-ride')).toBe(false);
+        expect(service.data.activities.some(item => item.id === 'external')).toBe(true);
+    });
     test('ride history is persisted before opting into Coach and provider refreshes retain rider feedback', async () => {
         const service = new CoachingService(memoryStorage(), () => timestamp);
         const raw = {id: 'intervals:one', source: 'intervals', externalId: 'one',

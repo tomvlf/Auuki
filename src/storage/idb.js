@@ -178,6 +178,21 @@ function IDB(args = {}) {
         return transaction(storeName, 'delete', id, 'readwrite');
     }
 
+    function removeChecked(storeName, id) {
+        return new Promise((resolve, reject) => {
+            const write = db.transaction(storeName, 'readwrite');
+            write.oncomplete = () => resolve();
+            write.onabort = () => reject(write.error || new Error('Unable to delete device data.'));
+            write.onerror = () => reject(write.error || new Error('Unable to delete device data.'));
+            try {
+                write.objectStore(storeName).delete(id);
+            } catch(error) {
+                write.abort();
+                reject(error);
+            }
+        });
+    }
+
     function clear(storeName) {
         return transaction(storeName, 'clear', undefined, 'readwrite');
     }
@@ -205,6 +220,7 @@ function IDB(args = {}) {
         get,
         getAll,
         remove,
+        removeChecked,
         clear,
         setId,
     });
