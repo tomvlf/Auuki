@@ -74,6 +74,7 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 #platform .library-filters label { margin: 14px 0 0; color: var(--platform-muted); }
 #platform .library-reset { width: 100%; margin-top: 20px; }
 .library-results { min-width: 0; container-type: inline-size; }
+.library-pages { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .workout-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
 .workout-card { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--platform-border); border-radius: 16px; background: var(--platform-panel); }
 .workout-card-content { display: flex; flex: 1; flex-direction: column; padding: 16px 20px 10px; }
@@ -356,8 +357,13 @@ body[data-route="player"] #home-page-wrapper { display: block !important; }
 body[data-route="player"] #graph-workout { margin-top: 24px; }
 #legacy-slot .training-calendar { margin: 0; }
 
+.mobile-details > summary { display: none; }
+.mobile-details-body { min-width: 0; }
+.activity-periods > .mobile-details { min-width: 0; flex: 1; }
+
 /* Mobile is a ride-first experience, with its own navigation and information density. */
 .mobile-app .sidebar { inset: auto 0 0; width: 100%; padding: 6px 8px max(6px, env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--platform-border); }
+#platform .sidebar .app-versions[hidden] { display: none; }
 .mobile-app #platform .sidebar .brand, .mobile-app .sidebar-bottom { display: none; }
 .mobile-app .sidebar nav { display: flex; justify-content: space-around; margin: 0; gap: 2px; }
 .mobile-app #platform .sidebar nav a { font-size: 11px; padding: 10px 8px; min-height: 44px; }
@@ -383,6 +389,97 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
 .mobile-app .ride-adjust { gap: 12px; font-size: 12px; }
 .mobile-app .interval-context { font-size: 11px; padding-top: 14px; }
 .mobile-app .session-row .button { font-size: 12px; }
+.mobile-app #main-content { padding: 14px 12px calc(88px + env(safe-area-inset-bottom)); }
+.mobile-app .platform-header { gap: 12px; margin-bottom: 12px; }
+.mobile-app #platform h1 { font-size: 25px; }
+.mobile-app #platform h2 { font-size: 17px; margin-bottom: 10px; }
+.mobile-app #platform p { margin: 8px 0 12px; }
+.mobile-app #platform .hero-title { font-size: 25px; margin: 12px 0; }
+.mobile-app .panel, .mobile-app .dashboard-grid > .panel { padding: 14px; margin-bottom: 12px; border-radius: 12px; }
+.mobile-app .stats { gap: 10px; margin: 12px 0; }
+.mobile-app .stat { min-width: 75px; }
+.mobile-app .stat strong { font-size: 25px; }
+.mobile-app .button-row { gap: 8px; margin: 10px 0; }
+.mobile-app #platform button, .mobile-app #platform .button { padding: 8px 12px; }
+.mobile-app #platform label { margin: 10px 0; }
+.mobile-app #platform input, .mobile-app #platform select, .mobile-app #platform textarea { padding: 9px; font-size: 16px; }
+.mobile-app #profile-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.mobile-app #profile-form button { grid-column: 1 / -1; justify-self: start; }
+.mobile-app .mobile-details > summary { display: list-item; min-height: 44px; padding: 10px 0; cursor: pointer; font-size: 14px; font-weight: 650; color: var(--platform-text); }
+.mobile-app .mobile-details[open] > summary { margin-bottom: 6px; }
+.mobile-app #platform .desktop-section-title { display: none; }
+.mobile-app .mobile-details .activity-period h3 { display: none; }
+.mobile-app #platform .library-filters { padding: 12px 14px; }
+.mobile-app .library-filters > .eyebrow, .mobile-app .library-filters > h2 { display: none; }
+.mobile-app .library-layout { gap: 12px; }
+.mobile-app .library-toolbar { gap: 8px; margin-bottom: 10px; }
+.mobile-app .library-actions { gap: 8px; }
+.mobile-app .library-filter-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.mobile-app .workout-grid { gap: 12px; }
+.mobile-app .workout-card-content { padding: 12px 14px 6px; }
+.mobile-app .workout-card-metrics { gap: 6px 12px; margin-top: 8px; }
+.mobile-app .workout-card-profile .profile-graph, .mobile-app .workout-card-profile .course-profile { height: 54px; margin: 6px 14px 12px; }
+.mobile-app .profile-graph, .mobile-app .course-profile { height: 76px; margin: 12px 0; }
+.mobile-app .interval-list { columns: 1; margin: 8px 0; font-size: 13px; }
+.mobile-app .session-row { padding: 10px 0; gap: 10px; }
+.mobile-app .session-row .button-row { flex-wrap: wrap; }
+.mobile-app .week-chart { height: 135px; margin-bottom: 10px; }
+.mobile-app #platform .activity-overview .activity-periods { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
+.mobile-app #platform .activity-overview .activity-period { padding: 12px; }
+.mobile-app .activity-period-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.mobile-app .activity-period-metrics dt { font-size: 10px; }
+.mobile-app .activity-period-metrics dd { font-size: 15px; }
+.mobile-app #platform .activity-period h3 { margin-bottom: 8px; font-size: 14px; }
+.mobile-app #platform .activity-history tbody tr { gap: 6px 12px; padding: 12px 0; }
+.mobile-app #platform .activity-history td::before { display: inline; margin-right: 6px; }
+.mobile-app #platform .activity-history td:first-child::before,
+.mobile-app #platform .activity-history td:last-child::before { display: none; }
+.mobile-app #platform .activity-title .power-profile svg { height: 30px; }
+.mobile-app #platform .activity-file-actions button { max-width: none; min-height: 44px; }
+.mobile-app #platform .activity-stream-panel { width: 100%; max-width: 100%; }
+.mobile-app .ride-panel { padding: 12px; }
+.mobile-app .ride-heading { margin-bottom: 8px; }
+.mobile-app .ride-heading .eyebrow { display: none; }
+.mobile-app #platform .ride-heading h2 { margin: 0; font-size: 16px; }
+.mobile-app .ride-metric { padding: 10px 4px; }
+.mobile-app .ride-metric strong { font-size: clamp(26px, 7vw, 44px); }
+.mobile-app .ride-summary { margin: 8px 0; padding: 4px 0; gap: 6px; }
+.mobile-app .ride-workout-profile { padding: 10px 8px; }
+.mobile-app .ride-profile { margin: 24px 0; }
+.mobile-app .ride-profile-axis, .mobile-app .ride-profile-plot { height: clamp(70px, 13dvh, 110px); }
+.mobile-app .interval-context { padding-top: 6px; gap: 4px; }
+.mobile-app #platform .interval-context .muted { font-size: 10px; }
+.mobile-app .ride-actions { margin-top: 10px; }
+.mobile-app .ride-settings { margin-top: 12px; padding-top: 8px; }
+.mobile-app #legacy-slot coaching-panel { font-size: 14px; line-height: 1.5; }
+.mobile-app #legacy-slot .coach-card { padding: 14px; margin-bottom: 12px; }
+.mobile-app #legacy-slot .coach-step, .mobile-app #legacy-slot .coach-intro,
+.mobile-app #legacy-slot .coach-hero { padding: 14px; margin-bottom: 12px; }
+.mobile-app #legacy-slot .coach-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.mobile-app #legacy-slot .coach-days { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.mobile-app #legacy-slot .coach-day { padding: 8px; }
+.mobile-app #legacy-slot .coach-fields label { margin: 8px 0; }
+.mobile-app #legacy-slot .training-calendar--header { gap: 8px; margin-bottom: 10px; }
+.mobile-app #legacy-slot .training-calendar--week-summary { margin: 8px 0; padding: 10px; }
+.mobile-app #legacy-slot .training-calendar--day { margin-top: 12px; padding: 12px; }
+.mobile-app #legacy-slot .training-calendar--entry { padding: 10px 0; gap: 8px; }
+.mobile-app #legacy-slot .device-card { font-size: 13px; --font-size-value: 1em; --size--icon: 2em; }
+.mobile-app #legacy-slot .device-card--header--label { font-size: 13px; line-height: 2; }
+.mobile-app #legacy-slot .device-card--cont { padding: 8px 0; }
+.mobile-app #legacy-slot .device-card--body--row { padding: 0; align-items: center; min-height: 44px; }
+.mobile-app #legacy-slot .device-card--body--row.second { margin-top: 8px; }
+.mobile-app #legacy-slot .device-card--tile { min-width: 0; }
+.mobile-app #legacy-slot .device-card--tile--header { font-size: 10px; }
+.mobile-app #legacy-slot .device-card--tile--value { padding: 4px 0; }
+.mobile-app #legacy-slot #view--settings-settings > .mobile-details { border-bottom: 1px solid var(--platform-border); }
+.mobile-app #legacy-slot #view--settings-settings > .mobile-details > summary { margin: 0; padding: 12px 0; }
+.mobile-app #legacy-slot #view--settings-settings > .mobile-details .device-card--header,
+.mobile-app #legacy-slot #view--settings-settings > .mobile-details .page--heading { display: none; }
+.mobile-app #platform .training-calendar--grid .calendar-day { height: 80px; }
+.mobile-app #platform .training-calendar--grid th, .mobile-app #platform .training-calendar--grid td { padding: 6px; }
+.mobile-app .plan-overview-head { gap: 10px; }
+.mobile-app .plan-stats { gap: 10px; margin: 12px 0; }
+.mobile-app .plan-next { padding: 12px 0 0; gap: 10px; }
 @media (min-width: 701px) {
     body:not(.mobile-app) .sidebar { overflow-y: auto; }
     body:not(.mobile-app) .sidebar nav { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #526276 transparent; }

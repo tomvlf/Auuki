@@ -21,7 +21,7 @@ import { serverRequest, serverAccount, SERVER_MODE_KEY } from '../server/client.
 import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
-import { cadenceSummary, escape, minutes, number, time, today, trainingSummary, profileGraph } from './format.js';
+import { cadenceSummary, escape, minutes, number, time, today, trainingSummary, profileGraph, mobileDetails } from './format.js';
 import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview, renderActivityStreamData } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
 import { renderPlan } from './plan-view.js';
@@ -45,7 +45,9 @@ const devices = {
     controllable: 'Smart trainer', heartRateMonitor: 'Heart rate',
     powerMeter: 'Power meter', speedCadenceSensor: 'Speed / cadence',
 };
-const card = (title, body, className = '') => `<section class="panel ${className}"><h2>${title}</h2>${body}</section>`;
+const card = (title, body, className = '', compact = false) => `<section class="panel ${className}">${compact
+    ? mobileDetails(title, title, `<h2 class="desktop-section-title">${title}</h2>${body}`)
+    : `<h2>${title}</h2>${body}`}</section>`;
 const link = (route, text, className = '') => `<a class="${className}" href="#/${route}">${text}</a>`;
 const empty = (text, route = 'library', action = 'Browse workouts') =>
     `<div class="empty-state"><p>${text}</p>${link(route, action, 'button secondary')}</div>`;
@@ -65,16 +67,17 @@ const stat = (label, value, unit = '') => `<div class="stat"><span>${label}</spa
 export async function launchPlatform(root, account) {
     root.removeAttribute('role');
     const authenticated = Boolean(account?.email);
-    const mobile = /^\/mobile\/?$/.test(window.location.pathname);
-    document.body.classList.add('platform-app', ...(mobile ? ['mobile-app'] : []));
+    let mobile = window.innerWidth <= 700;
+    document.body.classList.add('platform-app');
+    document.body.classList.toggle('mobile-app', mobile);
+    const navigation = () => (mobile
+        ? ['dashboard', 'player', 'devices', 'activities', 'settings']
+        : Object.keys(routes).filter(r => r !== 'workout'))
+        .map(route => link(route, routes[route][0])).join('');
     root.innerHTML = `<a class="skip-link" href="#main-content">Skip to content</a>
         <aside class="sidebar"><a class="brand" href="${mobile ? '/mobile' : '/'}">Athlima<span> / training</span></a>
-            <nav aria-label="Main navigation">${(mobile
-                ? ['dashboard', 'player', 'devices', 'activities', 'settings']
-                : Object.keys(routes).filter(r => !['workout'].includes(r)))
-                .map(route => link(route, routes[route][0])).join('')}</nav>
-            <div class="sidebar-bottom"><span>Train with intention.</span>
-                <a href="${mobile ? '/' : '/mobile'}">${mobile ? 'Desktop platform' : 'Mobile ride companion'}</a></div>
+            <nav aria-label="Main navigation">${navigation()}</nav>
+            <div class="sidebar-bottom"><span>Train with intention.</span></div>
             ${mobile ? '' : versionMarkup({showRevision: false})}
         </aside>
         <main id="main-content" tabindex="-1"><header class="platform-header">
@@ -86,6 +89,20 @@ export async function launchPlatform(root, account) {
     if(!mobile) mountVersions(root);
     const legacy = document.querySelector('.wrapper');
     root.querySelector('#legacy-slot').append(legacy);
+    const deviceSettings = legacy.querySelector('#view--settings-settings');
+    if(deviceSettings) {
+        const secondaryDevices = [...deviceSettings.querySelectorAll(':scope > .device-card')].slice(1);
+        const options = deviceSettings.querySelector(':scope > .list--sub-section');
+        const about = deviceSettings.querySelector(':scope > div > .page--heading')?.parentElement;
+        for(const [index, section] of [...secondaryDevices, options, about].filter(Boolean).entries()) {
+            const title = section.querySelector('.device-card--header--label, h2')?.textContent.trim();
+            if(!title) continue;
+            section.insertAdjacentHTML('beforebegin', mobileDetails(`device-options-${index}`, title, ''));
+            const disclosure = section.previousElementSibling;
+            disclosure.open = !mobile;
+            disclosure.querySelector('.mobile-details-body').append(section);
+        }
+    }
     const content = root.querySelector('#platform-content');
     const message = root.querySelector('#platform-message');
     let db;
@@ -100,6 +117,37 @@ export async function launchPlatform(root, account) {
     let syncTimer;
     let busy = false;
     let ready = false;
+    const mobileSections = new Map();
+    const updateMobileSections = () => {
+        root.querySelectorAll('[data-mobile-details]').forEach(section => {
+            section.open = !mobile || Boolean(section.querySelector('[role="alert"]')) ||
+                (mobileSections.get(section.dataset.mobileDetails) ?? false);
+        });
+    };
+    root.addEventListener('toggle', event => {
+        if(ready && mobile && event.target.matches('[data-mobile-details]')) {
+            mobileSections.set(event.target.dataset.mobileDetails, event.target.open);
+        }
+    }, true);
+    window.addEventListener('resize', () => {
+        const nextMobile = window.innerWidth <= 700;
+        if(nextMobile === mobile) return;
+        mobile = nextMobile;
+        document.body.classList.toggle('mobile-app', mobile);
+        root.querySelector('.sidebar nav').innerHTML = navigation();
+        root.querySelectorAll('nav a').forEach(a => a.setAttribute('aria-current',
+            a.getAttribute('href') === `#/${route}` ? 'page' : 'false'));
+        const sidebar = root.querySelector('.sidebar');
+        let versions = sidebar.querySelector('.app-versions');
+        if(!mobile && !versions) {
+            sidebar.insertAdjacentHTML('beforeend', versionMarkup({showRevision: false}));
+            versions = sidebar.querySelector('.app-versions');
+            mountVersions(sidebar);
+        }
+        if(versions) versions.hidden = mobile;
+        updateMobileSections();
+        if(ready && ['dashboard', 'library'].includes(route)) render();
+    });
     let coachingError = '';
     let lastRide;
     let savingRide = false;
@@ -171,8 +219,8 @@ export async function launchPlatform(root, account) {
                 ${link(data?.plan ? 'library' : 'coach', data?.plan ? 'Choose a workout' : 'Set up your Coach', 'button')}`;
         if(mobile) return `<section class="mobile-today panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
             ${db.elapsed > 0 ? card('Ride recovery', `<p>A ${time(db.elapsed)} ride is saved on this device. Reconnect your trainer before resuming.</p>${link('player', 'Return to ride', 'button')}`) : ''}
-            ${card('Connect & ride', `${deviceButtons()}<div class="button-row">${link('player', 'Open ride controls', 'button')}${link('library', 'Choose a workout', 'button secondary')}</div>`)}
-            ${card('Up next', next.length ? `<ul class="session-list">${next.slice(0, 2).map(workoutRow).join('')}</ul>` : '<p>No upcoming sessions.</p>')}`;
+            ${card('Connect & ride', `<div class="button-row">${link('player', 'Open ride controls', 'button')}${link('library', 'Choose a workout', 'button secondary')}</div>${mobileDetails('dashboard-devices', 'Trainer & sensors', deviceButtons())}`)}
+            ${card('Up next', next.length ? `<ul class="session-list">${next.slice(0, 2).map(workoutRow).join('')}</ul>` : '<p>No upcoming sessions.</p>', '', true)}`;
         return `<div class="dashboard-grid"><section class="panel hero"><p class="eyebrow">Today / ${escape(today(data))}</p>${todayBody}</section>
             ${card('This week', `<div class="stats">${stat('Ride time', number(summary.seconds / 3600, 1), 'h')}${stat('Rides', summary.week.length)}
                 ${stat('Plan completed to date', summary.adherence == null ? '--' : `${Math.round(summary.adherence * 100)}%`)}</div>
@@ -199,13 +247,14 @@ export async function launchPlatform(root, account) {
         const planned = data?.plan?.workouts.find(w => w.id === selectedId);
         const canStart = !planned || (data.plan.status === 'active' && planned.date === today(data) && planned.status === 'scheduled');
         return card(escape(workout.meta.name), `<p class="eyebrow">${escape(workout.meta.category)} / ${minutes(workout.meta.duration || 0)}</p>
-            ${profileGraph(workout)}<p class="description">${escape(workout.meta.description || 'No description supplied.')}</p>
+            ${profileGraph(workout)}
             ${planned ? `<p>${escape(planned.date)} &middot; ${escape(planned.status)} &middot; Expected RPE ${planned.expectedRpe}/10</p>` : ''}
             <div class="button-row">${canStart ? '<button data-action="start-workout">Start workout</button>' :
                 '<p class="muted">Coach sessions can be ridden on their scheduled date while unresolved.</p>'}${link('devices', 'Connect devices', 'button secondary')}</div>
-            <ol class="interval-list">${(workout.intervals || []).flatMap(interval => interval.steps || []).map(step => `<li>
+            ${mobileDetails('workout-notes', 'Workout notes', `<p class="description">${escape(workout.meta.description || 'No description supplied.')}</p>`)}
+            ${mobileDetails('workout-intervals', 'Intervals', `<ol class="interval-list">${(workout.intervals || []).flatMap(interval => interval.steps || []).map(step => `<li>
                 ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}
-                &middot; Cadence: ${escape(cadenceSummary([step]))}</li>`).join('')}</ol>`);
+                &middot; Cadence: ${escape(cadenceSummary([step]))}</li>`).join('')}</ol>`)}`);
     }
     function plan(data) {
         return renderPlan(data, today(data));
@@ -239,7 +288,7 @@ export async function launchPlatform(root, account) {
                 ${stat('Acute load', number(state.acuteLoad, 1))}</div><p class="muted">${escape(state.loadExplanation)}</p>`)}
                 ${card('Power profile', `<p class="muted">Best observed efforts, not necessarily maximal. Missing efforts are not evidence of decline.</p>
                 <div class="table-scroll"><table><thead><tr><th>Duration</th><th>Watts</th><th>W/kg</th></tr></thead><tbody>
-                ${state.powerDuration.map(effort => `<tr><td>${time(effort.seconds)}</td><td>${number(effort.watts)}</td><td>${number(effort.wKg, 2)}</td></tr>`).join('')}</tbody></table></div>`)}</div>` :
+                ${state.powerDuration.map(effort => `<tr><td>${time(effort.seconds)}</td><td>${number(effort.watts)}</td><td>${number(effort.wKg, 2)}</td></tr>`).join('')}</tbody></table></div>`, '', true)}</div>` :
                 card('Training metrics', '<p>Configure your Coach profile to calculate training-load and power metrics from your history. No inferred fitness score is shown without sufficient data.</p>')}`;
     }
     function player() {
@@ -284,18 +333,18 @@ export async function launchPlatform(root, account) {
                 <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required></label>
                 <button>Save profile</button></form>${integration?.connected ? '<button class="secondary" data-action="import-profile">Use Intervals.icu FTP / weight</button>' : ''}
                 <p class="muted">After changing FTP, archive and regenerate an active plan before riding it.</p>`)}
-            ${authenticated ? `${card('Intervals.icu', integrationView())}
+            ${authenticated ? `${card('Intervals.icu', integrationView(), '', true)}
             ${card('Private device backup', `<p>Back up this account's workout files, recent FIT recordings, settings and manual calendar to the server.</p>
                 <div class="button-row"><button class="secondary" data-action="backup">Save backup</button>
                 <button class="secondary" data-action="restore">Restore backup</button></div>
-                <p class="muted">Restore merges workout/recording files and replaces device settings/calendar. It does not import another account's data.</p>`)}
+                <p class="muted">Restore merges workout/recording files and replaces device settings/calendar. It does not import another account's data.</p>`, '', true)}
             ${card('Your account', `<p>${escape(account.email)}</p><p>Coach history and imports are automatically saved to this server. Bluetooth pairings and ride recovery stay on this device.</p>
                 <button class="secondary" data-action="export">Export training history</button>
                 <form id="delete-account"><label>Confirm email to permanently delete this account and all server data
-                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`)}` :
+                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`, '', true)}` :
                 card('Optional server account', `<p>Ride, connect devices, import workouts, download FIT recordings, use the calendar and run local coaching without an account.
                     Sign in for account-scoped server coaching, private backups and Intervals.icu integrations. Guest data is kept separately and is never automatically uploaded.</p>
-                    <button data-action="signin">Sign in / Create account</button><button class="secondary" data-action="export">Export local training history</button>`)}</div>`;
+                    <button data-action="signin">Sign in / Create account</button><button class="secondary" data-action="export">Export local training history</button>`, '', true)}</div>`;
     }
     function integrationView() {
         if(!integration) return '<p role="status">Loading integration status...</p>';
@@ -351,6 +400,7 @@ export async function launchPlatform(root, account) {
         finally { integrationLoading = false; }
     }
     let libraryFilters = initialLibraryFilters();
+    let libraryPage = 0;
     function render() {
         if(!ready) return;
         const data = coachingData();
@@ -361,7 +411,8 @@ export async function launchPlatform(root, account) {
             a.getAttribute('href') === `#/${route}` ? 'page' : 'false'));
         document.body.dataset.route = route;
         legacy.hidden = !['calendar', 'coach', 'devices', 'editor'].includes(route);
-        content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? renderLibrary(db.workouts, libraryFilters)
+        content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? renderLibrary(db.workouts, libraryFilters,
+            {page: libraryPage, pageSize: mobile ? 6 : Infinity})
             : route === 'workout' ? details(data) : route === 'plan' ? plan(data)
                 : route === 'activities' ? activities(data) : route === 'progress' ? progress(data)
                     : route === 'player' ? player() : route === 'settings' ? settings()
@@ -369,6 +420,7 @@ export async function launchPlatform(root, account) {
                             Connections and controls use the existing BLE / ANT+ engine.</p>
                             ${!navigator.bluetooth ? '<p role="alert">Web Bluetooth is unavailable in this browser. Use Chrome/Edge on a supported platform and HTTPS or localhost. ANT+ requires Web Serial or WebUSB.</p>' : ''}`
                             : route === 'coach' ? `<p class="muted">Your ${authenticated ? 'private' : 'on-device'} Coach plans around your goal, schedule and ride history.</p>` : '';
+        updateMobileSections();
         if(route === 'player') updateRide();
     }
     function navigate() {
@@ -449,6 +501,7 @@ export async function launchPlatform(root, account) {
     root.addEventListener('input', event => {
         if(event.target.id !== 'workout-search') return;
         libraryFilters.search = event.target.value;
+        libraryPage = 0;
         const position = event.target.selectionStart;
         render();
         const input = root.querySelector('#workout-search');
@@ -462,6 +515,7 @@ export async function launchPlatform(root, account) {
         }[event.target.id];
         if(libraryField) {
             libraryFilters[libraryField] = event.target.value;
+            libraryPage = 0;
             render();
             root.querySelector(`#${event.target.id}`).focus();
             return;
@@ -519,8 +573,19 @@ export async function launchPlatform(root, account) {
         }
         if(event.target.closest('[data-library-reset]')) {
             libraryFilters = initialLibraryFilters();
+            libraryPage = 0;
             render();
             root.querySelector('#workout-search').focus();
+            return;
+        }
+        const pageButton = event.target.closest('[data-library-page]');
+        if(pageButton) {
+            libraryPage = Number(pageButton.dataset.libraryPage);
+            render();
+            const results = root.querySelector('#library-results');
+            results.setAttribute('tabindex', '-1');
+            results.focus();
+            results.scrollIntoView({block: 'start'});
             return;
         }
         const device = event.target.closest('[data-device]')?.dataset.device;

@@ -2,7 +2,7 @@ import { addDays, localDay, weekday } from '../coaching/domain.js';
 import { renderPowerProfile } from '../views/power-profile.js';
 import { activityIcon, activityTypeLabel } from '../views/activity-icon.js';
 import { renderActivityDetails } from '../views/activity-details.js';
-import { escape, number, time } from './format.js';
+import { escape, number, time, mobileDetails } from './format.js';
 
 const loadLabels = {
     power: 'Power load',
@@ -128,7 +128,7 @@ export function renderActivityOverview(data, lists, state, now = Date.now()) {
     return `<section class="activity-overview" aria-label="Activity overview">
         <div class="activity-periods">
             ${periodMarkup('This week', periods.week, loadSource)}
-            ${periodMarkup('This month', periods.month, loadSource)}
+            ${mobileDetails('activity-month', 'This month', periodMarkup('This month', periods.month, loadSource))}
         </div>
         ${hasState ? `<div class="activity-load-state" aria-label="Current training load">
             <span>Fitness <strong>${number(currentState.chronicLoad)}</strong></span>
@@ -138,8 +138,8 @@ export function renderActivityOverview(data, lists, state, now = Date.now()) {
         </div>
         <p class="muted activity-overview-note">Modelled from coaching history using ${escape(loadLabels[loadSource])};
             these are not direct measurements. Only cycling activities are modelled.${deviceOnly ? ' Device-only rides are not included in the model.' : ''}</p>` : ''}
-        <p class="muted activity-overview-note">The week starts on Monday. Totals include all dated activities${deviceOnly ? ' and device-only recordings' : ''}.
-            ${periods.undated ? `${periods.undated} undated ${periods.undated === 1 ? 'activity is' : 'activities are'} excluded.` : ''}</p>
+        ${mobileDetails('activity-totals-notes', 'About these totals', `<p class="muted activity-overview-note">The week starts on Monday. Totals include all dated activities${deviceOnly ? ' and device-only recordings' : ''}.
+            ${periods.undated ? `${periods.undated} undated ${periods.undated === 1 ? 'activity is' : 'activities are'} excluded.` : ''}</p>`)}
     </section>`;
 }
 

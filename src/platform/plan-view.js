@@ -7,7 +7,7 @@
  */
 
 import { FAMILIES } from '../coaching/workouts.js';
-import { escape } from './format.js';
+import { escape, mobileDetails } from './format.js';
 
 const PHASES = {
     assessment: ['Baseline', 'Easy rides that show the Coach where your fitness is today.'],
@@ -154,7 +154,7 @@ export function renderPlan(data, day) {
                 <span class="muted">${escape(dateLabel(next.date, {weekday: 'long', day: 'numeric', month: 'long'}))}</span></div>
                 <a class="button" href="#/workout/${encodeURIComponent(next.id)}">${next.date === day ? 'Prepare to ride' : 'View session'}</a></div>` : ''}
         </section>
-        <section class="panel"><h2>Plan at a glance</h2>${timeline(plan, day)}</section>
+        <section class="panel">${mobileDetails('plan-timeline', 'Plan at a glance', `<h2 class="desktop-section-title">Plan at a glance</h2>${timeline(plan, day)}`)}</section>
         ${workouts.length ? `<section class="panel plan-weeks"><h2>Week by week</h2>
             ${currentIndex >= 0 ? block(weeks[currentIndex], true) : ''}
             ${upcoming.length ? `<h3>Coming up</h3>${upcoming.slice(0, 4).map((w, i) => block(w, currentIndex < 0 && i === 0)).join('')}` : ''}

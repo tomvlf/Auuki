@@ -53,6 +53,7 @@ const go = async route => {
 };
 
 test('mobile guests can ride and use local features without a backend version display', async () => {
+    window.innerWidth = 390;
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
     serverRequest.mockRejectedValue(new Error('Offline'));
     window.history.replaceState({}, '', '/mobile');
@@ -71,6 +72,14 @@ test('mobile guests can ride and use local features without a backend version di
     await go('library');
     expect(root.textContent).toContain('Local workout');
     expect(root.querySelector('#platform-upload')).not.toBeNull();
+    const filters = root.querySelector('[data-mobile-details="library-filters"]');
+    expect(filters.open).toBe(false);
+    expect(root.querySelector('#workout-search').closest('details')).toBeNull();
+    filters.open = true;
+    filters.dispatchEvent(new Event('toggle'));
+    await go('dashboard');
+    await go('library');
+    expect(root.querySelector('[data-mobile-details="library-filters"]').open).toBe(true);
     await go('calendar');
     expect(document.querySelector('.wrapper').hidden).toBe(false);
     await go('coach');
@@ -81,6 +90,7 @@ test('mobile guests can ride and use local features without a backend version di
     expect(root.textContent).toContain('stored only on this device');
     expect(root.textContent).toContain('Guest data is kept separately');
     expect(root.querySelector('#profile-form')).not.toBeNull();
+    expect(root.querySelector('[data-mobile-details="Optional server account"]').open).toBe(false);
     expect(root.querySelector('#intervals-connect')).toBeNull();
     expect(root.querySelector('[data-action="backup"]')).toBeNull();
     expect(root.querySelector('#delete-account')).toBeNull();

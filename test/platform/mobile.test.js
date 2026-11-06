@@ -47,8 +47,15 @@ jest.mock('../../src/functions.js', () => {
 });
 
 test('mobile has a dedicated ride-first navigation, recovered ride controls, glanceable metrics and finish summary', async () => {
-    window.history.replaceState({}, '', '/mobile');
-    document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar></div>';
+    window.innerWidth = 390;
+    window.history.replaceState({}, '', '/');
+    document.body.innerHTML = `<div id="platform"></div><div class="wrapper" hidden>
+        <training-calendar></training-calendar><div id="view--settings-settings">
+            <div class="device-card"><span class="device-card--header--label">Controllable</span></div>
+            <div class="device-card"><span class="device-card--header--label">Power Meter</span>
+                <connection-switch id="test-power-switch"></connection-switch></div>
+        </div></div>`;
+    const powerSwitch = document.querySelector('#test-power-switch');
     const calendar = document.querySelector('training-calendar');
     calendar.entriesForDate = () => [];
     calendar.loadPlannedMonth = jest.fn();
@@ -61,12 +68,38 @@ test('mobile has a dedicated ride-first navigation, recovered ride controls, gla
     expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(0);
     expect(root.querySelector('nav').textContent).not.toContain('Progress');
     expect(root.querySelector('nav').textContent).not.toContain('Training calendar');
+    expect(root.querySelector('nav').querySelectorAll('a')).toHaveLength(5);
     expect(document.body.dataset.route).toBe('player');
     expect(root.textContent).toContain('Ride recovered on this device');
     for(const id of ['power', 'target', 'cadence', 'hr', 'elapsed', 'countdown', 'next', 'remaining']) {
         expect(root.querySelector(`#ride-${id}`)).not.toBeNull();
     }
     expect(root.querySelector('#ride-toggle').textContent).toBe('Resume');
+    expect(powerSwitch.closest('[data-mobile-details]').open).toBe(false);
+    const toggle = root.querySelector('#ride-toggle');
+    const hash = window.location.hash;
+    xf.dispatch.mockClear();
+    window.innerWidth = 701;
+    window.dispatchEvent(new Event('resize'));
+    await Promise.resolve();
+    expect(document.body.classList.contains('mobile-app')).toBe(false);
+    expect(root.querySelector('nav').textContent).toContain('Progress');
+    expect(root.querySelector('nav [aria-current="page"]').textContent).toBe('Ride');
+    expect(root.querySelector('.sidebar .app-versions').hidden).toBe(false);
+    expect(powerSwitch.closest('[data-mobile-details]').open).toBe(true);
+    expect(root.querySelector('#test-power-switch')).toBe(powerSwitch);
+    expect(root.querySelector('#ride-toggle')).toBe(toggle);
+    expect(window.location.hash).toBe(hash);
+    expect(db.watchStatus).toBe('paused');
+    expect(xf.dispatch).not.toHaveBeenCalled();
+    window.innerWidth = 700;
+    window.dispatchEvent(new Event('resize'));
+    expect(document.body.classList.contains('mobile-app')).toBe(true);
+    expect(root.querySelector('nav').textContent).not.toContain('Progress');
+    expect(root.querySelector('.sidebar .app-versions').hidden).toBe(true);
+    expect(powerSwitch.closest('[data-mobile-details]').open).toBe(false);
+    expect(root.querySelector('#ride-toggle')).toBe(toggle);
+    expect(xf.dispatch).not.toHaveBeenCalled();
     const dispatch = xf.dispatch;
     dispatch.mockClear();
     root.querySelector('[data-action="ride-finish"]').click();

@@ -1,4 +1,4 @@
-import { cadenceSummary, escape, minutes, number, profileGraph } from './format.js';
+import { cadenceSummary, escape, minutes, number, profileGraph, mobileDetails } from './format.js';
 
 export const initialLibraryFilters = () => ({
     search: '', category: '', type: 'all', duration: 'all', sort: 'original',
@@ -61,11 +61,14 @@ function workoutCard(workout) {
     </article>`;
 }
 
-export function renderLibrary(workouts, filters) {
+export function renderLibrary(workouts, filters, {page = 0, pageSize = Infinity} = {}) {
     const filtered = filterWorkouts(workouts, filters);
+    const pages = Math.ceil(filtered.length / pageSize);
+    const currentPage = Math.max(0, Math.min(page, pages - 1));
+    const visible = Number.isFinite(pageSize) ? filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : filtered;
     const categories = [...new Set(workouts.map(workout => workout.meta.category)
         .filter(category => typeof category === 'string' && category.trim()))].sort((a, b) => a.localeCompare(b));
-    const results = filtered.length ? filtered.map(workoutCard).join('') :
+    const results = filtered.length ? visible.map(workoutCard).join('') :
         `<div class="library-empty">${workouts.length ? 'No workouts match your search.' :
             'Your workout library is empty. Import a workout to get started.'}</div>`;
 
@@ -81,8 +84,9 @@ export function renderLibrary(workouts, filters) {
             <aside class="panel library-filters" aria-labelledby="library-filters-heading">
                 <p class="eyebrow">Explore your library</p>
                 <h2 id="library-filters-heading">Find a workout</h2>
+                <label class="library-keywords">Keywords<input type="search" id="workout-search" aria-controls="library-results" placeholder="Name or category" value="${escape(filters.search)}"></label>
+                ${mobileDetails('library-filters', 'Filters & sorting', `
                 <div class="library-filter-fields">
-                    <label class="library-keywords">Keywords<input type="search" id="workout-search" aria-controls="library-results" placeholder="Name or category" value="${escape(filters.search)}"></label>
                     <label>Category<select id="workout-category" aria-controls="library-results">
                         ${option('', 'All categories', filters.category)}${categories.map(category => option(category, category, filters.category)).join('')}
                     </select></label>
@@ -98,9 +102,14 @@ export function renderLibrary(workouts, filters) {
                         ${option('duration', 'Shortest duration', filters.sort)}${option('distance', 'Longest distance', filters.sort)}
                     </select></label>
                 </div>
-                <button class="secondary library-reset" type="button" data-library-reset>Clear filters</button>
+                <button class="secondary library-reset" type="button" data-library-reset>Clear filters</button>`)}
             </aside>
-            <div class="library-results" id="library-results"><div class="workout-grid">${results}</div></div>
+            <div class="library-results" id="library-results"><div class="workout-grid">${results}</div>
+                ${pages > 1 ? `<nav class="library-pages" aria-label="Workout pages">
+                    <button class="secondary" data-library-page="${currentPage - 1}" ${currentPage === 0 ? 'disabled' : ''}>Previous</button>
+                    <span role="status">Page ${currentPage + 1} of ${pages}</span>
+                    <button class="secondary" data-library-page="${currentPage + 1}" ${currentPage + 1 === pages ? 'disabled' : ''}>Next</button>
+                </nav>` : ''}</div>
         </div>
     </section>`;
 }

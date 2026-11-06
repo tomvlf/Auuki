@@ -66,6 +66,8 @@ const go = async route => {
 };
 
 test('desktop shell wires every screen to real data, workout commands, accessible controls and integration settings', async () => {
+    window.innerWidth = 1024;
+    window.history.replaceState({}, '', '/mobile');
     document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar><connection-switch></connection-switch></div>';
     const calendar = document.querySelector('training-calendar');
     calendar.entriesForDate = () => [];
@@ -78,6 +80,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
         : {configured: true, connected: false, status: 'disconnected'}));
     await launchPlatform(root, {email: 'rider@example.com'});
     await settle();
+    expect(document.body.classList.contains('mobile-app')).toBe(false);
     const versions = root.querySelector('.sidebar > .app-versions');
     expect(versions).not.toBeNull();
     expect(root.querySelector('#main-content .app-versions')).toBeNull();
@@ -356,6 +359,14 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     const profile = root.querySelector('#profile-form');
     profile.elements.ftp.value = '270';
     profile.elements.weight.value = '74';
+    for(const width of [700, 701]) {
+        window.innerWidth = width;
+        window.dispatchEvent(new Event('resize'));
+        expect(root.querySelector('#profile-form')).toBe(profile);
+        expect(profile.elements.ftp.value).toBe('270');
+        expect(profile.elements.weight.value).toBe('74');
+        expect(document.body.dataset.route).toBe('settings');
+    }
     profile.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:ftp-set', 270);

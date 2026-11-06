@@ -19,10 +19,21 @@ The app is built around a single idea: training should work without friction, wh
 - fetches full-resolution power, heart-rate and cadence streams plus route previews on demand, with CSV export
 - uploads new FIT recordings back to Intervals.icu
 - includes an adaptive coaching engine for goal-based planning and ride review
-- supports a desktop web app and a dedicated `/mobile` training companion
+- automatically switches between mobile and desktop layouts as the window width changes
 - keeps guest-mode data separate from server-backed account data
 
 ## Ride screen
+
+Both `/` and `/mobile` automatically use the mobile layout at widths of 700px
+or less and the desktop layout above that. Resizing or rotating switches layouts
+without reloading, changing the current page, clearing forms, or interrupting a ride.
+Mobile screens use compact cards and expandable secondary information: library
+filters, workout notes and intervals, monthly activity totals, backup/account
+settings, additional sensors, the month calendar overview, and the plan timeline. Open sections retain their
+state while navigating during the session; desktop shows this information expanded.
+The mobile library shows six workouts per page with Previous/Next controls.
+Ride metrics and controls stay visible, and the five-item bottom navigation is unchanged.
+Long activity histories and setup forms still scroll so no information is clipped.
 
 The ride screen keeps target power, interval time remaining and target cadence
 above an always-visible workout power profile. A labelled position marker
@@ -110,7 +121,7 @@ ATHLIMA_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml
 ### Deployed versions
 
 The desktop app shows separate frontend and backend versions at the bottom of the
-left-hand menu; the dedicated mobile app omits them. The sign-in screen also shows
+left-hand menu; the mobile layout omits them. The sign-in screen also shows
 the versions. Published images display the GitHub Actions build number and
 attempt. The sign-in screen also shows the first 12 characters of the Git
 revision; hover over a version for the full revision. An older backend may show

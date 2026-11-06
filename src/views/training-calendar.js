@@ -369,7 +369,11 @@ class TrainingCalendar extends HTMLElement {
                     <button type="button" data-action="week">Week</button>
                 </div>
             </header>
-            ${this.renderCalendarTable(weeks.reverse(), heading, this.displayMonth.getMonth())}`;
+            <details class="mobile-details" data-mobile-details="calendar-month"
+                ${(this.querySelector('[data-mobile-details="calendar-month"]')?.open ?? window.innerWidth > 700) ? 'open' : ''}>
+                <summary>Month overview</summary>
+                <div class="mobile-details-body">${this.renderCalendarTable(weeks.reverse(), heading, this.displayMonth.getMonth())}</div>
+            </details>`;
     }
 
     renderCalendarTable(weeks, heading, displayMonth = null) {

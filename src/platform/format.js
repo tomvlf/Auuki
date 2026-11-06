@@ -20,6 +20,8 @@ import { addDays, localDay } from '../coaching/domain.js';
 
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, c =>
     ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+export const mobileDetails = (id, title, body) => `<details class="mobile-details" data-mobile-details="${escape(id)}" open>
+    <summary>${escape(title)}</summary><div class="mobile-details-body">${body}</div></details>`;
 export const minutes = seconds => `${Math.round(seconds / 60)} min`;
 export const number = (value, digits = 0) => Number.isFinite(value)
     ? value.toLocaleString(undefined, {maximumFractionDigits: digits}) : '--';

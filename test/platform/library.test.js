@@ -18,6 +18,21 @@ const workouts = [
 const ids = result => result.map(workout => workout.id);
 const filtered = overrides => filterWorkouts(workouts, {...initialLibraryFilters(), ...overrides});
 
+test('mobile pagination bounds visible cards without removing search results', () => {
+    const root = document.createElement('div');
+    root.innerHTML = renderLibrary(workouts, initialLibraryFilters(), {page: 0, pageSize: 2});
+    expect(root.querySelectorAll('.workout-card')).toHaveLength(2);
+    expect(root.querySelector('[data-library-page="-1"]').disabled).toBe(true);
+    expect(root.textContent).toContain('Page 1 of 3');
+    root.innerHTML = renderLibrary(workouts, initialLibraryFilters(), {page: 99, pageSize: 2});
+    expect(root.querySelectorAll('.workout-card')).toHaveLength(2);
+    expect(root.textContent).toContain('Page 3 of 3');
+    expect(root.querySelector('[data-library-page="3"]').disabled).toBe(true);
+    root.innerHTML = renderLibrary(workouts, initialLibraryFilters());
+    expect(root.querySelectorAll('.workout-card')).toHaveLength(6);
+    expect(root.querySelector('.library-pages')).toBeNull();
+});
+
 test('search and filters combine using actual categories, workout type and duration boundaries', () => {
     expect(ids(filtered({search: 'ENDURANCE'}))).toEqual(['medium', 'hour', 'long']);
     expect(ids(filtered({search: 'ba', category: 'Endurance'}))).toEqual(['medium']);
