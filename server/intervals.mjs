@@ -309,16 +309,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             const retryAt = retry && Number.isFinite(seconds) ? clock() + Math.max(0, seconds) * 1000
                 : retry && Number.isFinite(Date.parse(retry)) ? Date.parse(retry) : null;
             const error = new IntegrationError(response.status === 401 || response.status === 403
-                ? 'Intervals.icu rejected the API key. Reconnect with a valid key.'
-                : response.status === 429 ? 'Intervals.icu rate limited this import; it will retry later.'
-                    : `Intervals.icu returned HTTP ${response.status}. Retry the synchronization.`,
+                ? 'Intervals.icu could not confirm your connection. Reconnect it in Settings and try again.'
+                : response.status === 429 ? 'Intervals.icu needs a pause before importing more activities. Please try again later.'
+                    : 'Intervals.icu could not complete this request. Please try again later.',
             response.status === 429 ? 429 : response.status >= 500 ? 502 : 400, retryAt);
             error.providerStatus = response.status;
             throw error;
         }
         let result;
         try { result = await response.json(); }
-        catch { throw new IntegrationError('Intervals.icu returned an invalid response.', 502); }
+        catch { throw new IntegrationError('The information received from Intervals.icu could not be read. Please try again later.', 502); }
         return result;
     }
     /**
@@ -414,7 +414,7 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
      *
      * @param {number|string} id - User account identifier.
      * @param {string} activityId - Intervals.icu activity ID.
-     * @returns {Promise<{streams: object, map: object|null}>} Full stream arrays and optional route.
+     * @returns {Promise<{streams: object, map: object|null, routeError?: string}>} Full streams, optional route and route validation warning.
      */
     async function activityData(id, activityId) {
         const current = row(id);
@@ -454,12 +454,16 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
             streams[type] = values;
         }
         if(!map || !Array.isArray(map.latlngs)) return {streams, map: null};
-        if(map.latlngs.length > 200000 || map.latlngs.some(point =>
+        // Intervals.icu includes null entries for missing locations.
+        const latlngs = map.latlngs.filter(point => point !== null);
+        if(map.latlngs.length > 200000 || latlngs.some(point =>
             !Array.isArray(point) || point.length < 2 || !Number.isFinite(point[0]) ||
             !Number.isFinite(point[1]) || Math.abs(point[0]) > 90 || Math.abs(point[1]) > 180)) {
-            throw new IntegrationError('Intervals.icu returned invalid activity route data.', 502);
+            const routeError = 'Route could not be displayed because some location information could not be read. Your activity measurements are still available.';
+            console.warn('Intervals.icu returned invalid activity route data; returning streams without a route.');
+            return {streams, map: null, routeError};
         }
-        return {streams, map: {latlngs: map.latlngs}};
+        return {streams, map: latlngs.length ? {latlngs} : null};
     }
     /**
      * Fetches planned workouts in a bounded date window for the rider's athlete.

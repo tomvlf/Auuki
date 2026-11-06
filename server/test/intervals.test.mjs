@@ -204,6 +204,30 @@ test('activity data endpoint returns full on-demand streams and account-scoped r
     assert.ok(streamCall);
     assert.match(streamCall.args.headers.Authorization, /^Basic /);
 
+    for(const latlngs of [
+        [null, [52.1, 5.1], null, [52.2, 5.2], null],
+        [null, null], [],
+    ]) {
+        f.remote(async url => new URL(url).pathname.endsWith('/map')
+            ? json({latlngs}) : json([{type: 'watts', data: [180, 0, 220]}]));
+        const result = await f.request(`${endpoint}/activity-data?activityId=i123`, {cookie});
+        assert.equal(result.status, 200);
+        assert.deepEqual(result.data.streams, {watts: [180, 0, 220]});
+        const points = latlngs.filter(point => point !== null);
+        assert.deepEqual(result.data.map, points.length ? {latlngs: points} : null);
+        assert.equal(result.data.routeError, undefined);
+    }
+
+    for(const latlngs of [[[null, 5]], [[91, 5]], [[52, 181]], [['52', 5]]]) {
+        f.remote(async url => new URL(url).pathname.endsWith('/map')
+            ? json({latlngs}) : json([{type: 'watts', data: [180, 0, 220]}]));
+        const partial = await f.request(`${endpoint}/activity-data?activityId=i123`, {cookie});
+        assert.equal(partial.status, 200);
+        assert.deepEqual(partial.data.streams, {watts: [180, 0, 220]});
+        assert.equal(partial.data.map, null);
+        assert.match(partial.data.routeError, /Route could not be displayed/);
+    }
+
     const other = await f.register('other@example.com');
     await f.connect(other);
     const denied = await f.request(`${endpoint}/activity-data?activityId=i123`, {cookie: other});
@@ -256,7 +280,7 @@ test('bad credentials, future dates, malformed dates and remote errors are expli
     f.remote(async () => json({error: 'secret must never be exposed'}, 401));
     const rejected = await f.connect(cookie);
     assert.equal(rejected.status, 400);
-    assert.match(rejected.data.error, /rejected the API key/);
+    assert.match(rejected.data.error, /could not confirm your connection/);
     assert.ok(!JSON.stringify(rejected).includes('secret'));
     assert.equal((await f.status(cookie)).data.connected, false);
     f.remote(async () => { throw new Error('network error containing credentials'); });
@@ -481,7 +505,7 @@ test('rate limits honor Retry-After, retry transient failures, and bound attempt
     await f.sync(cookie);
     await f.tick();
     assert.equal((await f.status(cookie)).data.status, 'queued');
-    assert.match((await f.status(cookie)).data.error, /rate limited/);
+    assert.match((await f.status(cookie)).data.error, /needs a pause/);
     const count = f.calls.length;
     f.advance(119000);
     await f.tick();
@@ -492,7 +516,7 @@ test('rate limits honor Retry-After, retry transient failures, and bound attempt
     f.remote(async () => json({}, 503));
     for(let i = 0; i < 4; i++) { f.advance(3600000); await f.tick(); }
     assert.equal((await f.status(cookie)).data.status, 'error');
-    assert.match((await f.status(cookie)).data.error, /503/);
+    assert.match((await f.status(cookie)).data.error, /could not complete this request/);
 });
 
 test('concurrent sync requests coalesce and disconnect during an in-flight batch prevents any commit', async t => {

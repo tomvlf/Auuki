@@ -20,6 +20,26 @@ export const SERVER_MODE_KEY = 'athlima-server-mode';
 export const serverAccount = {email: null};
 export const serverEnabled = () => window.localStorage.getItem(SERVER_MODE_KEY) === '1';
 
+function requestFailure(path, status, reason = 'response') {
+    const operation = path.startsWith('integrations/intervals/activity-data') ? 'load this activity\'s route and measurements'
+        : path.startsWith('integrations/intervals') ? 'complete this Intervals.icu action'
+            : path === 'login' ? 'sign you in' : path === 'register' ? 'create your account'
+                : path === 'session' ? 'check your sign-in'
+                    : path === 'backup' ? 'complete your backup request'
+                        : path === 'coaching' ? 'update or load your training information' : 'complete this action';
+    const explanation = reason === 'connection' ? 'Cannot reach Athlima. Check your connection and try again.'
+        : status === 401 ? 'Please sign in again.'
+            : status === 403 ? 'This action is not allowed. If this continues, contact the app administrator.'
+                : status === 404 ? 'This feature or item is not available. Refresh the page and try again.'
+                    : status === 429 ? 'Too many requests were made. Wait a few minutes and try again.'
+                        : [408, 504, 524].includes(status) ? 'The service took too long to respond. Try again shortly.'
+                            : status >= 500 ? 'The service could not complete the request. Try again shortly.'
+                                : 'The service sent a response we could not use. Refresh the page and try again.';
+    const error = new Error(`We couldn't ${operation}. ${explanation}`);
+    error.status = status;
+    return error;
+}
+
 export async function serverRequest(path, {method = 'GET', body, account = serverAccount.email, signal} = {}) {
     let response;
     try { response = await fetch(`/api/server/${path}`, {
@@ -28,18 +48,20 @@ export async function serverRequest(path, {method = 'GET', body, account = serve
             ...(account ? {'X-Athlima-Account': account} : {})},
         ...(body === undefined ? {} : {body: JSON.stringify(body)}),
         ...(signal ? {signal} : {}),
-    }); } catch(error) {
-        throw new Error('Cannot reach the Athlima server. Check your connection and try again.', {cause: error});
+    }); } catch {
+        throw requestFailure(path, undefined, 'connection');
     }
     if(!response.headers.get('content-type')?.includes('application/json')) {
-        throw new Error('The Athlima backend is unavailable on this host. Your loaded ride remains local; retry when the server is available.');
+        throw requestFailure(path, response.status);
     }
     let result;
     try { result = await response.json(); }
-    catch(error) {
-        throw new Error('The Athlima backend returned an invalid response. Try again or contact the server operator.', {cause: error});
-    }    if(!response.ok) {
-        const error = new Error(result?.error || `Server request failed (${response.status}).`);
+    catch {
+        throw requestFailure(path, response.status);
+    }
+    if(!response.ok) {
+        const error = response.status >= 500 || response.status === 403 || typeof result?.error !== 'string'
+            ? requestFailure(path, response.status) : new Error(result.error);
         error.status = response.status;
         if(response.status === 401 && account && typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('session:expired', {detail: error.message}));
@@ -56,7 +78,7 @@ export async function authenticate(operation, credentials) {
     try { account = await serverRequest('session', {account: null}); }
     catch(error) {
         if(error.status !== 401) throw error;
-        throw new Error(`${operation === 'register' ? 'Your account was created, but' : 'Your credentials were accepted, but'} the session cookie was not saved. Enable cookies and use HTTPS, or ask the operator to enable ATHLIMA_INSECURE_COOKIES for localhost HTTP.`);
+        throw new Error(`${operation === 'register' ? 'Your account was created, but' : 'Your sign-in details were accepted, but'} we couldn't keep you signed in. Allow this site to save sign-in information in your browser and try signing in again. If this continues, contact the app administrator.`);
     }
     if(typeof signedIn?.email !== 'string' || account?.email !== signedIn.email) {
         throw new Error('The signed-in account changed. Please sign in again before opening account data.');

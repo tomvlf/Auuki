@@ -103,7 +103,7 @@ test('overlapping remote writes are rejected', async () => {
 
 test('static hosts report unavailable backend rather than a JSON parsing error', async () => {
     fetch.mockResolvedValue({headers: {get: () => 'text/html'}});
-    await expect(serverRequest('session')).rejects.toThrow('Athlima backend is unavailable');
+    await expect(serverRequest('session')).rejects.toThrow("couldn't check your sign-in");
 });
 
 test('optional public requests can be aborted without sending an account identifier', async () => {
@@ -130,7 +130,25 @@ test('authentication expiry triggers the protected shell without silently switch
 test('malformed backend responses produce an actionable error', async () => {
     fetch.mockResolvedValue({headers: {get: () => 'application/json'},
         json: async () => { throw new SyntaxError('Unexpected token'); }});
-    await expect(serverRequest('login')).rejects.toThrow('backend returned an invalid response');
+    await expect(serverRequest('login')).rejects.toThrow('response we could not use');
+});
+
+test.each([
+    [502, 'text/html', 'could not complete the request'],
+    [504, 'text/html', 'took too long'],
+    [524, 'text/html', 'took too long'],
+    [403, 'application/json', 'not allowed'],
+    [500, 'application/json', 'could not complete the request'],
+])('request failures give safe activity-specific guidance for %s', async (status, contentType, message) => {
+    fetch.mockResolvedValue({
+        ok: false, status, headers: {get: () => contentType},
+        json: async () => ({error: 'Private database path /private/accounts.sqlite and secret credentials'}),
+    });
+    const error = await serverRequest('integrations/intervals/activity-data?activityId=private-id').catch(error => error);
+    expect(error.message).toContain("load this activity's route and measurements");
+    expect(error.message).toContain(message);
+    expect(error.message).not.toMatch(/private|secret|sqlite|HTTP|backend/);
+    expect(error.status).toBe(status);
 });
 
 test('authentication never opens a different session account after a concurrent login', async () => {

@@ -195,6 +195,19 @@ test('includes every sport in totals and shows type icons and all imported metri
     expect(value('Gear')).toBe('Trail shoes');
 });
 
+test('shows route failures explicitly while retaining valid streams', () => {
+    const root = document.createElement('div');
+    root.innerHTML = renderActivityStreamData({
+        streams: {watts: [180, 200]}, map: null,
+        routeError: 'Route could not be displayed: invalid data <script>.',
+    });
+    expect(root.querySelector('[role="alert"]').textContent).toContain('Route could not be displayed');
+    expect(root.querySelector('script')).toBeNull();
+    expect(root.querySelector('.activity-stream-chart--power')).not.toBeNull();
+    expect(root.querySelector('[data-download-activity-csv]')).not.toBeNull();
+    expect(root.textContent).not.toContain('No route is available');
+});
+
 test('offers on-demand route and renders full-resolution stream previews', () => {
     const activity = ride('intervals:i123', '2026-03-01', {
         source: 'intervals', externalId: 'i123',

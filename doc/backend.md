@@ -111,6 +111,13 @@ generation/adaptation, history and analytics consume only this internal model.
 Missing measurements remain unavailable. Cycling `Ride`/`VirtualRide` and
 cycling subtypes are imported; Strava-origin data is not available through this
 API. Imported summaries do not fabricate one-second streams or best efforts.
+When loading **Activities > Route & data**, invalid route coordinates are reported
+with a visible warning without blocking valid activity streams or their CSV export.
+Missing location entries (`null`) in Intervals.icu routes are ignored, as in the
+provider's own viewer; remaining coordinates are still validated.
+Connection and service errors identify the affected action in plain language.
+Unexpected server failures and gateway responses are not displayed verbatim;
+technical details remain in server logs.
 Additional providers should add an adapter producing the same normalized input
 and stable provider IDs, rather than introduce provider objects to Coach.
 

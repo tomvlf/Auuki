@@ -98,7 +98,7 @@ test('implicit submission, duplicate registration and network failures show erro
     form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
     await settle();
     expect(fetch.mock.calls.some(([url]) => url === '/api/server/login')).toBe(true);
-    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Athlima server');
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach Athlima');
 });
 
 test('origin and credential errors stay visible and guest access is explicit after session failure', async () => {
@@ -112,7 +112,8 @@ test('origin and credential errors stay visible and guest access is explicit aft
         fetch.mockResolvedValueOnce(response({error}, status));
         form.querySelector('[value="login"]').click();
         await settle();
-        expect(document.querySelector('[role="alert"]').textContent).toBe(error);
+        expect(document.querySelector('[role="alert"]').textContent).toContain(
+            status === 403 ? 'This action is not allowed.' : error);
     }
     document.querySelector('#continue-guest').click();
     await settle();
@@ -127,7 +128,7 @@ test('a rejected session cookie is reported instead of pretending registration s
         .mockResolvedValueOnce(response({error: 'Sign in'}, 401));
     form.querySelector('[value="register"]').click();
     await settle();
-    expect(document.querySelector('[role="alert"]').textContent).toContain('account was created, but the session cookie');
+    expect(document.querySelector('[role="alert"]').textContent).toContain("account was created, but we couldn't keep you signed in");
     expect(launch).not.toHaveBeenCalled();
     expect(localStorage.getItem('athlima-server-mode')).toBeNull();
 });
@@ -150,7 +151,7 @@ test('an unavailable account backend is reported without silently switching to g
     fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const launch = await start();
     expect(launch).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach the Athlima server');
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Cannot reach Athlima');
     expect(document.querySelector('#continue-guest')).not.toBeNull();
     expect(localStorage.getItem('athlima-server-mode')).toBe('1');
 });

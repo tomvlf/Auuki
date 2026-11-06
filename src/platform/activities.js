@@ -270,7 +270,7 @@ export function renderActivityStreamData(data) {
     ].filter(Boolean);
     const sampleCount = Math.max(0, ...Object.values(streams).filter(Array.isArray).map(values => values.length));
     return `<section class="activity-stream-data" aria-label="Full activity data">
-        ${renderActivityRoute(data?.map)}
+        ${data?.routeError ? `<p role="alert">${escape(data.routeError)}</p>` : renderActivityRoute(data?.map)}
         ${charts.length ? `<div class="activity-stream-charts">${charts.join('')}</div>` :
             '<p class="activity-route-empty">No power, heart-rate or cadence streams are available.</p>'}
         <p class="activity-stream-note">Full-resolution streams are loaded on demand and held only in this browser session.
