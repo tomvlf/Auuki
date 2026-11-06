@@ -222,6 +222,9 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     db.workout.intervals[0].steps[0].cadence = 88;
     db.cadenceTarget = 88;
     await go('player');
+    expect(root.textContent).not.toContain('Original trainer controls');
+    expect(root.querySelector('#ride-advanced')).toBeNull();
+    expect(document.querySelector('.wrapper').hidden).toBe(true);
     expect(root.querySelector('#ride-workout')).toBeNull();
     const workoutLink = root.querySelector('.ride-actions').nextElementSibling.querySelector('a');
     expect(workoutLink.textContent).toBe('Choose a workout');

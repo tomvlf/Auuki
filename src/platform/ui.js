@@ -103,7 +103,6 @@ export async function launchPlatform(root, account) {
     let coachingError = '';
     let lastRide;
     let savingRide = false;
-    let advancedPlayer = false;
     let timeline;
     let state;
     let stateVersion = 0;
@@ -277,7 +276,6 @@ export async function launchPlatform(root, account) {
                 <button class="secondary" data-action="target-down" aria-label="Decrease current target">-</button>
                 <span id="ride-adjust-value"></span><button class="secondary" data-action="target-up" aria-label="Increase current target">+</button></div></details>
             <p class="muted" id="ride-recovery">${db.elapsed ? 'Ride recovered on this device. Reconnect sensors before resuming.' : 'Connect a trainer and sensors, then start. Your ride is recovered locally after an interruption.'}</p>
-            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Original trainer controls</summary><p>The controls below use the original Athlima workout engine.</p></details>
         </section>`;
     }
     function settings() {
@@ -362,8 +360,7 @@ export async function launchPlatform(root, account) {
         root.querySelectorAll('nav a').forEach(a => a.setAttribute('aria-current',
             a.getAttribute('href') === `#/${route}` ? 'page' : 'false'));
         document.body.dataset.route = route;
-        legacy.hidden = !['calendar', 'coach', 'devices', 'editor', 'player'].includes(route) || (route === 'player' && !advancedPlayer);
-        root.querySelector('#legacy-slot').classList.toggle('legacy-player', route === 'player');
+        legacy.hidden = !['calendar', 'coach', 'devices', 'editor'].includes(route);
         content.innerHTML = route === 'dashboard' ? dashboard(data) : route === 'library' ? renderLibrary(db.workouts, libraryFilters)
             : route === 'workout' ? details(data) : route === 'plan' ? plan(data)
                 : route === 'activities' ? activities(data) : route === 'progress' ? progress(data)
@@ -458,12 +455,6 @@ export async function launchPlatform(root, account) {
         input.focus();
         input.setSelectionRange(position, position);
     });
-    root.addEventListener('toggle', event => {
-        if(event.target.id !== 'ride-advanced') return;
-        advancedPlayer = event.target.open;
-        legacy.hidden = !advancedPlayer;
-        if(advancedPlayer) window.dispatchEvent(new Event('resize'));
-    }, true);
     root.addEventListener('change', event => {
         const libraryField = {
             'workout-category': 'category', 'workout-type': 'type',
