@@ -16,7 +16,7 @@
  * the tests and the surrounding callers in the same review.
  */
 
-import { VERSION, sum, round } from './domain.js';
+import { VERSION, DEFAULTS, sum, round, validateCoachingConfig } from './domain.js';
 import { explainWorkout } from './explanations.js';
 import { powerAccumulator } from './power.js';
 
@@ -37,8 +37,10 @@ export function stepLoad(steps) {
     return sum(steps.map(s => s.duration)) / 3600 * expectedIntensity ** 2 * 100;
 }
 
-function validateSlot({minutes, family, level = 1}) {
-    if(!FAMILIES[family] || !Number.isInteger(minutes) || minutes < 10 || !Number.isInteger(level) || level < 1 || level > 5) {
+function validateSlot({minutes, family, level = 1}, rules) {
+    if(!FAMILIES[family] || !Number.isInteger(minutes) ||
+       minutes < rules.minimumSessionMinutes || !Number.isInteger(level) ||
+       level < 1 || level > rules.progressionMaximumLevel) {
         throw new Error('Invalid workout family, duration or progression level.');
     }
 }
@@ -49,7 +51,8 @@ function validateSlot({minutes, family, level = 1}) {
  * @param {object} args - Slot fields plus `steps`, and optionally `title`, `description` and `library`.
  * @returns {object} A scheduled coaching workout.
  */
-export function buildWorkout({id, date, family, steps, level = 1, phaseId, weekId, phaseType, profile, title, description, library = null}) {
+export function buildWorkout({id, date, family, steps, level = 1, phaseId, weekId, phaseType,
+    profile, title, description, library = null}) {
     const spec = FAMILIES[family];
     const seconds = sum(steps.map(s => s.duration));
     const reason = explainWorkout(family, phaseType, level);
@@ -66,22 +69,29 @@ export function buildWorkout({id, date, family, steps, level = 1, phaseId, weekI
         phaseId, weekId, progressionLevel: level, expectedRpe: spec.rpe,
         libraryWorkoutId: library?.id ?? null, libraryName: library?.name ?? null,
         libraryAdjustments: library?.adjustments ?? [],
+        libraryRationale: library?.rationale ?? null,
         status: 'scheduled', matchedActivity: null, matchConfidence: null, completionQuality: null,
         adaptationNotes: [], plannerVersion: VERSION,
     };
 }
 
 export function progressWorkout(args) {
-    validateSlot(args);
+    const config = validateCoachingConfig(args.rules);
+    validateSlot(args, config);
     const {minutes, level = 1} = args;
     let {family} = args;
+    if(FAMILIES[family].hard && minutes < config.minimumHardSessionMinutes) family = 'endurance';
+    if(FAMILIES[family].power > config.libraryMaximumPower) {
+        family = FAMILIES.endurance.power <= config.libraryEnduranceMaximumPower ? 'endurance' : 'recovery';
+    }
     const spec = FAMILIES[family];
     const seconds = minutes * 60;
     let steps;
-    if(spec.hard && minutes >= 25) {
+    if(spec.hard && minutes >= config.minimumHardSessionMinutes) {
         const repetitions = 3;
         const on = family === 'sprint' ? 10 + (level - 1) * 5
-            : Math.min(family === 'aerobic' ? 180 : 300, 60 + (level - 1) * 30, Math.floor(seconds * 0.18 / repetitions));
+            : Math.min(family === 'aerobic' ? 180 : 300, 60 + (level - 1) * 30,
+                Math.floor(seconds * config.libraryMaximumHardTimeShare / repetitions));
         const off = 120;
         steps = [{duration: 300, power: 0.5}];
         for(let i = 0; i < repetitions; i++) {

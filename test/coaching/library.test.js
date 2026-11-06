@@ -25,6 +25,25 @@ describe('coach workout library', () => {
             expect(Math.max(...entry.steps.map(s => s.power))).toBeLessThanOrEqual(0.8);
         }
     });
+    test('fitting removes whole repetitions and preserves template-protected warm-up, recovery and cool-down', () => {
+        const template = `<workout_file><name>Protected intervals</name><category>Threshold</category>
+            <description>Structured session</description><workout>
+            <Warmup Duration="180" PowerLow="0.4" PowerHigh="0.6"/>
+            <IntervalsT Repeat="4" OnDuration="30" OffDuration="90" OnPower="1.0" OffPower="0.5"/>
+            <Cooldown Duration="180" PowerLow="0.6" PowerHigh="0.4"/>
+            </workout></workout_file>`;
+        const entry = coachCatalogue([template], undefined, {
+            'Protected intervals': {minimumEfforts: 2, minimumWarmupSeconds: 180, minimumCooldownSeconds: 180},
+        })[0];
+        const fit = fitWorkout(entry, {seconds: 600, family: 'threshold', level: 1});
+        expect(sum(fit.steps.filter(s => s.role === 'warmup').map(s => s.duration))).toBe(180);
+        expect(sum(fit.steps.filter(s => s.role === 'cooldown').map(s => s.duration))).toBe(180);
+        expect(fit.steps.filter(s => s.role === 'effort')).toHaveLength(2);
+        expect(new Set(fit.steps.filter(s => s.repetitionId).map(s => s.repetitionId)).size).toBe(2);
+        expect(sum(fit.steps.map(s => s.duration))).toBe(600);
+        const rejected = {...entry, minimumWarmupSeconds: 240};
+        expect(fitWorkout(rejected, {seconds: 600, family: 'threshold', level: 1})).toBeNull();
+    });
     test.each([['threshold', 45], ['threshold', 90], ['aerobic', 40], ['aerobic', 75], ['endurance', 30],
         ['durability', 200], ['recovery', 35]])('fits %s into %i minutes exactly and safely', (family, minutes) => {
         for(const level of [1, 3, 5]) {
@@ -54,12 +73,20 @@ describe('coach workout library', () => {
         expect(shorter.libraryWorkoutId).toBe(planned.libraryWorkoutId);
         expect(shorter.duration).toBe(2700);
     });
-    test('generated plans use varied library workouts and remain valid', () => {
+    test('generated plans use the best-fitting library dose before applying variety and remain valid', () => {
         const p = generatePlan({profile, goal, state: state(), startDate: start, generatedAt: timestamp});
         expect(() => validatePlan(p, profile)).not.toThrow();
         const library = p.workouts.filter(w => w.libraryWorkoutId);
         expect(library.length).toBeGreaterThan(p.workouts.length / 2);
         const hard = library.filter(w => FAMILIES[w.family].hard);
-        expect(new Set(hard.map(w => w.libraryWorkoutId)).size).toBeGreaterThan(Math.min(3, hard.length - 1));
+        expect(hard.length).toBeGreaterThan(0);
+        for(const workout of hard) {
+            const scores = coachCatalogue().filter(e => e.families.includes(workout.family))
+                .map(e => fitWorkout(e, {seconds: workout.duration, family: workout.family,
+                    level: workout.progressionLevel})?.score).filter(score => score != null);
+            expect(fitWorkout(coachCatalogue().find(e => e.id === workout.libraryWorkoutId), {
+                seconds: workout.duration, family: workout.family, level: workout.progressionLevel,
+            }).score).toBeLessThanOrEqual(Math.min(...scores) + 0.05);
+        }
     });
 });

@@ -1,4 +1,6 @@
-/*
+/**
+ * @jest-environment node
+ *
  * backup.test.js: test coverage module.
  *
  * Why this exists:
@@ -16,7 +18,6 @@
  * the tests and the surrounding callers in the same review.
  */
 
-/** @jest-environment node */
 import { indexedDB } from 'fake-indexeddb';
 import { Blob as NodeBlob } from 'node:buffer';
 import { createBackup, restoreBackup } from '../../src/server/backup.js';

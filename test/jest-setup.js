@@ -19,6 +19,18 @@
 // Jest's pretend browser window does not include Node's text encoder.
 // The jsdom package asks for it the moment a test imports it.
 import { TextDecoder, TextEncoder } from 'node:util';
+import { serialize, deserialize } from 'node:v8';
+
+// jsdom does not expose structuredClone; fake-indexeddb needs it to store values.
+if (typeof globalThis.structuredClone === 'undefined') {
+    globalThis.structuredClone = value => {
+        try {
+            return deserialize(serialize(value));
+        } catch (error) {
+            throw new DOMException(error.message, 'DataCloneError');
+        }
+    };
+}
 
 if (typeof globalThis.TextEncoder === 'undefined') {
     globalThis.TextEncoder = TextEncoder;

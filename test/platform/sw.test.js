@@ -1,4 +1,6 @@
-/*
+/**
+ * @jest-environment node
+ *
  * sw.test.js: test coverage module.
  *
  * Why this exists:
@@ -16,7 +18,6 @@
  * the tests and the surrounding callers in the same review.
  */
 
-/** @jest-environment node */
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 

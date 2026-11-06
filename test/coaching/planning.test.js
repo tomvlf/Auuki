@@ -28,6 +28,15 @@ const plan = overrides => generatePlan({profile, goal, state: state(), startDate
     generatedAt: timestamp, ...overrides});
 
 describe('goal-specific deterministic planning', () => {
+    test('one very short ride does not shrink the plan below the no-history starting volume', () => {
+        const ride = normalizeActivity({id: 'tiny', start: `${addDays(start, -1)}T08:00:00Z`,
+            duration: 33, normalizedPower: 90, averagePower: 90}, profile);
+        const tiny = plan({state: state(profile, [ride])});
+        const empty = plan({state: state(profile, [])});
+        expect(tiny.workouts.length).toBeGreaterThan(0);
+        expect(tiny.initialLimits.minutes).toBe(empty.initialLimits.minutes);
+        expect(() => validatePlan(tiny, profile)).not.toThrow();
+    });
     test.each(Object.keys(GOALS))('builds safe dated %s plans for realistic availability', type => {
         const p = plan({goal: {...goal, type}});
         expect(p).toEqual(plan({goal: {...goal, type}}));
@@ -68,6 +77,18 @@ describe('goal-specific deterministic planning', () => {
         expect(p.workouts.every(w => !FAMILIES[w.family].hard)).toBe(true);
         expect(p.weeks.every(w => w.rampLimit === 0.025)).toBe(true);
         expect(p.phases[0].type).toBe('assessment');
+    });
+    test('planned progression levels reflect successfully completed sessions, not scheduled session counts', () => {
+        const athleteState = state();
+        athleteState.successfulSessionsByFamily = {threshold: 3};
+        const p = plan({goal: {...goal, type: 'ftp_improvement'}, state: athleteState});
+        const thresholdSessions = p.workouts.filter(w => w.family === 'threshold');
+        expect(thresholdSessions.length).toBeGreaterThan(0);
+        expect(thresholdSessions.every(w => w.progressionLevel === 2)).toBe(true);
+
+        const noSuccesses = plan({goal: {...goal, type: 'ftp_improvement'}});
+        expect(noSuccesses.workouts.filter(w => w.family === 'threshold')
+            .every(w => w.progressionLevel === 1)).toBe(true);
     });
     test('initial power load is bounded by the actual recent and baseline power load', () => {
         const rides = Array.from({length: 14}, (_, i) => normalizeActivity({
@@ -153,6 +174,67 @@ describe('matching and future-only adaptation', () => {
             .toEqual(p.workouts.filter(w => w.date <= workout.date).map(w => w.steps));
         expect(adapted.workouts.every(w => p.workouts.some(old => old.id === w.id && old.date === w.date))).toBe(true);
         expect(() => validatePlan(adapted, profile)).not.toThrow();
+    });
+    test('a short-term reduction stays inside the adaptation window and is held until it ends', () => {
+        const p = plan({goal: {...goal, date: addDays(start, 182)}});
+        const first = p.workouts[0];
+        const windowEnd = addDays(first.date, 7);
+        const reduced = adaptPlan({plan: p, profile, state: state(), trigger: 'recovery',
+            date: first.date, timestamp});
+        const later = w => w.date > windowEnd;
+        const before = p.workouts.filter(later), after = reduced.workouts.filter(later);
+        const dose = list => list.map(w => `${w.id}:${w.family}:${w.duration}:${JSON.stringify(w.steps)}`);
+        // Sessions beyond the window keep their exact planned dose; reductions must not cascade via the ramp cap.
+        expect(dose(after)).toEqual(dose(before));
+        expect(after.some(w => w.original)).toBe(false);
+        const windowed = reduced.workouts.filter(w => w.original);
+        expect(windowed.length).toBeGreaterThan(0);
+        expect(windowed.every(w => w.original.until === windowEnd && w.date <= windowEnd)).toBe(true);
+        expect(() => validatePlan(reduced, profile)).not.toThrow();
+        // Later, less cautious events inside the window must not undo the requested easier sessions.
+        const pending = w => w.date > first.date && w.date <= windowEnd && w.status === 'scheduled';
+        for(const [trigger, workoutId] of [['feedback', null], ['missed', reduced.workouts.find(w => w.date > first.date).id]]) {
+            const when = reduced.workouts.find(w => w.id === workoutId)?.date ?? first.date;
+            const next = adaptPlan({plan: reduced, profile, state: state(), trigger, date: when, workoutId, timestamp});
+            const held = w => w.date > when && pending(w);
+            expect(dose(next.workouts.filter(held))).toEqual(dose(reduced.workouts.filter(held)));
+            const beyond = w => w.date > addDays(when, 7);
+            expect(dose(next.workouts.filter(beyond))).toEqual(dose(p.workouts.filter(beyond)));
+            expect(() => validatePlan(next, profile)).not.toThrow();
+        }
+        // Plans reduced before windows were recorded are restored to their planned dose.
+        const legacy = JSON.parse(JSON.stringify(reduced));
+        legacy.workouts.forEach(w => { if(w.original) { delete w.original.until; delete w.original.factor; delete w.original.easy; } });
+        const restoredPlan = adaptPlan({plan: legacy, profile, state: state(), trigger: 'feedback',
+            date: first.date, timestamp});
+        const future = w => w.date > first.date;
+        expect(dose(restoredPlan.workouts.filter(future))).toEqual(dose(p.workouts.filter(future)));
+        expect(restoredPlan.workouts.some(w => w.adaptationNotes.some(n => n.startsWith('Restored')))).toBe(true);
+        expect(restoredPlan.workouts.some(w => w.original)).toBe(false);
+        expect(() => validatePlan(restoredPlan, profile)).not.toThrow();
+    });
+    test('a stricter event inside an active reduction window can tighten it', () => {
+        const p = plan({goal: {...goal, date: addDays(start, 182)}});
+        const first = p.workouts[0];
+        const missed = adaptPlan({plan: p, profile, state: state(), trigger: 'missed',
+            date: first.date, workoutId: first.id, timestamp});
+        const easier = adaptPlan({plan: missed, profile, state: state(), trigger: 'recovery',
+            date: first.date, timestamp});
+        const inWindow = easier.workouts.filter(w => w.date > first.date && w.date <= addDays(first.date, 7));
+        expect(inWindow.length).toBeGreaterThan(0);
+        expect(inWindow.every(w => w.family === 'recovery' && w.original.easy)).toBe(true);
+        expect(() => validatePlan(easier, profile)).not.toThrow();
+    });
+    test('missed or failed sessions shorten nearby sessions without converting them to recovery', () => {
+        const p = plan({goal: {...goal, date: addDays(start, 182)}});
+        const workout = p.workouts[0];
+        for(const trigger of ['missed', 'failed']) {
+            const adapted = adaptPlan({plan: p, profile, state: state(), trigger, date: workout.date,
+                workoutId: workout.id, timestamp});
+            const structure = list => list.filter(w => w.date > workout.date && w.family !== 'recovery')
+                .map(w => `${w.id}:${w.family}`);
+            expect(structure(adapted.workouts)).toEqual(structure(p.workouts));
+        }
     });
     test('long unplanned activity reduces the remaining budget without adding catch-up sessions', () => {
         const p = plan(), workout = p.workouts[0];

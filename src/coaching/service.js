@@ -16,7 +16,7 @@
  * the tests and the surrounding callers in the same review.
  */
 
-import { VERSION, localDay, validateProfile, date } from './domain.js';
+import { VERSION, DEFAULTS, localDay, validateProfile, validateCoachingConfig, date } from './domain.js';
 import { normalizeActivity } from './normalizer.js';
 import { estimateState } from './state.js';
 import { generatePlan } from './planner.js';
@@ -42,9 +42,10 @@ export class CoachingService {
      * @param {{getItem: Function, setItem: Function}} storage - Persistence layer for the coached athlete state.
      * @param {Function} [clock=() => new Date().toISOString()] - Clock used to generate timestamps and local-day checks.
      */
-    constructor(storage, clock = () => new Date().toISOString()) {
+    constructor(storage, clock = () => new Date().toISOString(), rules = DEFAULTS) {
         this.storage = storage;
         this.clock = clock;
+        this.rules = validateCoachingConfig(rules);
         const stored = storage.getItem(KEY);
         this.data = stored ? JSON.parse(stored) : empty();
         if(this.data.version !== VERSION || !Array.isArray(this.data.activities) ||
@@ -98,9 +99,10 @@ export class CoachingService {
      */
     snapshot(data, asOf, outcome = null) {
         const outcomes = data.plan?.workouts.filter(w => w.status !== 'scheduled').map(w =>
-            ({date: w.date, status: w.status, quality: w.completionQuality})) || [];
+            ({date: w.date, status: w.status, quality: w.completionQuality, family: w.family,
+                activityId: w.matchedActivity ?? null, expectedRpe: w.expectedRpe ?? null})) || [];
         if(outcome) outcomes.push(outcome);
-        const state = estimateState(data.activities, data.profile, asOf, {}, outcomes);
+        const state = estimateState(data.activities, data.profile, asOf, this.rules, outcomes);
         state.id += `:${data.snapshots.length + 1}`;
         data.snapshots.push(state);
         return state;
@@ -188,9 +190,11 @@ export class CoachingService {
      */
     applyActivity(next, activity, asOf, explicitId = null) {
         if(activity.sport !== 'cycling' || activity.day > asOf || activity.day < next.plan.startDate) return;
-        const match = matchWorkout(activity, next.plan.workouts, explicitId);
-        const state = this.snapshot(next, asOf, match.workoutId
-            ? {date: activity.day, status: 'completed', quality: match.quality} : null);
+        const match = matchWorkout(activity, next.plan.workouts, explicitId, this.rules);
+        const matched = next.plan.workouts.find(w => w.id === match.workoutId);
+        const state = this.snapshot(next, asOf, matched
+            ? {date: activity.day, status: 'completed', quality: match.quality, family: matched.family,
+                activityId: activity.id, expectedRpe: matched.expectedRpe ?? null} : null);
         next.plan = adaptPlan({plan: next.plan, profile: next.profile, state,
             trigger: match.workoutId ? 'completed' : 'unplanned', date: asOf,
             timestamp: this.clock(), workoutId: match.workoutId, activity,
@@ -246,7 +250,8 @@ export class CoachingService {
             quality: Math.min(activity.duration, workout.duration) / Math.max(activity.duration, workout.duration),
             reason: 'Rider-confirmed substitution; duration quality, interval fidelity unknown.'} : null;
         const state = this.snapshot(next, today, workout
-            ? {date: workout.date, status: trigger, quality: match?.quality} : null);
+            ? {date: workout.date, status: trigger, quality: match?.quality, family: workout.family,
+                activityId: activity?.id ?? null, expectedRpe: workout.expectedRpe ?? null} : null);
         next.plan = adaptPlan({plan: next.plan, profile: next.profile, state, trigger, date: today,
             timestamp: this.clock(), workoutId, activity, match});
         next.revisions.push(JSON.parse(JSON.stringify(next.plan)));

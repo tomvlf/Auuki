@@ -16,16 +16,20 @@
  * the tests and the surrounding callers in the same review.
  */
 
-import { GOALS, CAPABILITIES, sum, metric } from './domain.js';
+import { DEFAULTS, GOALS, CAPABILITIES, sum, metric, validateCoachingConfig } from './domain.js';
 
-export function modelGoalDemand(goal, registry = GOALS) {
+export function modelGoalDemand(goal, registry = GOALS, rules = DEFAULTS) {
+    const config = validateCoachingConfig(rules);
     const weights = registry[goal.type];
     if(!weights || weights.length !== CAPABILITIES.length || weights.some(v => !Number.isFinite(v) || v < 0) || !sum(weights)) {
         throw new Error('Goal type needs five nonnegative capability weights.');
     }
     const adjusted = [...weights];
-    if(goal.expectedDurationMinutes >= 240 || goal.distanceKm >= 150) adjusted[4] += 2;
-    if(goal.elevationM >= 2000 || goal.terrain === 'mountainous') adjusted[1] += 2;
+    if(goal.expectedDurationMinutes >= config.longEventDurationThreshold ||
+       goal.distanceKm >= config.longEventDistanceThreshold) adjusted[4] += config.longEventDurabilityWeightBonus;
+    if(goal.elevationM >= config.climbingElevationThreshold || goal.terrain === 'mountainous') {
+        adjusted[1] += config.climbingThresholdWeightBonus;
+    }
     return {
         capabilities: Object.fromEntries(CAPABILITIES.map((key, i) => [key, adjusted[i] / sum(adjusted)])),
         durationMinutes: goal.expectedDurationMinutes ?? goal.finishTimeMinutes ?? null,

@@ -22,8 +22,41 @@ export const DEFAULTS = Object.freeze({
     shortDays: 7, mediumDays: 28, longDays: 84,
     chronicDays: 42, acuteDays: 7, maxRamp: 0.05, lowDataRamp: 0.025,
     recoveryFactor: 0.7, taperFactor: 0.55, initialMinutes: 90,
+    readinessVolumeFactor: 0.7, basePhaseEndFraction: 0.4,
+    buildPhaseEndFraction: 0.7, specificPhaseMinimumDays: 14,
+    initialLoadPower: 0.65, weeklyPlanningLoadPower: 0.7,
+    recoveryWeekInterval: 4, recoveryWeekOffset: 3,
+    taperDaysPriorityA: 7, taperDaysPriorityB: 4, taperDaysPriorityC: 2,
+    longRideAllocationShare: 0.4,
+    longEventDurationThreshold: 240, longEventDistanceThreshold: 150,
+    longEventDurabilityWeightBonus: 2, climbingElevationThreshold: 2000,
+    climbingThresholdWeightBonus: 2,
+    minimumSessionMinutes: 10, minimumHardSessionMinutes: 25,
+    beginnerHardSessionsPerWeek: 1, experiencedHardSessionsPerWeek: 2,
+    minimumHardSeparationDays: 2, hardPowerThreshold: 0.9, weeklyHardTimeShare: 0.2,
+    readinessWindowDays: 3, readinessHighRpe: 9, readinessRpeMargin: 2, readinessLowSleepQuality: 2,
+    readinessLowLegFreshness: 2, readinessHighSoreness: 4, readinessHighStress: 4,
+    readinessCautionScore: 3, readinessRpeScore: 2, readinessLegFreshnessScore: 2,
+    readinessSorenessScore: 2, readinessStressScore: 1, readinessSleepScore: 1,
+    readinessConservativeFactor: 0.7, outcomeReductionFactor: 0.85, adaptationWindowDays: 7,
+    automaticMatchMinimumConfidence: 0.65,
+    progressionSuccessfulSessionsPerLevel: 3, progressionMinimumQuality: 0.8,
+    progressionMaximumLevel: 5,
+    libraryMaximumPower: 1.5, libraryEnduranceMaximumPower: 0.8,
+    libraryRecoveryMaximumPower: 0.65, libraryEffortPowerThreshold: 0.88,
+    libraryHardPowerThreshold: 0.9, libraryMaximumHardTimeShare: 0.18,
+    libraryMinimumEfforts: 2, libraryMinimumEasyStepSeconds: 60, libraryProgressionBaseShare: 0.4,
+    libraryProgressionIncrement: 0.15,
+    easyPower: 0.75, durabilityMinimumSeconds: 3600, durabilityWarmupSeconds: 600,
+    durabilityMinimumPowerShare: 0.5, durabilityMaximumPowerShare: 0.75,
+    durabilityMaximumPowerVariation: 0.1, durabilityMinimumHeartRate: 40,
+    cpMinimumEfforts: 3, cpMinimumDuration: 120, cpMaximumDuration: 1200,
+    cpMinimumDurationRatio: 3, cpMinimumFitQuality: 0.95,
+    cpMinimumPower: 50, cpMaximumPower: 600, wPrimeMinimum: 1000, wPrimeMaximum: 50000,
     maxPlanDays: 366, powerZones: Object.freeze([0.55, 0.75, 0.9, 1.05, 1.2, 1.5]),
     heartRateZones: Object.freeze([0.6, 0.7, 0.8, 0.9]),
+    powerThreeZoneThresholds: Object.freeze([0.75, 1.05]),
+    heartRateThreeZoneThresholds: Object.freeze([0.7, 0.9]),
 });
 export const GOALS = Object.freeze({
     general_fitness: [5, 2, 1, 1, 1],
@@ -41,6 +74,86 @@ export const sum = values => values.reduce((a, b) => a + b, 0);
 export const mean = values => values.length ? sum(values) / values.length : null;
 export const positive = value => Number.isFinite(value) && value > 0;
 export const round = value => Math.round(value * 100) / 100;
+
+const bounded = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
+const increasingThresholds = values => Array.isArray(values) && values.length > 0 &&
+    values.every((value, i) => positive(value) && (i === 0 || value > values[i - 1]));
+
+/**
+ * Merges and validates the versioned coaching rules.
+ *
+ * @param {object} [overrides={}] - Explicit overrides for safety and planning thresholds.
+ * @returns {object} Validated configuration snapshot.
+ */
+export function validateCoachingConfig(overrides = {}) {
+    const config = {...DEFAULTS, ...overrides};
+    const positiveIntegers = ['shortDays', 'mediumDays', 'longDays', 'chronicDays', 'acuteDays',
+        'readinessWindowDays', 'minimumSessionMinutes', 'minimumHardSessionMinutes',
+        'beginnerHardSessionsPerWeek', 'experiencedHardSessionsPerWeek',
+        'minimumHardSeparationDays', 'progressionSuccessfulSessionsPerLevel', 'specificPhaseMinimumDays',
+        'progressionMaximumLevel', 'adaptationWindowDays',
+        'recoveryWeekInterval', 'recoveryWeekOffset',
+        'taperDaysPriorityA', 'taperDaysPriorityB', 'taperDaysPriorityC',
+        'maxPlanDays',
+        'durabilityMinimumSeconds', 'durabilityWarmupSeconds', 'cpMinimumEfforts',
+        'cpMinimumDuration', 'cpMaximumDuration'];
+    if(positiveIntegers.some(key => !Number.isInteger(config[key]) || config[key] < 1) ||
+       config.shortDays > config.mediumDays || config.mediumDays > config.longDays) {
+        throw new Error('Invalid coaching configuration windows or integer thresholds.');
+    }
+    const shares = ['maxRamp', 'lowDataRamp', 'recoveryFactor', 'taperFactor',
+        'readinessConservativeFactor', 'readinessVolumeFactor', 'outcomeReductionFactor',
+        'automaticMatchMinimumConfidence', 'basePhaseEndFraction', 'buildPhaseEndFraction',
+        'initialLoadPower', 'weeklyPlanningLoadPower',
+        'longRideAllocationShare',
+        'weeklyHardTimeShare', 'progressionMinimumQuality', 'libraryMaximumHardTimeShare',
+        'libraryProgressionBaseShare', 'libraryProgressionIncrement',
+        'durabilityMinimumPowerShare', 'durabilityMaximumPowerShare',
+        'durabilityMaximumPowerVariation', 'cpMinimumFitQuality'];
+    if(shares.some(key => !bounded(config[key], 0, 1)) ||
+       !positive(config.initialMinutes) || !positive(config.minimumSessionMinutes) ||
+       !positive(config.minimumHardSessionMinutes) ||
+       !bounded(config.readinessHighRpe, 0, 10) || !bounded(config.readinessRpeMargin, 0, 10) ||
+       !bounded(config.readinessLowSleepQuality, 1, 5) ||
+       !bounded(config.readinessLowLegFreshness, 1, 5) ||
+       !bounded(config.readinessHighSoreness, 1, 5) ||
+       !bounded(config.readinessHighStress, 1, 5) ||
+       !bounded(config.readinessCautionScore, 1, 20) ||
+       !bounded(config.readinessRpeScore, 0, 10) ||
+       !bounded(config.readinessLegFreshnessScore, 0, 10) ||
+       !bounded(config.readinessSorenessScore, 0, 10) ||
+       !bounded(config.readinessStressScore, 0, 10) ||
+       !bounded(config.readinessSleepScore, 0, 10) ||
+       config.readinessCautionScore <= config.readinessSleepScore ||
+       !Number.isInteger(config.libraryMinimumEfforts) || !bounded(config.libraryMinimumEfforts, 1, 20) ||
+       !positive(config.libraryMinimumEasyStepSeconds) ||
+       config.recoveryWeekOffset >= config.recoveryWeekInterval ||
+       !positive(config.libraryMaximumPower) ||
+       !positive(config.libraryEnduranceMaximumPower) ||
+       !positive(config.libraryRecoveryMaximumPower) ||
+       !positive(config.libraryEffortPowerThreshold) ||
+       !positive(config.libraryHardPowerThreshold) ||
+       !positive(config.easyPower) ||
+       !positive(config.durabilityMaximumPowerVariation) ||
+       !positive(config.durabilityMinimumHeartRate) ||
+       !positive(config.longEventDurationThreshold) || !positive(config.longEventDistanceThreshold) ||
+       !positive(config.longEventDurabilityWeightBonus) || !positive(config.climbingElevationThreshold) ||
+       !positive(config.climbingThresholdWeightBonus) ||
+       !positive(config.cpMinimumDurationRatio) ||
+       !positive(config.cpMinimumPower) || config.cpMaximumPower <= config.cpMinimumPower ||
+       !positive(config.wPrimeMinimum) || config.wPrimeMaximum <= config.wPrimeMinimum ||
+       config.cpMaximumDuration <= config.cpMinimumDuration ||
+       config.libraryProgressionBaseShare +
+           (config.progressionMaximumLevel - 1) * config.libraryProgressionIncrement > 1 ||
+       config.basePhaseEndFraction >= config.buildPhaseEndFraction ||
+       config.durabilityMinimumPowerShare >= config.durabilityMaximumPowerShare ||
+       !increasingThresholds(config.powerZones) || !increasingThresholds(config.heartRateZones) ||
+       !increasingThresholds(config.powerThreeZoneThresholds) ||
+       !increasingThresholds(config.heartRateThreeZoneThresholds)) {
+        throw new Error('Invalid coaching configuration thresholds or ranges.');
+    }
+    return config;
+}
 /**
  * Validates a date string and ensures it is an actual date in ISO YYYY-MM-DD format.
  *
@@ -134,13 +247,14 @@ export function validateProfile(profile) {
  * @param {Record<string, number[]>} [registry=GOALS] - Supported goal archetypes.
  * @returns {object} The validated goal.
  */
-export function validateGoal(goal, startDate, registry = GOALS) {
+export function validateGoal(goal, startDate, registry = GOALS, rules = DEFAULTS) {
+    const config = validateCoachingConfig(rules);
     date(startDate);
     date(goal.date);
     if(!goal.id || !goal.name || !registry[goal.type] || !['A', 'B', 'C'].includes(goal.priority) ||
        goal.active === false || daysBetween(startDate, goal.date) < 1 ||
-       daysBetween(startDate, goal.date) > DEFAULTS.maxPlanDays) {
-        throw new Error('An active supported goal must be dated 1-366 days after plan start.');
+       daysBetween(startDate, goal.date) > config.maxPlanDays) {
+        throw new Error(`An active supported goal must be dated 1-${config.maxPlanDays} days after plan start.`);
     }
     for(const key of ['distanceKm', 'elevationM', 'expectedDurationMinutes', 'targetPower',
         'targetFTP', 'targetWKg', 'finishTimeMinutes']) {

@@ -161,6 +161,48 @@ describe('versioned rider-state estimation', () => {
         expect(s.readiness.concerns).toHaveLength(2);
         expect(() => estimateState([], profile, start, {chronicDays: 0})).toThrow();
     });
+    test('a single poor-sleep report is monitoring only; missing subjective data stays unknown', () => {
+        const lowSleep = ride({feedback: {sleepQuality: 1}});
+        const monitored = estimateState([lowSleep], profile, start);
+        expect(monitored.readiness.status).toBe('monitor');
+        expect(monitored.readiness.confidence).toBe('low');
+        expect(monitored.readiness.reason).toMatch(/not independently reduce training/);
+        expect(estimateState([], profile, start).readiness.status).toBe('unknown');
+        expect(estimateState([ride({feedback: {muscleSoreness: 5}})], profile, start)
+            .readiness.status).toBe('monitor');
+    });
+    test('readiness and CP decision thresholds are configurable and validated', () => {
+        const highRpe = ride({rpe: 8});
+        expect(estimateState([highRpe], profile, start, {
+            readinessHighRpe: 7, readinessCautionScore: 2,
+        }).readiness.status)
+            .toBe('caution');
+        expect(() => estimateState([], profile, start, {weeklyHardTimeShare: 1.2})).toThrow(/configuration/);
+        expect(() => estimateState([], profile, start, {
+            readinessCautionScore: 1, readinessSleepScore: 1,
+        })).toThrow(/configuration/);
+    });
+    test('RPE after a matched session is judged against the planned effort', () => {
+        const hard = ride({rpe: 9, feedback: {legFreshness: 2}});
+        const matched = expected => [{date: hard.day, status: 'completed', activityId: hard.id, expectedRpe: expected}];
+        expect(estimateState([hard], profile, start).readiness.status).toBe('caution');
+        expect(estimateState([hard], profile, start, {}, matched(8)).readiness.status).toBe('monitor');
+        expect(estimateState([hard], profile, start, {}, matched(4)).readiness.status).toBe('caution');
+        const maximal = ride({rpe: 10, feedback: {legFreshness: 2}});
+        expect(estimateState([maximal], profile, start, {},
+            [{date: maximal.day, status: 'completed', activityId: maximal.id, expectedRpe: 9}]).readiness.status)
+            .toBe('caution');
+        expect(() => estimateState([], profile, start, {readinessRpeMargin: -1})).toThrow(/configuration/);
+    });
+    test('only successfully completed sessions contribute to family progression history', () => {
+        const outcomes = [
+            {date: start, family: 'threshold', status: 'completed', quality: 0.9},
+            {date: start, family: 'threshold', status: 'substituted', quality: 0.79},
+            {date: start, family: 'aerobic', status: 'missed', quality: null},
+        ];
+        const s = estimateState([], profile, start, {}, outcomes);
+        expect(s.successfulSessionsByFamily).toEqual({threshold: 1, aerobic: 0});
+    });
     test('power and HR distributions retain separate references and thresholds', () => {
         const a = ride({duration: 3, streams: {power: [100, 250, 300], heartRate: [100, 150, 185]}});
         const zones = intensityDistribution([a], profile);
