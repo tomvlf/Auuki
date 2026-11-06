@@ -9,7 +9,7 @@ The app is built around a single idea: training should work without friction, wh
 ## What Athlima does
 
 - runs `.zwo` workouts and built-in structured sessions
-- shows a live workout power timeline with a current-position marker, interval countdown, and separate target/actual power and cadence; unprescribed cadence is explicitly self-selected
+- shows a live workout power timeline with a current-position marker, interval countdown, and separate target/actual power and cadence; cadence targets appear only when prescribed
 - searches and filters the workout library by category, type, and duration, with power profiles and cadence previews
 - controls smart trainers in ERG, resistance, and grade-simulation modes
 - records `.fit` files with power, cadence, heart rate, and RR intervals
@@ -29,9 +29,12 @@ above an always-visible workout power profile. A labelled position marker
 follows the workout timeline, including skipped intervals; completed work is
 dimmed and the current interval is outlined. Actual power and cadence remain
 separate from their targets, and disconnected sensors show unavailable readings.
-Cadence targets come from the workout; an unprescribed cadence is explicitly
-shown as self-selected. Device connections and trainer settings are available
+Cadence targets come from the workout and are hidden when none is prescribed;
+actual cadence remains visible. Device connections and trainer settings are available
 under "Devices & trainer settings" without hiding the profile.
+Use "Choose a workout" beneath the ride controls to browse the library.
+In workout details, "Start workout" opens the ride screen and starts the session.
+Finish and save an existing ride before starting another workout.
 
 The library includes gentle cadence-practice sessions and shows target cadence
 ranges on workout cards and individual targets in workout details. The Coach

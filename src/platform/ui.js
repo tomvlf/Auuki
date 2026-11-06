@@ -198,11 +198,11 @@ export async function launchPlatform(root, account) {
         const workout = selectedWorkout(data);
         if(!workout) return empty('This workout is not available on this device.');
         const planned = data?.plan?.workouts.find(w => w.id === selectedId);
-        const canPrepare = !planned || (data.plan.status === 'active' && planned.date === today(data) && planned.status === 'scheduled');
+        const canStart = !planned || (data.plan.status === 'active' && planned.date === today(data) && planned.status === 'scheduled');
         return card(escape(workout.meta.name), `<p class="eyebrow">${escape(workout.meta.category)} / ${minutes(workout.meta.duration || 0)}</p>
             ${profileGraph(workout)}<p class="description">${escape(workout.meta.description || 'No description supplied.')}</p>
             ${planned ? `<p>${escape(planned.date)} &middot; ${escape(planned.status)} &middot; Expected RPE ${planned.expectedRpe}/10</p>` : ''}
-            <div class="button-row">${canPrepare ? '<button data-action="prepare">Prepare workout</button>' :
+            <div class="button-row">${canStart ? '<button data-action="start-workout">Start workout</button>' :
                 '<p class="muted">Coach sessions can be ridden on their scheduled date while unresolved.</p>'}${link('devices', 'Connect devices', 'button secondary')}</div>
             <ol class="interval-list">${(workout.intervals || []).flatMap(interval => interval.steps || []).map(step => `<li>
                 ${time(step.duration)} &middot; ${step.power == null ? `Slope ${number(step.slope, 1)}%` : `${number(targetPower(step.power, db.ftp))} W`}
@@ -247,15 +247,11 @@ export async function launchPlatform(root, account) {
         timeline = rideTimeline(db.workout, db.ftp, targetPower);
         return `<section class="ride-panel"><div class="ride-heading"><div><p class="eyebrow">Workout player</p><h2>${escape(db.workout?.meta?.name || 'Free ride')}</h2></div>
             <span id="ride-status" role="status"></span></div>
-            <label>Choose a workout<select id="ride-workout">
-                <option value="">Current: ${escape(db.workout?.meta?.name || 'Free ride')}</option>
-                ${db.workouts.map(workout => `<option value="${escape(workout.id)}">${escape(workout.meta.name)}</option>`).join('')}
-            </select></label>
             <div class="ride-metrics">
                 <div class="ride-metric primary"><span>Target power</span><div><strong id="ride-target">--</strong><small>W</small></div>
                     <span class="ride-reading">Actual <b id="ride-power">--</b> W</span></div>
                 <div class="ride-metric"><span>Interval left</span><strong id="ride-countdown">--</strong><span id="ride-interval"></span></div>
-                <div class="ride-metric"><span>Cadence target</span><div><strong id="ride-cadence-target">--</strong><small id="ride-cadence-unit">rpm</small></div>
+                <div class="ride-metric"><span id="ride-cadence-label">Cadence</span><div id="ride-cadence-prescription" hidden><strong id="ride-cadence-target"></strong><small id="ride-cadence-unit">rpm</small></div>
                     <span class="ride-reading">Actual <b id="ride-cadence">--</b> rpm</span></div>
             </div>
             <div class="ride-summary"><span>Heart rate <strong id="ride-hr">--</strong> bpm</span>
@@ -270,6 +266,7 @@ export async function launchPlatform(root, account) {
             <div class="ride-actions"><button data-action="ride-toggle" id="ride-toggle">Start workout</button>
                 <button class="secondary" data-action="ride-skip">Skip interval</button>
                 <button class="secondary" data-action="ride-finish">Finish & save</button></div>
+            <p>${link('library', 'Choose a workout')}</p>
             <section id="ride-unsaved" role="alert" hidden><h3>Recording needs saving</h3>
                 <p>Keep this page open. Download your FIT file now, or retry local storage after freeing space.</p>
                 <div class="button-row"><button data-action="recover-download">Download unsaved FIT</button>
@@ -409,7 +406,8 @@ export async function launchPlatform(root, account) {
                 : step?.power == null ? null : targetPower(step.power, db.ftp)),
             countdown: time(finished ? 0 : running || !timeline ? db.lapTime : timeline.intervals[db.intervalIndex]?.duration),
             cadence: connected('cadence') ? number(db.cadence) : '--',
-            'cadence-target': finished ? '--' : cadenceTarget == null ? 'Self-selected' : number(cadenceTarget),
+            'cadence-label': cadenceTarget == null ? 'Cadence' : 'Cadence target',
+            'cadence-target': cadenceTarget == null ? '' : number(cadenceTarget),
             'cadence-unit': cadenceTarget == null ? '' : 'rpm',
             hr: connected('heartRate') && db.heartRate > 0 ? number(db.heartRate) : '--', elapsed: time(db.elapsed),
             interval: intervals.length ? `Interval ${Math.min(intervals.length, db.intervalIndex + 1)} / ${intervals.length}` : 'Free ride',
@@ -427,7 +425,7 @@ export async function launchPlatform(root, account) {
         });
         const progress = root.querySelector('#ride-progress');
         if(progress) progress.value = duration ? position / duration : 0;
-        root.querySelector('#ride-cadence-target').classList.toggle('free-cadence', cadenceTarget == null);
+        root.querySelector('#ride-cadence-prescription').hidden = cadenceTarget == null;
         const instruction = root.querySelector('#ride-instruction');
         instruction.textContent = db.workoutTextEvent || '';
         instruction.hidden = !instruction.textContent;
@@ -448,8 +446,6 @@ export async function launchPlatform(root, account) {
         root.querySelector('[data-action="ride-skip"]').disabled = db.watchStatus !== 'started' || !intervals.length;
         root.querySelector('[data-action="ride-finish"]').disabled = !db.elapsed;
         root.querySelector('[data-action="ride-toggle"]').disabled = savingRide || Boolean(engineModels.activity?.pendingRecording);
-        root.querySelector('#ride-workout').disabled = db.watchStatus !== 'stopped' || db.elapsed > 0 ||
-            savingRide || Boolean(engineModels.activity?.pendingRecording);
         root.querySelector('#ride-unsaved').hidden = !engineModels.activity?.pendingRecording;
     }
 
@@ -477,13 +473,6 @@ export async function launchPlatform(root, account) {
             libraryFilters[libraryField] = event.target.value;
             render();
             root.querySelector(`#${event.target.id}`).focus();
-            return;
-        }
-        if(event.target.id === 'ride-workout') {
-            const workout = db.workouts.find(item => String(item.id) === event.target.value);
-            if(workout && db.watchStatus === 'stopped' && !db.elapsed && !savingRide && !engineModels.activity?.pendingRecording) {
-                xf.dispatch('workout', workout);
-            }
             return;
         }
         if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
@@ -652,14 +641,18 @@ export async function launchPlatform(root, account) {
                 window.localStorage.removeItem(SERVER_MODE_KEY);
                 serverAccount.email = null;
                 window.location.reload();
-            } else if(action === 'prepare') {
-                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before selecting another workout.');
+            } else if(action === 'start-workout') {
+                if(db.watchStatus !== 'stopped' || db.elapsed > 0 || savingRide) {
+                    throw new Error('Finish and save your current ride before starting another workout.');
+                }
                 const workout = selectedWorkout(coachingData());
                 if(workout.coachingWorkoutId) {
                     if(coachingData().profile.ftp !== db.ftp) throw new Error('Update device FTP to match your Coach profile, or regenerate your plan.');
                     xf.dispatch('ui:coaching:select', workout);
                 } else xf.dispatch('workout', workout);
                 window.location.hash = '/player';
+                xf.dispatch('ui:watchStart');
+                xf.dispatch('ui:workoutStart');
             } else if(action === 'ride-toggle') {
                 if(db.watchStatus === 'started') xf.dispatch('ui:watchPause');
                 else if(db.elapsed > 0) xf.dispatch('ui:watchResume');
