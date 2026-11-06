@@ -21,7 +21,7 @@
 import { localDate, TrainingCalendar } from '../../src/views/training-calendar.js';
 import { xf } from '../../src/functions.js';
 import { setAccountScope } from '../../src/storage/account.js';
-import { coachingData } from '../../src/coaching/service.js';
+import { coachingData, coachingService } from '../../src/coaching/service.js';
 import { normalizeActivity } from '../../src/coaching/normalizer.js';
 import { estimateState } from '../../src/coaching/state.js';
 import { profile } from '../coaching/fixtures.js';
@@ -62,6 +62,7 @@ describe('training calendar', () => {
         window.localStorage.clear();
         setAccountScope(null);
         coachingData.mockReset().mockReturnValue(null);
+        coachingService.mockReset();
         estimateState.mockReset();
     });
 
@@ -292,6 +293,49 @@ describe('training calendar', () => {
             workout: {meta: {}},
             coaching: {targetLoad: null, expectedRpe: null},
         })).toEqual(['Workout']);
+    });
+
+    test.each(['future', 'today', 'archived'])('keeps %s coaching details separate from action controls', (scenario) => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-11-03T12:00:00Z'));
+        const calendar = new TrainingCalendar();
+        const date = scenario === 'future' ? '2026-11-17' : '2026-11-03';
+        const data = {
+            profile: {timeZone: 'UTC'},
+            plan: {status: scenario === 'archived' ? 'archived' : 'active', workouts: []},
+            activities: [{id: 'ride-1', day: date, duration: 1800}],
+        };
+        coachingData.mockReturnValue(data);
+        coachingService.mockReturnValue({data});
+        const description = 'Endurance supports base objectives. '.repeat(20) + '<img src=x onerror=alert(1)>';
+        calendar.innerHTML = calendar.renderEntry({
+            id: 'coach-1',
+            name: 'Salmon',
+            date,
+            source: 'coaching',
+            workout: {
+                id: 'salmon',
+                meta: {duration: 1620, category: 'Endurance'},
+                intervals: [{steps: [{duration: 1620, power: 0.6}]}],
+            },
+            coaching: {date, status: 'scheduled', targetLoad: 15, expectedRpe: 3, description},
+        });
+
+        const entry = calendar.querySelector('.training-calendar--entry.is-coaching');
+        const copy = entry.querySelector('.training-calendar--copy');
+        const explanation = copy.querySelector('.training-calendar--description');
+        const actions = entry.querySelector('.training-calendar--entry-actions');
+        expect(explanation.textContent).toContain('15 planned power-load points');
+        expect(explanation.textContent).toContain('RPE 3.');
+        expect(explanation.textContent).toContain(description);
+        expect(explanation.previousElementSibling.className).toBe('training-calendar--meta');
+        expect(explanation.nextElementSibling.classList.contains('power-profile')).toBe(true);
+        expect(actions.textContent).not.toContain(description);
+        expect(actions.querySelector('[data-action="coach-export"]')).not.toBeNull();
+        expect(actions.querySelector('[data-action="start"]') !== null).toBe(scenario === 'today');
+        expect(actions.querySelector('[data-action="coach-missed"]') !== null).toBe(scenario === 'today');
+        expect(actions.querySelector('[data-action="coach-failed"]') !== null).toBe(scenario === 'today');
+        expect(actions.querySelector('[data-action="coach-substitute"]') !== null).toBe(scenario === 'today');
+        expect(calendar.querySelector('img')).toBeNull();
     });
 
     test('stores a library reference instead of copying a large course', () => {

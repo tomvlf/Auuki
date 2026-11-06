@@ -37,13 +37,14 @@ test('server mode is opt-in and does not probe the server by default', () => {
 
 test('remote coach uses server state and revisions for all mutations', async () => {
     fetch.mockResolvedValueOnce(response({email: 'rider@example.com'}))
+        .mockResolvedValueOnce(response({connected: false, status: 'disconnected'}))
         .mockResolvedValueOnce(response({data: {profile: null}, revision: 2}))
         .mockResolvedValueOnce(response({data: {profile: {id: 'server'}}, revision: 3, result: 'configured'}));
     const coach = await ServerCoachingService.open();
     expect(await coach.configure({id: 'server'}, {id: 'goal'})).toBe('configured');
     expect(coach.data.profile.id).toBe('server');
     expect(coach.revision).toBe(3);
-    const [url, options] = fetch.mock.calls[2];
+    const [url, options] = fetch.mock.calls[3];
     expect(url).toBe('/api/server/coaching');
     expect(options.credentials).toBe('same-origin');
     expect(options.headers['X-Athlima-Client']).toBe('1');
@@ -51,6 +52,33 @@ test('remote coach uses server state and revisions for all mutations', async () 
     expect(JSON.parse(options.body)).toEqual({
         method: 'configure', args: [{id: 'server'}, {id: 'goal'}], revision: 2,
     });
+});
+
+test('each server coaching startup queues connected Intervals sync before loading coaching data', async () => {
+    fetch.mockImplementation(url => Promise.resolve(response(
+        url.endsWith('/session') ? {email: 'rider@example.com'} :
+        url.endsWith('/intervals/sync') ? {connected: true, status: 'queued'} :
+        url.endsWith('/intervals') ? {connected: true, status: 'connected'} :
+        {data: {profile: null, plan: null}, revision: 2})));
+    for(let i = 0; i < 2; i++) {
+        const coach = await ServerCoachingService.open();
+        expect(coach.syncPending).toBe(true);
+    }
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(Array(2).fill([
+        '/api/server/session', '/api/server/integrations/intervals',
+        '/api/server/integrations/intervals/sync', '/api/server/coaching',
+    ]).flat());
+    expect(fetch.mock.calls[2][1]).toMatchObject({
+        method: 'POST', headers: {'X-Athlima-Account': 'rider@example.com'}, body: '{}',
+    });
+});
+
+test('startup surfaces failure to queue a connected integration instead of using stale coaching data', async () => {
+    fetch.mockResolvedValueOnce(response({email: 'rider@example.com'}))
+        .mockResolvedValueOnce(response({connected: true}))
+        .mockResolvedValueOnce(response({error: 'Reconnect Intervals.icu'}, false));
+    await expect(ServerCoachingService.open()).rejects.toThrow('Reconnect Intervals.icu');
+    expect(fetch.mock.calls.some(([url]) => url.endsWith('/coaching'))).toBe(false);
 });
 
 test('failed remote changes do not mutate the last known state or silently fall back', async () => {

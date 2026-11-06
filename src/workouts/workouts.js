@@ -882,6 +882,109 @@ let workouts = [
         <Cooldown Duration="900" PowerLow="0.6" PowerHigh="0.45"/>
     </workout>
 </workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 2h Steady</name>
+    <category>Base</category>
+    <description>A two-hour aerobic ride with two long, conversational endurance blocks. Keep the effort controlled and fuel and hydrate regularly.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="3000" Power="0.65"/>
+        <SteadyState Duration="3000" Power="0.68"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 2h45 Progressive</name>
+    <category>Base</category>
+    <description>A progressive long aerobic ride, moving from easy endurance to a steady but still conversational finish. Fuel and hydrate regularly; do not turn the final block into a threshold effort.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="900" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="4200" Power="0.64"/>
+        <SteadyState Duration="3600" Power="0.67"/>
+        <SteadyState Duration="600" Power="0.7"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Endurance 3h15 Steady</name>
+    <category>Base</category>
+    <description>A long, steady aerobic ride for riders who already tolerate this duration. Keep the work easy and even, and plan regular food and fluids before starting.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="900" PowerLow="0.45" PowerHigh="0.65"/>
+        <SteadyState Duration="4800" Power="0.64"/>
+        <SteadyState Duration="4200" Power="0.66"/>
+        <SteadyState Duration="1200" Power="0.68"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.45"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Tempo 2x20</name>
+    <category>Base</category>
+    <description>Two controlled 20-minute tempo blocks at 78-80% of FTP with five minutes easy between. Keep the effort below threshold and conversational in short sentences.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.7"/>
+        <IntervalsT Repeat="2" OnDuration="1200" OffDuration="300" OnPower="0.78" OffPower="0.55"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Sweet Spot 4x8</name>
+    <category>Sweet Spot</category>
+    <description>Four eight-minute sweet-spot efforts near 90% of FTP with four minutes easy between. A shorter-step progression from longer sweet-spot blocks; keep every effort controlled.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.4" PowerHigh="0.72"/>
+        <IntervalsT Repeat="4" OnDuration="480" OffDuration="240" OnPower="0.9" OffPower="0.5"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>Threshold 3x8</name>
+    <category>Threshold</category>
+    <description>Three controlled eight-minute threshold efforts at 98% of FTP with four minutes easy between. The Coach may reduce the repetitions to meet the hard-time limit. Keep the effort even; stop or reduce it if the target is no longer sustainable.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.4" PowerHigh="0.75"/>
+        <IntervalsT Repeat="3" OnDuration="480" OffDuration="240" OnPower="0.98" OffPower="0.5"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
+`<workout_file>
+    <author>Athlima</author>
+    <name>VO2 4x4</name>
+    <category>VO2 Max</category>
+    <description>Four four-minute high-aerobic efforts, starting around 112% of FTP, with four minutes easy between. This is a demanding session: pace evenly and use only when recovered.</description>
+    <sportType>bike</sportType>
+    <tags>
+    </tags>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.4" PowerHigh="0.75"/>
+        <IntervalsT Repeat="4" OnDuration="240" OffDuration="240" OnPower="1.12" OffPower="0.5"/>
+        <Cooldown Duration="600" PowerLow="0.6" PowerHigh="0.4"/>
+    </workout>
+</workout_file>`,
 ];
 
 export { workouts };

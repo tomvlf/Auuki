@@ -500,7 +500,7 @@ xf.reg('app:start', async function(_, db) {
     try {
         await initializeCoaching();
         await syncRecordedRides(coachingService());
-        await coachingService().advance();
+        if(!coachingService().syncPending) await coachingService().advance();
         xf.dispatch('coaching:changed');
     } catch(error) {
         console.error('Unable to review coaching plan:', error);

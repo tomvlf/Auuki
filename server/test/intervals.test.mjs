@@ -398,6 +398,81 @@ test('malformed activities are skipped with a notice instead of blocking the imp
     assert.deepEqual((await f.status(cookie)).data.skipped, []);
 });
 
+test('sync matches offline rides before reviewing overdue sessions, then persists corrected coaching state', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    const mutate = async (method, args) => {
+        const stored = await f.history(cookie);
+        const result = await f.request('coaching', {method: 'POST', cookie,
+            body: {method, args, revision: stored.revision}});
+        assert.equal(result.status, 200, JSON.stringify(result.data));
+        return result.data;
+    };
+    await mutate('configure', [profile, {...goal, date: '2026-05-01'}]);
+    const generated = await mutate('generate', ['2026-03-01']);
+    const workout = generated.data.plan.workouts[0];
+    assert.ok(workout.date < '2026-03-20');
+    const offlineRide = {...activity, start_date: `${workout.date}T10:00:00Z`,
+        moving_time: workout.duration, icu_weighted_avg_watts: workout.targetIntensity * profile.ftp};
+    await f.connect(cookie, '2026-02-01');
+    f.remote(async url => {
+        const params = new URL(url).searchParams;
+        return json(params.get('oldest') <= workout.date && params.get('newest') >= workout.date
+            ? [offlineRide] : []);
+    });
+    await f.sync(cookie);
+    await f.tick();
+    let stored = await f.history(cookie);
+    assert.equal((await f.status(cookie)).data.status, 'queued');
+    assert.equal(stored.data.plan.workouts.find(w => w.id === workout.id).status, 'completed');
+    assert.equal(stored.data.plan.workouts.some(w => w.status === 'missed'), false);
+    f.advance(1001);
+    await f.tick();
+    stored = await f.history(cookie);
+    assert.equal((await f.status(cookie)).data.status, 'connected');
+    assert.ok(stored.data.plan.workouts.some(w => w.status === 'missed'));
+    const completed = stored.data.plan.workouts.find(w => w.id === workout.id);
+    assert.equal(completed.status, 'completed');
+    assert.equal(completed.matchedActivity, 'intervals:i123');
+
+    await mutate('updateFeedback', ['intervals:i123', {rpe: 5}]);
+    const before = await f.history(cookie);
+    // Return the provider correction in the next incremental batch.
+    f.remote(async () => json([{...offlineRide, icu_weighted_avg_watts: 300}]));
+    await f.sync(cookie);
+    f.advance(1001);
+    await f.tick();
+    const corrected = await f.history(cookie);
+    assert.equal(corrected.data.plan.revision, before.data.plan.revision + 1);
+    assert.equal(corrected.data.activities[0].normalizedPower, 300);
+    assert.equal(corrected.data.activities[0].rpe, 5);
+    assert.deepEqual(corrected.data.plan.workouts.find(w => w.id === workout.id), completed);
+    assert.notEqual(corrected.data.snapshots.at(-1).acuteLoad, before.data.snapshots.at(-1).acuteLoad);
+});
+
+test('a launch during an older in-flight sync extends it through the current day', async t => {
+    const f = await fixture(t);
+    const cookie = await f.register();
+    await f.connect(cookie, '2026-03-20');
+    let finish;
+    f.remote(() => new Promise(resolve => { finish = resolve; }));
+    await f.sync(cookie);
+    const pending = f.tick();
+    f.advance(86400000);
+    const queued = await f.sync(cookie);
+    assert.equal(queued.data.status, 'running');
+    assert.equal(queued.data.through, '2026-03-21');
+    finish(json([]));
+    await pending;
+    assert.equal((await f.status(cookie)).data.status, 'queued');
+    f.advance(1001);
+    f.remote(async () => json([{...activity, start_date: '2026-03-21T10:00:00Z'}]));
+    await f.tick();
+    assert.equal(new URL(f.calls.at(-1).url).searchParams.get('oldest'), '2026-03-21');
+    assert.equal((await f.history(cookie)).data.activities.length, 1);
+    assert.equal((await f.status(cookie)).data.status, 'connected');
+});
+
 test('rate limits honor Retry-After, retry transient failures, and bound attempts', async t => {
     const f = await fixture(t);
     const cookie = await f.register();

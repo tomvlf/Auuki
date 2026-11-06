@@ -147,6 +147,9 @@ export class CoachingService {
         const normalized = rawActivities.map(raw => normalizeActivity(raw, this.data.profile || undefined));
         const next = JSON.parse(JSON.stringify(this.data));
         const added = [];
+        let refreshed = false;
+        const evidence = value => JSON.stringify({...value, syncedAt: null,
+            original: {...value.original, syncedAt: null}});
         for(const activity of normalized) {
             const index = next.activities.findIndex(a => a.id === activity.id);
             if(index !== -1) {
@@ -159,11 +162,14 @@ export class CoachingService {
                 // Provider refreshes must not erase the rider's subjective feedback or re-complete a session.
                 if(activity.source !== 'manual' && previous.source === activity.source &&
                    previous.externalId === activity.externalId) {
-                    next.activities[index] = normalizeActivity({...activity.original,
+                    const updated = normalizeActivity({...activity.original,
                         rpe: previous.rpe ?? activity.rpe,
                         feedback: Object.fromEntries(Object.keys(previous.feedback).map(key =>
                             [key, previous.feedback[key] ?? activity.feedback[key]]))},
                     next.profile || undefined);
+                    if((previous.sport === 'cycling' || updated.sport === 'cycling') &&
+                       evidence(previous) !== evidence(updated)) refreshed = true;
+                    next.activities[index] = updated;
                 }
                 continue;
             }
@@ -171,10 +177,16 @@ export class CoachingService {
             added.push(activity);
         }
         if(next.plan?.status === 'active') {
-            const today = localDay(this.clock(), next.profile.timeZone);
-            if(today >= next.plan.startDate && today <= next.plan.endDate) {
+            const today = [localDay(this.clock(), next.profile.timeZone), next.plan.endDate].sort()[0];
+            if(today >= next.plan.startDate) {
                 for(const activity of added.filter(a => a.day <= today && a.day >= next.plan.startDate)) {
                     this.applyActivity(next, activity, today);
+                }
+                if(refreshed || added.some(a => a.sport === 'cycling' && a.day < next.plan.startDate)) {
+                    const state = this.snapshot(next, today);
+                    next.plan = adaptPlan({plan: next.plan, profile: next.profile, state,
+                        trigger: 'feedback', date: today, timestamp: this.clock()});
+                    next.revisions.push(JSON.parse(JSON.stringify(next.plan)));
                 }
             }
         }
@@ -320,7 +332,7 @@ export async function initializeCoaching(indexedDB = window.indexedDB) {
 }
 export async function useServerCoaching() {
     const remote = await ServerCoachingService.open();
-    await remote.advance();
+    if(!remote.syncPending) await remote.advance();
     window.localStorage.setItem(SERVER_MODE_KEY, '1');
     modeRevision++;
     instance = remote;

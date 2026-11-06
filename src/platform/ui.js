@@ -25,6 +25,7 @@ import { escape, minutes, number, time, today, trainingSummary, profileGraph } f
 import { activityLists, historyActivityRow, localActivityRow, renderActivityOverview, renderActivityStreamData } from './activities.js';
 import { initialLibraryFilters, renderLibrary } from './library.js';
 import { renderPlan } from './plan-view.js';
+import { rideTimeline, ridePosition, rideProfile } from './ride.js';
 import { mountVersions, versionMarkup } from './version.js';
 
 const routes = {
@@ -94,6 +95,7 @@ export async function launchPlatform(root, account) {
     let selectedId = '';
     let integration;
     let integrationLoading = false;
+    let integrationNeedsRefresh = true;
     const activityDataCache = new Map();
     let syncTimer;
     let busy = false;
@@ -102,6 +104,7 @@ export async function launchPlatform(root, account) {
     let lastRide;
     let savingRide = false;
     let advancedPlayer = false;
+    let timeline;
     let state;
     let stateVersion = 0;
     const sensorStatus = {};
@@ -240,14 +243,25 @@ export async function launchPlatform(root, account) {
                 card('Training metrics', '<p>Configure your Coach profile to calculate training-load and power metrics from your history. No inferred fitness score is shown without sufficient data.</p>')}`;
     }
     function player() {
+        timeline = rideTimeline(db.workout, db.ftp, targetPower);
         return `<section class="ride-panel"><div class="ride-heading"><div><p class="eyebrow">Workout player</p><h2>${escape(db.workout?.meta?.name || 'Free ride')}</h2></div>
             <span id="ride-status" role="status"></span></div>
-            <div class="ride-sensors">${deviceButtons()}</div>
-            <div class="ride-metrics">${[['power', 'Power', 'W'], ['target', 'Target', 'W'], ['countdown', 'Interval left', ''],
-                ['cadence', 'Cadence', 'rpm'], ['hr', 'Heart rate', 'bpm'], ['elapsed', 'Elapsed', '']].map(([key, label, unit]) =>
-                `<div class="ride-metric ${key === 'power' ? 'primary' : ''}"><span>${label}</span><strong id="ride-${key}">--</strong><small>${unit}</small></div>`).join('')}</div>
-            <div class="interval-context"><span id="ride-interval"></span><span id="ride-next"></span><span id="ride-remaining"></span></div>
-            <progress id="ride-progress" max="1" value="0" aria-label="Workout progress"></progress>
+            <div class="ride-metrics">
+                <div class="ride-metric primary"><span>Target power</span><div><strong id="ride-target">--</strong><small>W</small></div>
+                    <span class="ride-reading">Actual <b id="ride-power">--</b> W</span></div>
+                <div class="ride-metric"><span>Interval left</span><strong id="ride-countdown">--</strong><span id="ride-interval"></span></div>
+                <div class="ride-metric"><span>Cadence target</span><div><strong id="ride-cadence-target">--</strong><small id="ride-cadence-unit">rpm</small></div>
+                    <span class="ride-reading">Actual <b id="ride-cadence">--</b> rpm</span></div>
+            </div>
+            <div class="ride-summary"><span>Heart rate <strong id="ride-hr">--</strong> bpm</span>
+                <span>Elapsed <strong id="ride-elapsed">--</strong></span><strong id="ride-remaining"></strong></div>
+            <section class="ride-workout-profile" aria-labelledby="ride-profile-heading">
+                <div class="ride-profile-heading"><h3 id="ride-profile-heading">Workout power profile</h3><span id="ride-position-label"></span></div>
+                <div id="ride-profile" class="ride-profile" role="img" aria-label="Workout target power profile">${rideProfile(timeline)}</div>
+                <progress id="ride-progress" max="1" value="0" aria-label="Workout progress" ${timeline ? '' : 'hidden'}></progress>
+                <div class="interval-context"><span class="muted">Blocks: target power &middot; marker: your position</span><strong id="ride-next"></strong></div>
+            </section>
+            <p id="ride-instruction" class="ride-instruction" hidden></p>
             <div class="ride-actions"><button data-action="ride-toggle" id="ride-toggle">Start workout</button>
                 <button class="secondary" data-action="ride-skip">Skip interval</button>
                 <button class="secondary" data-action="ride-finish">Finish & save</button></div>
@@ -255,12 +269,13 @@ export async function launchPlatform(root, account) {
                 <p>Keep this page open. Download your FIT file now, or retry local storage after freeing space.</p>
                 <div class="button-row"><button data-action="recover-download">Download unsaved FIT</button>
                 <button class="secondary" data-action="recover-save">Retry saving</button></div></section>
+            <details class="ride-settings"><summary>Devices &amp; trainer settings</summary><div class="ride-sensors">${deviceButtons()}</div>
             <div class="ride-adjust"><label>Trainer mode<select id="ride-mode"><option value="erg">ERG</option>
                 <option value="resistance">Resistance</option><option value="sim">Slope</option></select></label>
                 <button class="secondary" data-action="target-down" aria-label="Decrease current target">-</button>
-                <span id="ride-adjust-value"></span><button class="secondary" data-action="target-up" aria-label="Increase current target">+</button></div>
+                <span id="ride-adjust-value"></span><button class="secondary" data-action="target-up" aria-label="Increase current target">+</button></div></details>
             <p class="muted" id="ride-recovery">${db.elapsed ? 'Ride recovered on this device. Reconnect sensors before resuming.' : 'Connect a trainer and sensors, then start. Your ride is recovered locally after an interruption.'}</p>
-            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Workout profile and original trainer controls</summary><p>The controls below use the original Athlima workout engine.</p></details>
+            <details id="ride-advanced" ${advancedPlayer ? 'open' : ''}><summary>Original trainer controls</summary><p>The controls below use the original Athlima workout engine.</p></details>
         </section>`;
     }
     function settings() {
@@ -301,7 +316,7 @@ export async function launchPlatform(root, account) {
             <div class="button-row"><button data-action="sync" ${['running', 'queued'].includes(integration.status) ? 'disabled' : ''}>${integration.lastSuccess ? 'Sync now' : 'Import history'}</button>
                 <button class="secondary" data-action="test-connection">Test connection</button>
                 <button class="secondary" data-action="disconnect">Disconnect</button></div>
-            <p class="muted">Disconnect removes credentials and stops imports. Imported history is retained. Future syncs recheck the last seven days for updates.</p>`;
+            <p class="muted">Disconnect removes credentials and stops imports. Imported history is retained. Each launch syncs new activities and rechecks the last seven days for updates.</p>`;
     }
     async function loadIntegration() {
         if(!authenticated) return;
@@ -310,15 +325,29 @@ export async function launchPlatform(root, account) {
         try {
             const previous = integration;
             integration = await serverRequest('integrations/intervals');
+            if(['queued', 'running'].includes(integration.status)) integrationNeedsRefresh = true;
             xf.dispatch('services', {intervals: integration.connected});
             if(route === 'settings' && !root.querySelector('#intervals-connect:focus-within')) render();
-            if(previous && ['queued', 'running'].includes(previous.status) && integration.status === 'connected') {
+            if(integration.status === 'connected' && integrationNeedsRefresh) {
                 await refresh();
-                report('Activity sync completed.');
+                integrationNeedsRefresh = false;
+                coachingService().syncPending = false;
+                report('Intervals.icu sync completed. Coach and training plan are up to date.');
+            } else if(integration.error || integration.status === 'error') {
+                report(integration.error || 'Intervals.icu sync failed. Retry in Settings > Integrations.', true);
+            } else if(['queued', 'running'].includes(integration.status) && !previous) {
+                report('Syncing latest Intervals.icu activities and updating Coach and training plan...');
             }
             clearTimeout(syncTimer);
             if(['queued', 'running'].includes(integration.status)) syncTimer = setTimeout(loadIntegration, 2500);
-        } catch(error) { report(error.message, true); }
+        } catch(error) {
+            report(error.message, true);
+            if(ready && (!integration || ['queued', 'running'].includes(integration.status) ||
+               (integration.status === 'connected' && integrationNeedsRefresh))) {
+                clearTimeout(syncTimer);
+                syncTimer = setTimeout(loadIntegration, 2500);
+            }
+        }
         finally { integrationLoading = false; }
     }
     let libraryFilters = initialLibraryFilters();
@@ -358,20 +387,30 @@ export async function launchPlatform(root, account) {
         if(!ready || route !== 'player') return;
         const intervals = db.workout?.intervals || [];
         const current = intervals[db.intervalIndex];
-        const next = current?.steps?.[db.stepIndex + 1] || intervals[db.intervalIndex + 1]?.steps?.[0];
-        const duration = db.workout?.meta?.duration;
-        const remaining = db.workoutStatus === 'done' ? 0
-            : db.workoutStatus === 'started' && current ? Math.max(0, db.lapTime) +
-                intervals.slice(db.intervalIndex + 1).reduce((total, interval) => total + interval.duration, 0)
-                : duration;
+        const step = current?.steps?.[db.stepIndex];
+        const next = intervals[db.intervalIndex + 1];
+        const nextStep = next?.steps?.[0];
+        const duration = timeline?.duration;
+        const position = ridePosition(timeline, db);
+        const remaining = duration - position;
+        const running = db.workoutStatus === 'started';
+        const finished = db.workoutStatus === 'done';
+        const cadence = finished ? null : running && db.cadenceTarget > 0 ? db.cadenceTarget : step?.cadence;
+        const cadenceTarget = Number.isFinite(cadence) && cadence > 0 ? cadence : null;
         const connected = metric => !db.connectedDevices || db.connectedDevices[db.sources?.[metric]] === true;
         const values = {
             power: connected('power') ? number(db.power1s) : '--',
-            target: number(db.powerTarget), countdown: time(db.lapTime), cadence: connected('cadence') ? number(db.cadence) : '--',
+            target: finished ? '--' : number(running ? db.powerTarget
+                : step?.power == null ? null : targetPower(step.power, db.ftp)),
+            countdown: time(finished ? 0 : running || !timeline ? db.lapTime : timeline.intervals[db.intervalIndex]?.duration),
+            cadence: connected('cadence') ? number(db.cadence) : '--',
+            'cadence-target': finished ? '--' : cadenceTarget == null ? 'Self-selected' : number(cadenceTarget),
+            'cadence-unit': cadenceTarget == null ? '' : 'rpm',
             hr: connected('heartRate') && db.heartRate > 0 ? number(db.heartRate) : '--', elapsed: time(db.elapsed),
             interval: intervals.length ? `Interval ${Math.min(intervals.length, db.intervalIndex + 1)} / ${intervals.length}` : 'Free ride',
-            next: next ? `Next: ${time(next.duration)} / ${next.power == null ? 'slope target' : `${number(targetPower(next.power, db.ftp))} W`}` : 'No next interval',
+            next: !finished && nextStep ? `Next: ${time(next.duration)} / ${nextStep.power == null ? 'No power target' : `${number(targetPower(nextStep.power, db.ftp))} W`}${nextStep.cadence > 0 ? ` / ${number(nextStep.cadence)} rpm` : ''}` : 'No next interval',
             remaining: duration ? `${time(remaining)} remaining` : '',
+            'position-label': duration ? `${time(position)} / ${time(duration)}` : 'Free ride',
             status: db.workoutStatus === 'done' ? 'Workout complete - finish to save' : db.watchStatus,
             toggle: db.watchStatus === 'started' ? 'Pause' : db.elapsed > 0 ? 'Resume' : 'Start workout',
             'adjust-value': db.mode === 'erg' ? `${number(db.powerTarget)} W` : db.mode === 'resistance'
@@ -382,7 +421,23 @@ export async function launchPlatform(root, account) {
             if(element) element.textContent = value;
         });
         const progress = root.querySelector('#ride-progress');
-        if(progress) progress.value = duration ? Math.max(0, Math.min(1, 1 - remaining / duration)) : 0;
+        if(progress) progress.value = duration ? position / duration : 0;
+        root.querySelector('#ride-cadence-target').classList.toggle('free-cadence', cadenceTarget == null);
+        const instruction = root.querySelector('#ride-instruction');
+        instruction.textContent = db.workoutTextEvent || '';
+        instruction.hidden = !instruction.textContent;
+        if(timeline) {
+            const fraction = position / duration;
+            root.querySelector('#ride-profile-cursor').style.left = `${fraction * 100}%`;
+            root.querySelector('#ride-profile-cursor span').textContent = finished ? 'Done' : 'Now';
+            root.querySelector('#ride-profile-completed').setAttribute('width', fraction * 1000);
+            const interval = timeline.intervals[db.intervalIndex];
+            const active = root.querySelector('#ride-profile-active');
+            active.setAttribute('x', interval ? interval.start / duration * 1000 : 0);
+            active.setAttribute('width', interval && !finished ? interval.duration / duration * 1000 : 0);
+            root.querySelector('#ride-profile').setAttribute('aria-label',
+                `Workout target power profile. Position ${time(position)} of ${time(duration)}.`);
+        }
         const mode = root.querySelector('#ride-mode');
         if(mode && document.activeElement !== mode) mode.value = db.mode;
         root.querySelector('[data-action="ride-skip"]').disabled = db.watchStatus !== 'started' || !intervals.length;
@@ -692,8 +747,9 @@ export async function launchPlatform(root, account) {
     });
     xf.sub('action:planned', () => { if(ready && route === 'dashboard') render(); });
     xf.sub('db:workouts', () => { if(ready && route === 'library') render(); });
-    for(const key of ['elapsed', 'lapTime', 'power1s', 'powerTarget', 'cadence', 'heartRate', 'watchStatus',
-        'workoutStatus', 'intervalIndex', 'mode', 'resistanceTarget', 'slopeTarget', 'sources']) xf.sub(`db:${key}`, updateRide);
+    for(const key of ['elapsed', 'lapTime', 'power1s', 'powerTarget', 'cadence', 'cadenceTarget', 'heartRate', 'watchStatus',
+        'workoutStatus', 'intervalIndex', 'stepIndex', 'workoutTextEvent', 'mode', 'resistanceTarget', 'slopeTarget', 'sources']) xf.sub(`db:${key}`, updateRide);
+    for(const key of ['workout', 'ftp']) xf.sub(`db:${key}`, () => { if(ready && route === 'player') render(); });
     const started = new Promise((resolve, reject) => {
         window.addEventListener('app:ready', resolve, {once: true});
         window.addEventListener('app:error', event => reject(new Error(event.detail.data)), {once: true});

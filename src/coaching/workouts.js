@@ -122,6 +122,6 @@ export function exportZwo(workout) {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file><author>Athlima</author>` +
         `<name>${escape(workout.title)}</name><description>${escape(workout.description)}</description>` +
         `<sportType>bike</sportType><workout>` +
-        workout.steps.map(s => `<SteadyState Duration="${s.duration}" Power="${s.power}"/>`).join('') +
+        workout.steps.map(s => `<SteadyState Duration="${s.duration}" Power="${s.power}"${Number.isFinite(s.cadence) ? ` Cadence="${s.cadence}"` : ''}/>`).join('') +
         '</workout></workout_file>';
 }

@@ -47,20 +47,27 @@ export function zwoTemplate(zwo, rules = DEFAULTS) {
     for(const [, tag, rest] of text(zwo, 'workout').matchAll(/<(\w+)\b([^>]*?)\/?>/g)) {
         if(tag.toLowerCase() === 'textevent') continue;
         const a = attributes(rest);
+        for(const key of ['Cadence', 'CadenceResting']) {
+            if(a[key] != null && (!Number.isInteger(Number(a[key])) || Number(a[key]) < 0)) {
+                return {steps: null, reason: `Invalid ${key} target.`};
+            }
+        }
+        const cadence = a.Cadence == null ? {} : {cadence: Number(a.Cadence)};
+        const restingCadence = a.CadenceResting == null ? {} : {cadence: Number(a.CadenceResting)};
         const duration = Math.round(Number(a.Duration));
         if(tag === 'SteadyState') {
             const power = Number(a.Power);
             if(!Number.isInteger(duration) || duration <= 0 || !Number.isFinite(power)) {
                 return {steps: null, reason: 'Missing or invalid steady-state duration/power.'};
             }
-            steps.push({duration, power, role: power >= config.libraryEffortPowerThreshold ? 'effort' : 'steady'});
+            steps.push({duration, power, ...cadence, role: power >= config.libraryEffortPowerThreshold ? 'effort' : 'steady'});
         } else if(['Warmup', 'Cooldown', 'Ramp'].includes(tag)) {
             if(!Number.isInteger(duration) || duration <= 0 ||
                !Number.isFinite(Number(a.PowerLow)) || !Number.isFinite(Number(a.PowerHigh))) {
                 return {steps: null, reason: `Missing or invalid ${tag} duration/power.`};
             }
             steps.push(...ramp(duration, Number(a.PowerLow), Number(a.PowerHigh))
-                .map(step => ({...step, role: tag === 'Warmup' ? 'warmup' : tag === 'Cooldown' ? 'cooldown' : 'ramp', protected: true})));
+                .map(step => ({...step, ...cadence, role: tag === 'Warmup' ? 'warmup' : tag === 'Cooldown' ? 'cooldown' : 'ramp', protected: true})));
         } else if(tag === 'IntervalsT') {
             const repeat = Number(a.Repeat), onDuration = Number(a.OnDuration), offDuration = Number(a.OffDuration);
             const onPower = Number(a.OnPower), offPower = Number(a.OffPower);
@@ -73,9 +80,9 @@ export function zwoTemplate(zwo, rules = DEFAULTS) {
             const block = intervalBlock++;
             for(let i = 0; i < repeat; i++) {
                 const repetitionId = `${block}:${i}`;
-                steps.push({duration: onDuration, power: onPower,
+                steps.push({duration: onDuration, power: onPower, ...cadence,
                     role: 'effort', repetitionId},
-                {duration: offDuration, power: offPower,
+                {duration: offDuration, power: offPower, ...restingCadence,
                     role: 'interval-recovery', repetitionId, protected: true});
             }
         } else {

@@ -158,17 +158,45 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 #platform .device-buttons button { flex: 1; min-width: 125px; flex-direction: column; font-size: 13px; }
 .device-buttons span { font-size: 11px; font-weight: 400; }
 .ride-panel { background: #101820; border-radius: 18px; padding: 24px; border: 1px solid var(--platform-border); }
-.ride-heading { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
-#ride-status { color: var(--platform-accent); font-size: 12px; }
-.ride-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.ride-metric { background: #192532; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; text-align: center; }
+.ride-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+#ride-status { color: var(--platform-accent); background: #213831; border-radius: 20px; padding: 4px 12px; font-size: 12px; }
+.ride-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ride-metric { background: #192532; border-radius: 12px; padding: 18px 12px; display: flex; justify-content: space-between; flex-direction: column; text-align: center; min-width: 0; }
 .ride-metric > span { font-size: 12px; color: var(--platform-muted); }
-.ride-metric strong { font-size: clamp(32px, 5vw, 72px); font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1.3; }
+.ride-metric strong { font-size: clamp(32px, 5vw, 68px); font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1.3; }
+.ride-metric small { margin-left: 6px; }
+.ride-metric strong.free-cadence { font-size: clamp(16px, 2vw, 24px); letter-spacing: -.02em; }
 .ride-metric.primary strong { color: var(--platform-accent); }
-.interval-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 13px; padding: 24px 0 10px; }
-#ride-progress { width: 100%; height: 10px; accent-color: var(--platform-accent); }
-.ride-actions { display: flex; gap: 12px; margin-top: 24px; }
+.ride-metric .ride-reading { margin-top: 8px; }
+.ride-reading b { color: var(--platform-text); font-size: 20px; font-variant-numeric: tabular-nums; }
+.ride-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 14px 0 20px; font-size: 13px; color: var(--platform-muted); }
+.ride-summary strong { color: var(--platform-text); font-variant-numeric: tabular-nums; }
+.ride-workout-profile { border: 1px solid var(--platform-border); border-radius: 12px; padding: 16px 20px; }
+.ride-profile-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+#platform .ride-profile-heading h3 { font-size: 14px; margin: 0; }
+#ride-position-label { color: var(--platform-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ride-profile { display: grid; grid-template-columns: 44px minmax(0, 1fr); margin: 32px 0 28px; }
+.ride-profile > p { grid-column: 1 / -1; }
+.ride-profile-axis { height: 180px; display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--platform-muted); }
+.ride-profile-plot { position: relative; height: 180px; border-bottom: 1px solid #526276; }
+.ride-profile-plot svg { display: block; width: 100%; height: 100%; }
+.ride-profile-grid { stroke: #526276; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; }
+.ride-profile-active { fill: #fff; fill-opacity: .08; stroke: #fff; stroke-opacity: .7; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ride-profile-completed { fill: #101820; fill-opacity: .6; }
+.ride-profile-cursor { position: absolute; top: -5px; bottom: 0; width: 2px; background: #fff; pointer-events: none; }
+.ride-profile-cursor span { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #eef4fa; color: #101820; border-radius: 4px 4px 0 0; padding: 1px 5px; font-size: 10px; font-weight: 750; }
+.ride-profile-times { display: flex; justify-content: space-between; position: absolute; top: 100%; left: 0; right: 0; padding-top: 5px; color: var(--platform-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.interval-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; font-size: 12px; padding-top: 10px; }
+#ride-next { font-weight: 600; }
+#ride-progress { width: 100%; height: 5px; accent-color: var(--platform-accent); display: block; margin-top: 12px; }
+#ride-progress[hidden] { display: none; }
+.ride-instruction { padding: 12px 16px; border-left: 3px solid var(--platform-accent); background: #213831; border-radius: 6px; }
+.ride-actions { display: flex; gap: 12px; margin-top: 20px; }
 .ride-actions button { flex: 1; }
+#ride-unsaved[hidden] { display: none; }
+.ride-settings { margin-top: 20px; border-top: 1px solid var(--platform-border); padding-top: 14px; }
+.ride-settings summary { cursor: pointer; color: var(--platform-muted); font-size: 13px; }
+.ride-sensors { margin-top: 14px; }
 .ride-adjust { display: flex; align-items: center; justify-content: center; gap: 18px; }
 .ride-adjust label { max-width: 160px; }
 .auth-screen { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at top left, #264940, transparent 65%); }
@@ -343,9 +371,10 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
 .mobile-app .ride-heading { margin-bottom: 12px; }
 .mobile-app .ride-sensors .device-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mobile-app #platform .ride-sensors button { min-width: 0; min-height: 44px; padding: 6px; font-size: 11px; }
-.mobile-app .ride-metrics { grid-template-columns: 1fr 1fr; gap: 8px; }
+.mobile-app .ride-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .mobile-app .ride-metric { padding: 12px 4px; }
-.mobile-app .ride-metric strong { font-size: clamp(36px, 12vw, 72px); }
+.mobile-app .ride-metric strong { font-size: clamp(30px, 7vw, 58px); }
+.mobile-app .ride-metric strong.free-cadence { font-size: 16px; }
 .mobile-app .ride-actions { gap: 8px; }
 .mobile-app[data-route="player"] .ride-actions { position: sticky; bottom: 76px; z-index: 10; padding: 8px 0; background: #101820; }
 .mobile-app #platform .ride-actions button { font-size: 12px; min-height: 54px; padding: 8px; }
@@ -383,15 +412,28 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
     #platform .activity-history td:first-child, #platform .activity-history td:last-child { grid-column: 1 / -1; }
     #platform .activity-history td.activity-title { min-width: 0; }
     #platform .activity-history td[data-label="Source"] { min-width: 0; }
-    .ride-metrics { grid-template-columns: 1fr 1fr; }
+    .ride-panel { padding: 14px; }
+    .ride-metrics { gap: 8px; }
+    .ride-metric { padding: 12px 4px; }
+    .ride-metric strong { font-size: clamp(28px, 7vw, 48px); }
+    .ride-metric > span { font-size: 11px; }
+    .ride-reading b { font-size: 16px; }
+    .ride-workout-profile { padding: 14px 12px; }
+    .ride-profile { grid-template-columns: 36px minmax(0, 1fr); }
+    .ride-profile-heading { align-items: start; }
+    .ride-profile-axis, .ride-profile-plot { height: 150px; }
+    .ride-summary { font-size: 12px; }
+    #platform .ride-actions button { padding: 10px 6px; font-size: 12px; }
     .auth-card { padding: 24px; }
 }
 @media (orientation: landscape) and (max-height: 600px) {
     .mobile-app[data-route="player"] .platform-header, .mobile-app[data-route="player"] .app-versions, .mobile-app[data-route="player"] .ride-heading,
     .mobile-app[data-route="player"] .ride-sensors, .mobile-app[data-route="player"] #ride-recovery,
     .mobile-app[data-route="player"] #legacy-slot { display: none; }
-    .mobile-app .ride-metrics { grid-template-columns: repeat(6, 1fr); }
+    .mobile-app .ride-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .mobile-app .ride-metric strong { font-size: 38px; }
+    .mobile-app .ride-metric strong.free-cadence { font-size: 18px; }
+    .mobile-app .ride-profile-axis, .mobile-app .ride-profile-plot { height: 120px; }
     .mobile-app #main-content { padding-top: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { #platform *, #legacy-slot * { animation: none !important; transition: none !important; } }

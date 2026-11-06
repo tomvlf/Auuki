@@ -74,7 +74,14 @@ export class ServerCoachingService {
     }
     static async open() {
         const account = await serverRequest('session', {account: null});
+        let integration = await serverRequest('integrations/intervals', {account: account.email});
+        if(integration.connected) {
+            integration = await serverRequest('integrations/intervals/sync', {
+                method: 'POST', account: account.email, body: {},
+            });
+        }
         const service = new ServerCoachingService(await serverRequest('coaching', {account: account.email}), account.email);
+        service.syncPending = ['queued', 'running'].includes(integration.status);
         return service;
     }
     async call(method, args) {

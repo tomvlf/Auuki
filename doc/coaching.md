@@ -66,6 +66,8 @@ failed or low-quality work does not earn progression. Day to day:
 - Start generated sessions from the calendar, or export individual ZWO files.
    Day preferences, purpose, expected RPE and the reason for each session are
    recorded. ZWO powers are fractions of FTP, not absolute watts.
+   Calendar session details show the coaching explanation with the workout metrics
+   and power profile, with export and other available controls on a separate row.
    In-app Start is available only for today's unresolved sessions in the active
    plan; future/archived sessions cannot accidentally be executed as today's
    prescription. Without FTP, follow the duration/RPE guidance instead of
@@ -441,7 +443,9 @@ automatically synchronized.
    Warm-up, interval recovery and cool-down are protected when parsed; the
    fitter removes only complete repetitions and trims only unprotected easy
    riding. Its default minimum is two repetitions (or all repetitions if the
-   template has fewer).
+   template has fewer). Optional `Cadence` and `CadenceResting` targets are
+   retained through fitting, playback and export; missing cadence is not
+   replaced by an invented target.
 4. Add or verify its category-to-family mapping in
    `src/coaching/library.js` (`CATEGORY_FAMILIES`). For a template requiring
    stricter minimums, add `minimumEfforts`, `minimumWarmupSeconds` and/or
@@ -450,6 +454,32 @@ automatically synchronized.
 5. Add parser, minimum-dose, exact-duration, power-limit and hard-time-share
    tests to `test/coaching/library.test.js`. Run that test file and the broader
    coaching suite before using the template in plans.
+
+### Recently added library workouts
+
+The library includes three additional long aerobic options (2h, 2h45 and
+3h15), a 2x20 tempo session, a 4x8 sweet-spot session, a 3x8 threshold
+template and a 4x4 VO2 session. The Coach can reduce interval repetitions to
+stay within the configured hard-time limit. The long rides stay within the configured
+endurance power ceiling and include reminders to pace and fuel them sensibly.
+These are original Athlima templates informed by established workout formats,
+not copied workout files or guarantees of a particular adaptation.
+
+References consulted:
+
+* [Seiler et al., "Adaptations to aerobic interval training: interactive
+  effects of exercise intensity and total work duration"](https://pubmed.ncbi.nlm.nih.gov/21812820/)
+  (peer-reviewed study; informs interval duration/structure, not a universal
+  power prescription).
+* [British Cycling indoor training sessions](https://www.britishcycling.org.uk/knowledge/skills/article/izn20150901-Indoor-Training-Sessions-0)
+  (examples of structured indoor session design).
+* [TrainerRoad sweet spot training overview](https://www.trainerroad.com/blog/sweet-spot-training-everything-you-need-to-know/)
+  (practical context for sweet-spot intensity).
+
+The Coach still selects and fits templates against each rider's available
+time, family, progression level, safety limits and load budget. A listed
+2-hour-or-longer template is not automatically prescribed at full length; the
+planned dose and the rider's current constraints take priority.
 
 ## Adding a readiness rule
 

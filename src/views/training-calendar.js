@@ -497,7 +497,7 @@ class TrainingCalendar extends HTMLElement {
         const details = entry.source === 'activity' ? renderActivityDetails(entry.activity) : '';
 
         return `
-            <li class="training-calendar--entry ${entry.source === 'activity' ? 'is-activity' : ''}">
+            <li class="training-calendar--entry ${entry.source === 'activity' ? 'is-activity' : entry.source === 'coaching' ? 'is-coaching' : ''}">
                 <div class="training-calendar--copy">
                     <div class="training-calendar--eyebrow">${entry.source === 'activity'
                         ? activityIcon(entry.activity) : ''}${escapeHTML(source)}</div>
@@ -505,6 +505,11 @@ class TrainingCalendar extends HTMLElement {
                     <div class="training-calendar--meta">
                         ${metrics.map(metric => `<span>${escapeHTML(metric)}</span>`).join('')}
                     </div>
+                    ${entry.source === 'coaching' ? `
+                        <div class="training-calendar--description">
+                            ${escapeHTML(entry.coaching.status)}; ${Math.round(entry.coaching.targetLoad)} planned power-load points;
+                            RPE ${entry.coaching.expectedRpe}. ${escapeHTML(entry.coaching.description)}
+                        </div>` : ''}
                     ${profile}
                     ${details}
                 </div>
@@ -691,9 +696,7 @@ class TrainingCalendar extends HTMLElement {
         const today = localDay(new Date().toISOString(), data.profile.timeZone);
         const activities = data.activities.filter(a => a.day === workout.date &&
             !data.plan.workouts.some(w => w.matchedActivity === a.id));
-        return `<span>${escapeHTML(workout.status)}; ${Math.round(workout.targetLoad)} planned power-load points;
-            RPE ${workout.expectedRpe}. ${escapeHTML(workout.description)}</span>
-            <button type="button" data-action="coach-export" data-entry="${escapeHTML(entry.id)}">Export ZWO</button>
+        return `<button type="button" data-action="coach-export" data-entry="${escapeHTML(entry.id)}">Export ZWO</button>
             ${workout.status === 'scheduled' && workout.date <= today && data.plan.status === 'active' ? `
                 <button type="button" data-action="coach-missed" data-entry="${escapeHTML(entry.id)}">Missed</button>
                 <button type="button" data-action="coach-failed" data-entry="${escapeHTML(entry.id)}">Not completed</button>

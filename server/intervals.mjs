@@ -588,7 +588,12 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
     function sync(id) {
         const current = row(id);
         if(!current || !key) throw new IntegrationError('Connect Intervals.icu first.');
-        if(['running', 'queued'].includes(current.status)) return status(id);
+        if(['running', 'queued'].includes(current.status)) {
+            if(current.newest < nowDay()) {
+                db.prepare('UPDATE integrations SET newest=? WHERE user_id=?').run(nowDay(), id);
+            }
+            return status(id);
+        }
         const cursor = current.cursor || (current.last_success
             ? [current.oldest, addDays(current.last_success.slice(0, 10), -7)].sort().at(-1) : current.oldest);
         // A fresh run reports only its own skipped activities; a resumed run keeps earlier ones.
@@ -645,11 +650,12 @@ export function createIntervals({db, document, save, clock, encryptionKey, fetch
                 setItem: (key, value) => { staged = JSON.parse(value); },
             }, () => new Date(clock()).toISOString());
             await service.importActivities(raw);
+            const done = newest >= row(current.user_id).newest;
+            if(done) await service.advance();
             if(stopped || row(current.user_id)?.credential !== current.credential) return;
             db.exec('BEGIN IMMEDIATE');
             try {
                 save(current.user_id, 'coaching', staged, stored.revision);
-                const done = newest >= current.newest;
                 const previousSkipped = current.notice ? JSON.parse(current.notice) : [];
                 const allSkipped = [...previousSkipped, ...skipped];
                 db.prepare(`UPDATE integrations SET cursor=?, status=?, last_success=?,

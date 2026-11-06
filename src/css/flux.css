@@ -2972,9 +2972,25 @@ coaching-panel textarea {
     border-color: rgba(101, 228, 190, 0.18);
 }
 
+.training-calendar--entry.is-coaching {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.training-calendar--entry.is-coaching .training-calendar--entry-actions {
+    min-width: 0;
+}
+
 .training-calendar--copy {
     display: grid;
     gap: 0.4em;
+    min-width: 0;
+}
+
+.training-calendar--description {
+    overflow-wrap: anywhere;
+}
+
+.training-calendar--copy .power-profile {
     min-width: 0;
 }
 

@@ -189,8 +189,15 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await settle();
     expect(dispatch).toHaveBeenCalledWith('workout', expect.objectContaining({id: 'ride'}));
 
+    db.workout.intervals[0].steps[0].cadence = 88;
+    db.cadenceTarget = 88;
     await go('player');
     expect(root.querySelector('#ride-power').textContent).toBe('180');
+    expect(root.querySelector('#ride-target').textContent).toBe('200');
+    expect(root.querySelector('#ride-cadence-target').textContent).toBe('88');
+    expect(root.querySelector('#ride-profile svg')).not.toBeNull();
+    expect(root.querySelector('#ride-profile-cursor').style.left).toBe('0%');
+    expect(root.querySelector('#ride-profile').closest('details')).toBeNull();
     db.connectedDevices = {};
     db.sources = {power: 'ble:controllable'};
     xf.dispatch('db:power1s', db);
@@ -212,7 +219,15 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     db.lapTime = 30;
     xf.dispatch('db:elapsed', db);
     expect(root.querySelector('#ride-progress').value).toBe(.25);
+    expect(root.querySelector('#ride-profile-cursor').style.left).toBe('25%');
+    expect(root.querySelector('#ride-profile-completed').getAttribute('width')).toBe('250');
     expect(root.querySelector('#ride-toggle').textContent).toBe('Pause');
+    db.cadenceTarget = 95;
+    xf.dispatch('db:cadenceTarget', db);
+    expect(root.querySelector('#ride-cadence-target').textContent).toBe('95');
+    db.cadenceTarget = 0;
+    xf.dispatch('db:cadenceTarget', db);
+    expect(root.querySelector('#ride-cadence-target').textContent).toBe('88');
     root.querySelector('[data-action="ride-toggle"]').click();
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:watchPause');
@@ -226,8 +241,14 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(dispatch).toHaveBeenCalledWith('ui:watchLap');
     db.intervalIndex = 1;
     db.lapTime = 60;
+    db.cadenceTarget = 0;
     xf.dispatch('db:intervalIndex', db);
     expect(root.querySelector('#ride-progress').value).toBe(.5);
+    expect(root.querySelector('#ride-profile-cursor').style.left).toBe('50%');
+    expect(root.querySelector('#ride-profile-active').getAttribute('x')).toBe('500');
+    expect(root.querySelector('#ride-profile-active').getAttribute('width')).toBe('500');
+    expect(root.querySelector('#ride-cadence-target').textContent).toBe('Self-selected');
+    expect(root.querySelector('#ride-cadence-unit').textContent).toBe('');
     expect(root.querySelector('#ride-remaining').textContent).toBe('1:00 remaining');
     root.querySelector('[data-action="target-up"]').click();
     await settle();
@@ -261,6 +282,12 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:activity:retry-save');
     models.activity.pendingRecording = null;
+    db.workoutStatus = 'done';
+    xf.dispatch('db:workoutStatus', db);
+    expect(root.querySelector('#ride-profile-cursor').style.left).toBe('100%');
+    expect(root.querySelector('#ride-profile-cursor span').textContent).toBe('Done');
+    expect(root.querySelector('#ride-cadence-target').textContent).toBe('--');
+    expect(root.querySelector('#ride-target').textContent).toBe('--');
 
     await go('settings');
     await settle();
@@ -329,4 +356,38 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     xf.dispatch('coaching:changed');
     await settle();
     expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
+
+    jest.useFakeTimers();
+    try {
+        let syncing = true;
+        let failRefresh = true;
+        serverRequest.mockImplementation(path => {
+            if(path === 'coaching' && failRefresh) {
+                failRefresh = false;
+                return Promise.reject(new Error('Connection interrupted'));
+            }
+            return Promise.resolve(path === 'coaching'
+                ? {data: {activities: [], profile: null, plan: null}, revision: 3}
+                : {configured: true, connected: true, status: syncing ? 'queued' : 'connected'});
+        });
+        await go('settings');
+        expect(root.querySelector('[data-action="sync"]').disabled).toBe(true);
+        await go('coach');
+        syncing = false;
+        dispatch.mockClear();
+        await jest.advanceTimersByTimeAsync(2500);
+        expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
+        expect(root.querySelector('#platform-message').textContent).toBe('Connection interrupted');
+        await jest.advanceTimersByTimeAsync(2500);
+        expect(serverRequest).toHaveBeenCalledWith('coaching');
+        expect(dispatch).toHaveBeenCalledWith('coaching:changed');
+        expect(document.body.dataset.route).toBe('coach');
+        expect(root.querySelector('#platform-message').textContent).toContain('Coach and training plan are up to date');
+
+        serverRequest.mockResolvedValue({configured: true, connected: true,
+            status: 'error', error: 'Intervals.icu rejected the API key. Reconnect.'});
+        await go('settings');
+        expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
+        expect(root.querySelector('#platform-message').textContent).toContain('Reconnect');
+    } finally { jest.useRealTimers(); }
 });

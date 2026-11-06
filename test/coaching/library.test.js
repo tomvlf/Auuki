@@ -1,13 +1,29 @@
 import { sum } from '../../src/coaching/domain.js';
+import { workouts } from '../../src/workouts/workouts.js';
 import { generatePlan, validatePlan } from '../../src/coaching/planner.js';
 import { coachCatalogue, fitWorkout, prescribeWorkout, zwoSteps } from '../../src/coaching/library.js';
-import { FAMILIES, stepLoad, toAppWorkout } from '../../src/coaching/workouts.js';
+import { FAMILIES, stepLoad, toAppWorkout, exportZwo } from '../../src/coaching/workouts.js';
 import { profile, goal, start, timestamp, state } from './fixtures.js';
 
 const slot = (family, minutes, level = 1) => ({id: 'w', date: start, minutes, family, level,
     phaseId: 'p', weekId: 'wk', phaseType: 'build', profile});
 
 describe('coach workout library', () => {
+    test('preserves prescribed work and recovery cadence through fitting, playback and export', () => {
+        const source = `<workout_file><name>Cadence targets</name><category>Sweet Spot</category><workout>
+            <Warmup Duration="120" PowerLow="0.4" PowerHigh="0.6" Cadence="80"/>
+            <IntervalsT Repeat="2" OnDuration="60" OffDuration="60" OnPower="0.9" OffPower="0.5" Cadence="95" CadenceResting="75"/>
+            <Cooldown Duration="120" PowerLow="0.6" PowerHigh="0.4" Cadence="80"/>
+            </workout></workout_file>`;
+        const catalogue = coachCatalogue([source]);
+        expect(catalogue[0].steps.map(step => step.cadence)).toEqual([80, 95, 75, 95, 75, 80]);
+        const workout = prescribeWorkout(slot('threshold', 30), {catalogue});
+        expect(workout.steps.filter(step => step.role === 'effort').map(step => step.cadence)).toEqual([95, 95]);
+        expect(toAppWorkout(workout).intervals.flatMap(interval => interval.steps)
+            .filter(step => step.role === 'interval-recovery').map(step => step.cadence)).toEqual([75, 75]);
+        expect(exportZwo(workout)).toContain('Cadence="95"');
+        expect(zwoSteps(source.replace('Cadence="95"', 'Cadence="invalid"'))).toBeNull();
+    });
     test('parses ZWO elements into constant-power steps and rejects unusable workouts', () => {
         const zwo = body => `<workout_file><workout>${body}</workout></workout_file>`;
         expect(zwoSteps(zwo('<Warmup Duration="240" PowerLow="0.4" PowerHigh="0.6"/><IntervalsT Repeat="2" OnDuration="60" OffDuration="30" OnPower="1.1" OffPower="0.5"/>')))
@@ -24,6 +40,42 @@ describe('coach workout library', () => {
         for(const entry of catalogue.filter(e => e.families.includes('endurance'))) {
             expect(Math.max(...entry.steps.map(s => s.power))).toBeLessThanOrEqual(0.8);
         }
+    });
+    test('new researched templates are coach-eligible with exact long-ride durations and safe fits', () => {
+        const catalogue = coachCatalogue();
+        const expected = new Map([
+            ['Endurance 2h Steady', 120],
+            ['Endurance 2h45 Progressive', 165],
+            ['Endurance 3h15 Steady', 195],
+            ['Tempo 2x20', 70],
+            ['Sweet Spot 4x8', 68],
+            ['Threshold 3x8', 56],
+            ['VO2 4x4', 52],
+        ]);
+        for(const [name, minutes] of expected) {
+            const entry = catalogue.find(candidate => candidate.name === name);
+            expect(entry).toBeDefined();
+            expect(sum(entry.steps.map(step => step.duration))).toBe(minutes * 60);
+            expect(entry.families.length).toBeGreaterThan(0);
+            const family = name.startsWith('VO2') ? 'aerobic'
+                : name.startsWith('Threshold') || name.startsWith('Sweet Spot') ? 'threshold' : 'endurance';
+            const slotMinutes = name.startsWith('Threshold') ? 90 : minutes;
+            const fit = fitWorkout(entry, {seconds: slotMinutes * 60, family, level: 1});
+            expect(fit).not.toBeNull();
+            expect(sum(fit.steps.map(step => step.duration))).toBe(slotMinutes * 60);
+            expect(fit.steps.every(step => step.power <= 1.5 && step.duration > 0)).toBe(true);
+            if(name.startsWith('Threshold')) {
+                expect(fit.steps.filter(step => step.role === 'effort')).toHaveLength(2);
+            }
+        }
+        const vo2 = catalogue.find(entry => entry.name === 'VO2 4x4');
+        const fittedVo2 = fitWorkout(vo2, {seconds: 45 * 60, family: 'aerobic', level: 1});
+        expect(fittedVo2.steps.filter(step => step.role === 'effort')).toHaveLength(2);
+        expect(sum(fittedVo2.steps.filter(step => step.power > 0.9).map(step => step.duration)))
+            .toBeLessThanOrEqual(45 * 60 * 0.18);
+        expect(catalogue.find(entry => entry.id === 'builtin-0').name).toBe('Dijon');
+        expect(workouts.slice(-expected.size).map(source =>
+            source.match(/<name>([^<]+)<\/name>/)?.[1])).toEqual([...expected.keys()]);
     });
     test('fitting removes whole repetitions and preserves template-protected warm-up, recovery and cool-down', () => {
         const template = `<workout_file><name>Protected intervals</name><category>Threshold</category>

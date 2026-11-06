@@ -61,6 +61,18 @@ For an imported Intervals.icu activity, choose **Route & data** in Activity hist
 
 ### 4. Sync worker
 
+Every signed-in application launch queues a sync for a connected Intervals.icu account.
+New activities are fetched and the last seven days since the previous successful sync are
+rechecked for corrections. An already queued or running import is reused, not duplicated.
+Guest sessions and accounts without an Intervals.icu connection do not start an import.
+
+The Coach imports new rides and recalculates its state and upcoming sessions when existing
+cycling data changes, while preserving rider feedback and resolved workout outcomes.
+Only after the final import batch does it review overdue sessions, so rides completed while
+the app was closed can be matched before sessions are marked missed. The open app refreshes
+its coaching data when synchronization finishes, including on the Coach and training plan
+screens. Sync failures are shown explicitly; existing history is retained.
+
 The `tick()` function is the background importer. It runs when the server decides there is a queued job.
 
 The worker:

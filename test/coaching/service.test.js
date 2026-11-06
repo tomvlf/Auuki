@@ -126,6 +126,41 @@ describe('persistent coaching loop', () => {
         await service.importActivities([raw, raw]);
         expect(service.data.plan.revision).toBe(2);
     });
+    test('provider corrections refresh coaching state without resolving a completed workout again', async () => {
+        const {service, storage, clock, setDate} = await setup();
+        const workout = service.data.plan.workouts[0];
+        setDate(addDays(workout.date, 1));
+        const raw = {id: 'intervals:corrected', externalId: 'corrected', source: 'intervals',
+            start: `${workout.date}T10:00:00Z`, duration: workout.duration,
+            normalizedPower: workout.targetIntensity * profile.ftp, ftp: profile.ftp,
+            syncedAt: clock()};
+        await service.importActivities([raw]);
+        const completed = JSON.parse(JSON.stringify(service.data.plan.workouts.find(w => w.id === workout.id)));
+        expect(completed.status).toBe('completed');
+        await service.updateFeedback(raw.id, {rpe: 5, sleepQuality: 3});
+        const revision = service.data.plan.revision;
+        const previousLoad = service.data.snapshots.at(-1).acuteLoad;
+        await service.importActivities([{...raw, normalizedPower: 300, syncedAt: `${workout.date}T15:00:00Z`}]);
+        expect(service.data.plan.revision).toBe(revision + 1);
+        expect(service.data.snapshots.at(-1).acuteLoad).not.toEqual(previousLoad);
+        expect(service.data.plan.workouts.find(w => w.id === workout.id)).toEqual(completed);
+        expect(service.data.activities.find(a => a.id === raw.id)).toMatchObject({rpe: 5, feedback: {sleepQuality: 3}});
+        const updatedRevision = service.data.plan.revision;
+        await service.importActivities([{...raw, normalizedPower: 300, syncedAt: `${workout.date}T16:00:00Z`}]);
+        expect(service.data.plan.revision).toBe(updatedRevision);
+        expect(new CoachingService(storage, clock).data).toEqual(service.data);
+    });
+    test('returning after the plan ends still matches imported rides before finishing the plan', async () => {
+        const {service, setDate} = await setup();
+        const workout = service.data.plan.workouts[0];
+        setDate(addDays(service.data.plan.endDate, 1));
+        await service.importActivities([{id: 'offline', start: `${workout.date}T10:00:00Z`,
+            duration: workout.duration, normalizedPower: workout.targetIntensity * profile.ftp}]);
+        expect(service.data.plan.workouts.find(w => w.id === workout.id).status).toBe('completed');
+        await service.advance();
+        expect(service.data.plan.status).toBe('finished');
+        expect(service.data.plan.workouts.find(w => w.id === workout.id).status).toBe('completed');
+    });
     test('feedback on an old history ride does not consume the current load budget', async () => {
         const {service} = await setup();
         const before = service.data.plan.workouts.map(w => ({id: w.id, duration: w.duration, steps: w.steps}));

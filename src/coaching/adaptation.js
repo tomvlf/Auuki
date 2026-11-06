@@ -264,7 +264,7 @@ export function adaptPlan({plan, profile, state, trigger, date, timestamp, worko
         // Shortened templates often carry less load than a proportional cut; use the week's remaining
         // budget so one reduction does not compound through every later ramp check.
         let best = {scale: weekScale, ...fill(weekScale)};
-        for(let scale = weekScale * 1.04; weekScale < 1 && best.load < loadCap * 0.98 && scale < 1.25; scale *= 1.04) {
+        for(let scale = weekScale * 1.04; weekScale < 1 && best.load < loadCap * 0.98 && scale > 0 && scale < 1.25; scale *= 1.04) {
             const result = fill(Math.min(1, scale));
             if(result.downgraded <= best.downgraded && result.load > best.load + 0.01) best = {scale: Math.min(1, scale), ...result};
             if(scale >= 1) break;

@@ -38,6 +38,7 @@ test('switching to server coaching does not upload or replace local history', as
     expect(fetch).not.toHaveBeenCalled();
     const remoteData = {profile: null, plan: null, activities: []};
     fetch.mockResolvedValueOnce(response({email: 'server@example.com'}))
+        .mockResolvedValueOnce(response({connected: false, status: 'disconnected'}))
         .mockResolvedValueOnce(response({data: remoteData, revision: 0}))
         .mockResolvedValueOnce(response({data: remoteData, revision: 0, result: null}));
     const remote = await service.useServerCoaching();
@@ -45,7 +46,7 @@ test('switching to server coaching does not upload or replace local history', as
     expect(service.coachingData().profile).toBeNull();
     expect(local.data.profile).toEqual(profile);
     expect(window.localStorage.getItem('athlima-server-mode')).toBe('1');
-    expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual({method: 'advance', args: [], revision: 0});
+    expect(JSON.parse(fetch.mock.calls[3][1].body)).toEqual({method: 'advance', args: [], revision: 0});
     expect(await service.useLocalCoaching()).toBe(local);
     expect(service.coachingData().profile).toEqual(profile);
     expect(window.localStorage.getItem('athlima-server-mode')).toBeNull();
@@ -68,6 +69,7 @@ test('a delayed server startup cannot override an explicit local-only switch', a
     window.localStorage.setItem('athlima-server-mode', '1');
     let finish;
     fetch.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }))
+        .mockResolvedValueOnce(response({connected: false, status: 'disconnected'}))
         .mockResolvedValueOnce(response({data: {profile: {id: 'server'}}, revision: 1}));
     const service = require('../../src/coaching/service.js');
     const pending = service.initializeCoaching();
@@ -78,4 +80,16 @@ test('a delayed server startup cannot override an explicit local-only switch', a
     expect(service.coachingData().profile).toBeNull();
     expect(window.localStorage.getItem('athlima-server-mode')).toBeNull();
     expect(require('../../src/server/client.js').serverAccount.email).toBeNull();
+});
+
+test('server startup waits for queued history before reviewing missed sessions', async () => {
+    const service = require('../../src/coaching/service.js');
+    fetch.mockResolvedValueOnce(response({email: 'server@example.com'}))
+        .mockResolvedValueOnce(response({connected: true, status: 'running'}))
+        .mockResolvedValueOnce(response({connected: true, status: 'running'}))
+        .mockResolvedValueOnce(response({data: {profile, plan: {status: 'active'}, activities: []}, revision: 1}));
+    const remote = await service.useServerCoaching();
+    expect(remote.syncPending).toBe(true);
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/coaching'))).toHaveLength(1);
+    expect(fetch.mock.calls.at(-1)[1].method).toBe('GET');
 });
