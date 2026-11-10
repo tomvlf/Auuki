@@ -1,4 +1,3 @@
-<img alt="Athlima smart trainer app" src="https://github.com/user-attachments/assets/292a3216-2f52-4994-9b15-614446e41912" />
 
 # Athlima
 
