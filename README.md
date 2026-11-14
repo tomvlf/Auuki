@@ -25,7 +25,10 @@ The app supports local backups and optional direct Intervals.icu history import 
 ## Ride screen
 
 The application's default cyberpunk theme uses a locally bundled city backdrop,
-dark panels and restrained cyan/magenta accents. The ride screen removes
+angular dark panels, signal-yellow controls and cyan/magenta accents. Industrial
+headings and a more visible original skyline evoke a dystopian city interface,
+without animation, flashing, external assets or changes to training-zone colors.
+The ride screen retains its calmer mint controls and removes
 decorative imagery and header accents to keep metrics and controls
 distraction-free. The theme is included in production builds and Docker images,
 with no external image or font requests. Styling lives in `src/css/cyberpunk.css`;

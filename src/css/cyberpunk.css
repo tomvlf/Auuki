@@ -1,16 +1,18 @@
 :root {
-    --platform-bg: #080c16;
-    --platform-panel: #121a2b;
-    --platform-surface: #101827;
-    --platform-border: #304052;
+    --platform-bg: #080b10;
+    --platform-panel: #121b24;
+    --platform-surface: #101820;
+    --platform-border: #3c5260;
     --platform-text: #edf4fb;
     --platform-muted: #b1bfd0;
-    --platform-accent: #70eadc;
+    --platform-accent: #f2ed55;
+    --cyber-cyan: #78f5ec;
+    --cyber-magenta: #ff86ba;
 }
 
 body.platform-app {
     background-color: var(--platform-bg);
-    background-image: linear-gradient(110deg, rgba(8, 12, 22, .92), rgba(8, 12, 22, .62)),
+    background-image: linear-gradient(110deg, rgba(8, 11, 16, .93), rgba(8, 11, 16, .42)),
         url('../images/cyberpunk-city.webp');
     background-position: center;
     background-size: cover;
@@ -18,22 +20,23 @@ body.platform-app {
 }
 
 .platform-app .sidebar {
-    background: linear-gradient(180deg, #11192a, #0c1422);
-    border-color: #304052;
+    background: linear-gradient(180deg, #151b24, #080e16);
+    border-color: #48606b;
     box-shadow: 8px 0 30px rgba(0, 0, 0, .15);
 }
 
 #platform .brand {
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     font-size: 28px;
+    color: var(--platform-accent);
     letter-spacing: -.05em;
-    text-shadow: 2px 0 rgba(243, 116, 196, .25), -2px 0 rgba(112, 234, 220, .2);
+    text-shadow: 2px 1px rgba(255, 134, 186, .4), -1px 0 rgba(120, 245, 236, .35);
 }
 
 #platform .brand span { font-family: system-ui, sans-serif; white-space: nowrap; text-shadow: none; }
-#platform .sidebar nav a { border-radius: 5px; }
+#platform .sidebar nav a { border-radius: 0; }
 #platform .sidebar nav a[aria-current="page"] {
-    background: #15313b;
+    background: #2c2e20;
     box-shadow: inset 3px 0 var(--platform-accent);
 }
 
@@ -42,39 +45,53 @@ body.platform-app {
     content: '';
     position: absolute;
     inset: auto 0 -14px;
-    height: 1px;
-    background: linear-gradient(90deg, #70eadc, #ce76b3 55%, transparent 90%);
+    height: 2px;
+    background: linear-gradient(90deg, #f2ed55 0 18%, #78f5ec 18% 65%, #ff86ba 65% 76%, transparent 76%);
     pointer-events: none;
 }
 
 .platform-app .panel, .platform-app .workout-card {
-    border-radius: 10px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+    border-radius: 0 16px 0 0;
+    border-top-color: #54727d;
+    box-shadow: inset 2px 0 #253e48, 0 12px 28px rgba(0, 0, 0, .18);
 }
 
 .platform-app .hero {
-    background: linear-gradient(105deg, #142331 20%, rgba(20, 35, 49, .94) 65%, rgba(20, 35, 49, .5)),
+    background: linear-gradient(105deg, #13212b 20%, rgba(19, 33, 43, .94) 60%, rgba(19, 33, 43, .3)),
         url('../images/cyberpunk-city.webp') center 55% / cover;
-    border-color: #3d666c;
+    border-color: #818348;
+    box-shadow: inset 3px 0 var(--platform-accent), 0 12px 28px rgba(0, 0, 0, .18);
 }
 
-#platform button, #platform .button { border-radius: 5px; }
+#platform h1 { font-weight: 800; letter-spacing: -.035em; text-transform: uppercase; }
+#platform .eyebrow, #platform .sidebar-bottom, #platform .app-versions {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+#platform .eyebrow { color: var(--cyber-cyan); letter-spacing: .16em; }
+#platform .hero > .eyebrow { color: var(--platform-accent); }
+#platform .stat strong { color: var(--cyber-cyan); }
+#platform .brand span { color: var(--platform-muted); }
+#platform button, #platform .button { border-radius: 0 10px 0 0; }
 #platform button:not(.secondary):not(.danger), #platform .button:not(.secondary) {
     color: #09111b;
-    box-shadow: inset 0 1px rgba(255, 255, 255, .2);
+    border-color: #f2ed55;
+    box-shadow: inset 0 -3px rgba(0, 0, 0, .15);
 }
 #platform button.secondary, #platform .button.secondary {
-    background: #1b293b;
-    border-color: #45576e;
+    background: #142731;
+    border-color: #426a75;
 }
 #platform input, #platform textarea, #platform select {
-    border-radius: 5px;
-    background: #0c1422;
-    border-color: #56677e;
+    border-radius: 0 6px 0 0;
+    background: #0b141c;
+    border-color: #5b7583;
 }
 #platform input:disabled { color: var(--platform-muted); }
 #platform :focus-visible { outline-color: #a8fff2; }
 #platform .library-import:focus-within { outline-color: #a8fff2; }
+#platform-message:not(:empty) { border-radius: 0 10px 0 0; border-left: 3px solid var(--cyber-cyan); }
+#platform-message.error { border-left-color: #ffadb7; }
+#legacy-slot .coach-card { border-radius: 0 16px 0 0; }
 
 body.platform-app[data-route="player"] {
     background-image: none;
@@ -82,11 +99,14 @@ body.platform-app[data-route="player"] {
 body.platform-app[data-route="player"] .platform-header::after { display: none; }
 .platform-app .ride-panel { box-shadow: none; }
 .platform-app .ride-metric strong { text-shadow: none; }
+body.platform-app[data-route="player"] { --platform-accent: #70eadc; }
+body.platform-app[data-route="player"] h1 { text-transform: none; font-weight: 700; }
+body.platform-app[data-route="player"] button:not(.secondary):not(.danger) { border-color: transparent; }
 
 @media (max-width: 700px) {
     body.platform-app { background-attachment: scroll; }
     .platform-app .sidebar { box-shadow: none; }
-    .platform-app .hero { background: #142331; }
+    .platform-app .hero { background: #13212b; }
     .platform-app .platform-header::after { opacity: .5; }
 }
 
@@ -94,4 +114,6 @@ body.platform-app[data-route="player"] .platform-header::after { display: none; 
     body.platform-app, .platform-app .hero, .platform-app .sidebar { background-image: none; }
     .platform-app .platform-header::after { display: none; }
     #platform .brand { text-shadow: none; }
+    .platform-app .panel, .platform-app .workout-card, .platform-app .hero { box-shadow: none; }
+    #platform .sidebar nav a[aria-current="page"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
