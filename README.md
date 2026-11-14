@@ -26,13 +26,20 @@ The app supports local backups and optional direct Intervals.icu history import 
 
 The application's default cyberpunk theme uses a locally bundled city backdrop,
 angular dark panels, signal-yellow controls and cyan/magenta accents. Industrial
-headings and a more visible original skyline evoke a dystopian city interface,
+headings and a road leading toward a distant night skyline evoke a dystopian city interface,
 without animation, flashing, external assets or changes to training-zone colors.
 The ride screen retains its calmer mint controls and removes
 decorative imagery and header accents to keep metrics and controls
 distraction-free. The theme is included in production builds and Docker images,
-with no external image or font requests. Styling lives in `src/css/cyberpunk.css`;
-the original city artwork is retained in `src/images/cyberpunk-city.svg`.
+with no external image or font requests. Styling lives in `src/css/cyberpunk.css`.
+The locally bundled backdrop uses a 1920-pixel WebP for smaller displays and a
+3840-pixel version for large or high-density desktop displays.
+
+Backdrop photograph: [Krzysztof Kotkowicz, city skyline at night with a freeway in the foreground](https://unsplash.com/photos/a-city-skyline-at-night-with-a-freeway-in-the-foreground-VPnxo1uloJE),
+used under the [Unsplash License](https://unsplash.com/license), brightness- and
+color-adjusted. Both the road and buildings are photographic, not illustrated.
+A stronger overlay over the skyline keeps the city secondary to the road and
+the interface. All image assets are served locally.
 
 Both `/` and `/mobile` automatically use the mobile layout at widths of 700px
 or less and the desktop layout above that. Resizing or rotating switches layouts

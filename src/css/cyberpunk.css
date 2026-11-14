@@ -8,12 +8,13 @@
     --platform-accent: #f2ed55;
     --cyber-cyan: #78f5ec;
     --cyber-magenta: #ff86ba;
+    --city-backdrop: url('/src/images/city-road-1920.webp');
 }
 
 body.platform-app {
     background-color: var(--platform-bg);
-    background-image: linear-gradient(110deg, rgba(8, 11, 16, .93), rgba(8, 11, 16, .42)),
-        url('../images/cyberpunk-city.webp');
+    background-image: linear-gradient(180deg, rgba(8, 11, 16, .82), rgba(8, 11, 16, .68) 48%, rgba(8, 11, 16, .38)),
+        var(--city-backdrop);
     background-position: center;
     background-size: cover;
     background-attachment: fixed;
@@ -57,8 +58,8 @@ body.platform-app {
 }
 
 .platform-app .hero {
-    background: linear-gradient(105deg, #13212b 20%, rgba(19, 33, 43, .94) 60%, rgba(19, 33, 43, .3)),
-        url('../images/cyberpunk-city.webp') center 55% / cover;
+    background: linear-gradient(105deg, #13212b 20%, rgba(19, 33, 43, .96) 60%, rgba(19, 33, 43, .78)),
+        var(--city-backdrop) center 70% / cover;
     border-color: #818348;
     box-shadow: inset 3px 0 var(--platform-accent), 0 12px 28px rgba(0, 0, 0, .18);
 }
@@ -102,6 +103,10 @@ body.platform-app[data-route="player"] .platform-header::after { display: none; 
 body.platform-app[data-route="player"] { --platform-accent: #70eadc; }
 body.platform-app[data-route="player"] h1 { text-transform: none; font-weight: 700; }
 body.platform-app[data-route="player"] button:not(.secondary):not(.danger) { border-color: transparent; }
+
+@media (min-width: 701px) and (min-resolution: 1.5dppx), (min-width: 1921px) {
+    :root { --city-backdrop: url('/src/images/city-road-3840.webp'); }
+}
 
 @media (max-width: 700px) {
     body.platform-app { background-attachment: scroll; }
