@@ -6,13 +6,14 @@ import { intervalsActivity, compactProfile } from './intervals-data.js';
 
 const API = 'https://intervals.icu/api/v1';
 const KEY = 'athlima-intervals-v1';
+const validAthleteId = id => /^(?:i)?\d{1,20}$/.test(String(id));
 let syncing = false;
 
 function saved() {
     const value = window.localStorage.getItem(KEY);
     if(!value) return null;
     const result = JSON.parse(value);
-    if(typeof result.apiKey !== 'string' || !result.apiKey || !/^\d+$/.test(result.athleteId)) {
+    if(typeof result.apiKey !== 'string' || !result.apiKey || !validAthleteId(result.athleteId)) {
         throw new Error('Stored Intervals.icu connection is invalid. Disconnect and reconnect in Settings.');
     }
     date(result.oldest);
@@ -76,7 +77,7 @@ async function connect({apiKey, oldest} = {}) {
     const connection = {apiKey: apiKey.trim(), athleteId: '0', oldest};
     const athlete = await request('/athlete/0', {connection});
     const id = athlete?.id ?? athlete?.athlete?.id ?? athlete?.user_id ?? athlete?.athleteId;
-    if(!/^\d+$/.test(String(id))) throw new Error('Intervals.icu returned an unexpected athlete profile.');
+    if(!validAthleteId(id)) throw new Error('Intervals.icu returned an unexpected athlete profile.');
     if(window.localStorage.getItem(KEY) !== previous) throw new Error('The Intervals.icu connection changed in another tab. Retry.');
     connection.athleteId = String(id);
     window.localStorage.setItem(KEY, JSON.stringify(connection));

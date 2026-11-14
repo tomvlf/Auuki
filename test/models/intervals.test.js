@@ -40,6 +40,26 @@ test('planned workouts use the resolved athlete and keep errors explicit', async
     await expect(intervals.wod()).rejects.toThrow('rejected the API key');
 });
 
+test('connection accepts prefixed athlete IDs and preserves them in subsequent requests', async () => {
+    fetch.mockResolvedValueOnce(response({id: 'i1234567'}))
+        .mockResolvedValueOnce(response({id: 'i1234567', weight: 75}));
+    expect(await intervals.connect({apiKey: 'test-key', oldest: '2026-01-01'}))
+        .toEqual(expect.objectContaining({connected: true, athleteId: 'i1234567'}));
+    expect(stored().athleteId).toBe('i1234567');
+    expect(await intervals.athlete()).toEqual({id: 'i1234567', weight: 75});
+    expect(new URL(fetch.mock.calls[1][0]).pathname).toBe('/api/v1/athlete/i1234567');
+});
+
+test.each([undefined, null, '', '../123', '123?other=1', 'invalid', {}])(
+    'connection rejects malformed athlete ID %p without saving credentials',
+    async id => {
+        fetch.mockResolvedValueOnce(response({id}));
+        await expect(intervals.connect({apiKey: 'test-key', oldest: '2026-01-01'}))
+            .rejects.toThrow('unexpected athlete profile');
+        expect(localStorage.getItem(KEY)).toBeNull();
+    },
+);
+
 test('profile import and FIT upload work directly without an app account', async () => {
     seed();
     fetch.mockResolvedValueOnce(response({weight: 75, sportSettings: [{types: ['VirtualRide'], indoor_ftp: 250}]}))
