@@ -16,7 +16,7 @@
  * the tests and the surrounding callers in the same review.
  */
 
-import { syncRecordedRides } from '../../src/server/ride-sync.js';
+import { syncRecordedRides } from '../../src/storage/ride-sync.js';
 import { idb } from '../../src/storage/idb.js';
 
 jest.mock('../../src/storage/idb.js', () => ({idb: {getAll: jest.fn(), putChecked: jest.fn()}}));

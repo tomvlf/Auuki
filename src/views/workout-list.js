@@ -17,6 +17,7 @@
  */
 
 import { xf, exists, empty, equals, debounce } from '../functions.js';
+import { escapeHTML } from '../utils.js';
 import { models } from '../models/models.js';
 import { intervalsToGraph, courseToGraph, renderInfo } from './workout-graph.js';
 
@@ -43,21 +44,21 @@ function workoutTemplate(workout) {
     if(workout.meta.distance) {
         duration = `${(workout.meta.distance / 1000).toFixed(2)} km`;
     }
-    return `<workout-item class='workout cf' id="${workout.id}" metric="ftp">
+    return `<workout-item class='workout cf' id="${escapeHTML(workout.id)}" metric="ftp">
                 <div class="workout--info">
                     <div class="workout--short-info">
                         <div class="workout--summary">
-                            <div class="workout--name">${workout.meta.name}</div>
-                            <div class="workout--type">${workout.meta.category}</div>
+                            <div class="workout--name">${escapeHTML(workout.meta.name)}</div>
+                            <div class="workout--type">${escapeHTML(workout.meta.category)}</div>
                             <div class="workout--duration">${duration}</div>
-                            <div class="workout--select" id="btn${workout.id}">${workout.selected ? radioOn : radioOff}
+                            <div class="workout--select" id="btn${escapeHTML(workout.id)}">${workout.selected ? radioOn : radioOff}
                             </div>
                             <div class="workout--options">${options}</div>
                         </div>
                     </div>
                     <div class="workout--full-info">
                         <div class="workout-list--graph-cont">${workout.graph}</div>
-                        <div class="workout--description">${workout.meta.description}</div>
+                        <div class="workout--description">${escapeHTML(workout.meta.description)}</div>
                     </div>
                 </div>
                 <div class="workout--actions">

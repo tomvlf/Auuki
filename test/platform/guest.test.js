@@ -18,7 +18,6 @@
 
 /** @jest-environment jsdom */
 import { launchPlatform } from '../../src/platform/ui.js';
-import { serverRequest } from '../../src/server/client.js';
 import { coachingService } from '../../src/coaching/service.js';
 import { xf } from '../../src/functions.js';
 
@@ -34,7 +33,6 @@ jest.mock('../../src/db.js', () => ({db: {
     workout: {meta: {name: 'Free ride'}, intervals: []},
     workouts: [{id: 'local', meta: {name: 'Local workout', duration: 600}, intervals: []}],
 }}));
-jest.mock('../../src/server/client.js', () => ({serverAccount: {}, serverRequest: jest.fn()}));
 jest.mock('../../src/coaching/service.js', () => ({
     coachingData: () => ({activities: [], profile: null, plan: null}),
     coachingService: jest.fn(() => ({advance: jest.fn().mockResolvedValue()})),
@@ -55,7 +53,7 @@ const go = async route => {
 test('mobile guests can ride and use local features without a backend version display', async () => {
     window.innerWidth = 390;
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    serverRequest.mockRejectedValue(new Error('Offline'));
+    global.fetch = jest.fn(() => Promise.reject(new Error('Offline')));
     window.history.replaceState({}, '', '/mobile');
     document.body.innerHTML = '<div id="platform"></div><div class="wrapper" hidden><training-calendar></training-calendar></div>';
     const calendar = document.querySelector('training-calendar');
@@ -66,8 +64,8 @@ test('mobile guests can ride and use local features without a backend version di
     await launchPlatform(root, null);
     await settle();
     expect(root.querySelector('.app-versions')).toBeNull();
-    expect(root.textContent).toContain('Guest / on-device only');
-    expect(root.querySelector('[data-action="signin"]')).not.toBeNull();
+    expect(root.textContent).toContain('On-device only');
+    expect(root.querySelector('[data-action="signin"]')).toBeNull();
     expect(root.querySelector('#platform-content a[href="#/library"]')).not.toBeNull();
     await go('library');
     expect(root.textContent).toContain('Local workout');
@@ -88,11 +86,10 @@ test('mobile guests can ride and use local features without a backend version di
     expect(root.textContent).toContain('BLE / ANT+');
     await go('settings');
     expect(root.textContent).toContain('stored only on this device');
-    expect(root.textContent).toContain('Guest data is kept separately');
     expect(root.querySelector('#profile-form')).not.toBeNull();
-    expect(root.querySelector('[data-mobile-details="Optional server account"]').open).toBe(false);
-    expect(root.querySelector('#intervals-connect')).toBeNull();
-    expect(root.querySelector('[data-action="backup"]')).toBeNull();
+    expect(root.querySelector('[data-mobile-details="Local backup"]').open).toBe(false);
+    expect(root.querySelector('#intervals-connect')).not.toBeNull();
+    expect(root.querySelector('[data-action="backup"]')).not.toBeNull();
     expect(root.querySelector('#delete-account')).toBeNull();
     await go('player');
     root.querySelector('[data-action="ride-toggle"]').click();
@@ -110,6 +107,6 @@ test('mobile guests can ride and use local features without a backend version di
     window.dispatchEvent(new Event('focus'));
     await settle();
     expect(coachingService).toHaveBeenCalled();
-    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
     warning.mockRestore();
 });

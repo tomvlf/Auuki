@@ -20,7 +20,10 @@
 
 import { indexedDB } from 'fake-indexeddb';
 import { Blob as NodeBlob } from 'node:buffer';
-import { createBackup, restoreBackup } from '../../src/server/backup.js';
+import { createBackup, restoreBackup } from '../../src/storage/backup.js';
+import { openCoachingStorage } from '../../src/coaching/storage.js';
+import { CoachingService } from '../../src/coaching/service.js';
+import { profile, goal } from '../coaching/fixtures.js';
 
 const workout = {id: 'custom-workout', meta: {name: 'My workout'}, intervals: []};
 const calendar = [{id: 'entry', date: '2026-01-01', workoutId: workout.id, name: 'My workout'}];
@@ -59,6 +62,9 @@ afterAll(() => {
 });
 beforeEach(async () => {
     localStorage.clear();
+    const storage = await openCoachingStorage(indexedDB);
+    await storage.setItem('athlima-coaching-v1', null);
+    storage.close();
     await transaction(tx => {
         tx.objectStore('workouts').clear();
         tx.objectStore('activity').clear();
@@ -98,7 +104,7 @@ test('backups round-trip workouts, raw settings, calendar and exact FIT bytes wi
 test('invalid backups fail before changing stored data', async () => {
     await transaction(tx => tx.objectStore('workouts').put(workout));
     const backup = await createBackup();
-    await expect(restoreBackup({...backup, settings: {arbitrary: 'value'}})).rejects.toThrow('Invalid server backup');
+    await expect(restoreBackup({...backup, settings: {arbitrary: 'value'}})).rejects.toThrow('Invalid local backup');
     await expect(restoreBackup({...backup, activities: [{id: 'broken', blob: '!'}]})).rejects.toThrow('Invalid activity');
     expect((await createBackup()).workouts).toEqual([workout]);
 });
@@ -116,4 +122,22 @@ test('a failed restore transaction does not partially merge workouts', async () 
     backup.workouts = [workout, {...workout, id: {invalid: 'indexedDB key'}}];
     await expect(restoreBackup(backup)).rejects.toThrow();
     expect((await createBackup()).workouts).toEqual([]);
+});
+
+test('local backup restores coaching plans and history without including the Intervals API key', async () => {
+    const storage = await openCoachingStorage(indexedDB);
+    const coach = new CoachingService(storage);
+    await coach.configure(profile, goal);
+    await coach.generate('2026-01-01');
+    localStorage.setItem('athlima-intervals-v1', JSON.stringify({apiKey: 'private-key'}));
+    const backup = await createBackup();
+    expect(backup.version).toBe(2);
+    expect(backup.coaching.plan).not.toBeNull();
+    expect(JSON.stringify(backup)).not.toContain('private-key');
+    await storage.setItem('athlima-coaching-v1', null);
+    storage.close();
+    await restoreBackup(backup);
+    expect((await createBackup()).coaching).toEqual(backup.coaching);
+    await expect(restoreBackup({...backup, coaching: {version: -1}})).rejects.toThrow('corrupt coaching storage');
+    expect((await createBackup()).coaching).toEqual(backup.coaching);
 });

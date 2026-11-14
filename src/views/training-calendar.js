@@ -21,8 +21,8 @@ import { toAppWorkout, exportZwo } from '../coaching/workouts.js';
 import { localDay } from '../coaching/domain.js';
 import { estimateState } from '../coaching/state.js';
 import { fileHandler } from '../file.js';
-import { accountStorage, accountKey, hasAccountScope } from '../storage/account.js';
-import { serverRequest } from '../server/client.js';
+import { accountStorage, accountKey } from '../storage/account.js';
+import intervals from '../models/intervals.js';
 import { renderPowerProfile } from './power-profile.js';
 import { activityIcon, activityTypeLabel } from './activity-icon.js';
 import { renderActivityDetails } from './activity-details.js';
@@ -149,6 +149,11 @@ class TrainingCalendar extends HTMLElement {
             this.intervalsConnected = Boolean(
                 services?.services?.intervals ?? services?.intervals,
             );
+            if(!this.intervalsConnected) {
+                this.plannedByRange.clear();
+                this.plannedWorkouts = [];
+                this.render();
+            }
             if(this.intervalsConnected && !wasConnected && !this.checkingServices) {
                 this.loadPlannedMonth();
             }
@@ -248,9 +253,7 @@ class TrainingCalendar extends HTMLElement {
             if(this.intervalsConnected === null) {
                 this.checkingServices = true;
                 try {
-                    const status = hasAccountScope()
-                        ? {intervals: (await serverRequest('integrations/intervals')).connected}
-                        : {intervals: false};
+                    const status = {intervals: intervals.status().connected};
                     this.intervalsConnected = Boolean(
                         status?.services?.intervals ?? status?.intervals,
                     );

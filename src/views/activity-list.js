@@ -17,6 +17,7 @@
  */
 
 import { xf, formatDate, } from '../functions.js';
+import { escapeHTML } from '../utils.js';
 import { models } from '../models/models.js';
 import { formatTime, } from '../utils.js';
 import { coachingData } from '../coaching/service.js';
@@ -202,18 +203,18 @@ class ActivityList extends HTMLElement {
         });
 
         return `
-            <activity-item id="i${i}--activity--item" class="some" data-id="${this.id(data)}">
+            <activity-item id="i${i}--activity--item" class="some" data-id="${escapeHTML(this.id(data))}">
                     <div class="activity--cont list--row--outer">
                         <div class="list--row--inner activity--info">
                             <div class="activity--info--short">
                                 <view-action
                                     class="info"
                                     action=":toggleExpand"
-                                    topic=":activity:${this.id(data)}">
+                                    topic=":activity:${escapeHTML(this.id(data))}">
                                     <div class="activity--summary-row">
                                         <div>
                                             <div id="i${i}--activity--date" class="activity--name">
-                                                ${this.name(data)}
+                                                ${escapeHTML(this.name(data))}
                                             </div>
                                             <div class="activity--date">
                                                 ${this.date(data)}
@@ -224,14 +225,14 @@ class ActivityList extends HTMLElement {
                                         </div>
                                     </div>
                                     <div class="activity--stats">
-                                        ${metrics.map((metric) => `<span>${metric}</span>`).join('')}
+                                        ${metrics.map((metric) => `<span>${escapeHTML(metric)}</span>`).join('')}
                                     </div>
                                     ${profile}
                                 </view-action>
                                 <view-action
                                     class=""
                                     action=":options"
-                                    topic=":activity:${this.id(data)}">
+                                    topic=":activity:${escapeHTML(this.id(data))}">
                                     <svg class="control--btn--icon" width="24" height="24">
                                         <use href="#icon--options" />
                                     </svg>
@@ -245,26 +246,17 @@ class ActivityList extends HTMLElement {
                                     <view-action
                                         class="activity--action action--intervals"
                                         action=":intervals:upload"
-                                        topic=":activity:${this.id(data)}">
+                                        topic=":activity:${escapeHTML(this.id(data))}">
                                         <svg class="activity--icon intervals--icon" width="24" height="24">
                                             <use href="#icon--intervals" />
                                         </svg>
-                                        <div class="connection-icon-switch--indicator ${status.intervals ?? 'none'} intervals"></div>
+                                        <div class="connection-icon-switch--indicator ${escapeHTML(status.intervals ?? 'none')} intervals"></div>
                                     </view-action>
 
                                     <view-action
-                                        class="activity--action"
-                                        action=":strava:upload"
-                                        topic=":activity:${this.id(data)}">
-                                        <svg class="activity--icon strava--icon" width="24" height="24">
-                                            <use href="#icon--strava" />
-                                        </svg>
-                                        <div class="connection-icon-switch--indicator ${status.strava ?? 'none'} strava"></div>
-                                    </view-action>
-                                    <view-action
                                         class="activity--action action--download"
                                         action=":download"
-                                        topic=":activity:${this.id(data)}">
+                                        topic=":activity:${escapeHTML(this.id(data))}">
                                         <svg class="activity--icon">
                                             <use href="#icon--save-btn" />
                                         </svg>
@@ -272,7 +264,7 @@ class ActivityList extends HTMLElement {
                                     <view-action
                                         class="activity--action action--image"
                                         action=":image"
-                                        topic=":activity:${this.id(data)}">
+                                        topic=":activity:${escapeHTML(this.id(data))}">
                                         <svg class="activity--icon">
                                             <use href="#icon--image" />
                                         </svg>
@@ -284,7 +276,7 @@ class ActivityList extends HTMLElement {
                     <view-action
                         class="activity--options"
                         action=":remove"
-                        topic=":activity:${this.id(data)}">
+                        topic=":activity:${escapeHTML(this.id(data))}">
                         <span class="activity--remove">Delete</span>
                     </view-action>
             </activity-item>

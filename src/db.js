@@ -25,8 +25,9 @@ import { TimerStatus, } from './activity/enums.js';
 import { coachingService, initializeCoaching } from './coaching/service.js';
 import { localDay } from './coaching/domain.js';
 import { toAppWorkout } from './coaching/workouts.js';
-import { accountDatabase, hasAccountScope } from './storage/account.js';
-import { syncRecordedRides } from './server/ride-sync.js';
+import { accountDatabase } from './storage/account.js';
+import intervals from './models/intervals.js';
+import { syncRecordedRides } from './storage/ride-sync.js';
 
 // import { trainerMock } from './simulation-scripts.js';
 
@@ -94,7 +95,6 @@ let db = {
     // UI options
     powerSmoothing: 0,
     dataTileSwitch: models.dataTileSwitch.default,
-    auth: ':login',
 
     // Workouts
     workouts: [],
@@ -404,11 +404,11 @@ async function saveStoppedRide(_, db) {
             const coach = coachingService();
             await syncRecordedRides(coach);
             db.activity = await models.activity.restore();
-            await coach.advance();
+            if(!coach.syncPending) await coach.advance();
             xf.dispatch('coaching:changed');
         } catch(error) {
             console.error('Ride saved, but coaching could not be updated:', error);
-            xf.dispatch('coaching:error', `Ride saved on this device; server sync is pending and will retry on reload: ${error.message}`);
+            xf.dispatch('coaching:error', `Ride saved on this device; the local coaching update is pending and will retry on reload: ${error.message}`);
         }
         xf.dispatch('activity:save:success', record.ride);
     } catch (err) {
@@ -507,6 +507,7 @@ xf.reg('app:start', async function(_, db) {
     try {
         await initializeCoaching();
         await syncRecordedRides(coachingService());
+        coachingService().syncPending = intervals.status().connected;
         if(!coachingService().syncPending) await coachingService().advance();
         xf.dispatch('coaching:changed');
     } catch(error) {
@@ -514,7 +515,7 @@ xf.reg('app:start', async function(_, db) {
         xf.dispatch('coaching:error', error.message);
     }
     db.workout = models.workout.restore(db);
-    if(!hasAccountScope()) models.planned.restore();
+    models.planned.restore();
 
     await models.session.restore(db);
     xf.dispatch('workout:restore');

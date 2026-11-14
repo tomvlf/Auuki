@@ -18,7 +18,6 @@
 
 import './connection-switch.js';
 import './data-views.js';
-import './auth-forms.js';
 import './effect-views.js';
 import './editor.js';
 import './tabs.js';
@@ -26,7 +25,6 @@ import './workout-list.js';
 import './planned-list.js';
 import './training-calendar.js';
 import './coaching-panel.js';
-import './server-account.js';
 import './active-list-item.js';
 import './activity-list.js';
 import './workout-graph.js';

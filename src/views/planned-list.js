@@ -17,7 +17,7 @@
  */
 
 import { xf, empty, } from '../functions.js';
-import { isoDate, isoDateToWeekDay } from '../utils.js';
+import { escapeHTML, isoDate, isoDateToWeekDay } from '../utils.js';
 import { models } from '../models/models.js';
 import { WorkoutGraphViewModel, } from './workout-graph-svg.js';
 
@@ -121,9 +121,9 @@ class PlannedList extends HTMLElement {
         const weekDayTemplate = `
             <div class="weekday">${weekDay.weekDay}</div>
             <div class="date">${`${weekDay.day}`.padStart(2, "0")}</div>`;
-        const name = workout.meta.name;
-        const category = workout.meta.category;
-        const description = workout.meta.description;
+        const name = escapeHTML(workout.meta.name);
+        const category = escapeHTML(workout.meta.category);
+        const description = escapeHTML(workout.meta.description);
 
         let duration = '';
         if(workout.meta.duration) {
@@ -307,18 +307,18 @@ function listItemTemplate(
     topic = 'li',
     element = "planned-list-item",
 ) {
-    return `<${element} class="active-list-item" data-wid="${id}">
+    return `<${element} class="active-list-item" data-wid="${escapeHTML(id)}">
                 <div class="item--cont optional">
                     <div class="summary">
-                        <view-action action=":toggle" topic=":${topic}:${id}" class="summary--data">
+                        <view-action action=":toggle" topic=":${escapeHTML(topic)}:${escapeHTML(id)}" class="summary--data">
                             ${summary}
-                            <view-action class="selectable" action=":select" topic=":${topic}:${id}" stoppropagation class="item--select" id="btn${id}">
+                            <view-action class="selectable" action=":select" topic=":${escapeHTML(topic)}:${escapeHTML(id)}" stoppropagation class="item--select" id="btn${escapeHTML(id)}">
                                 <svg class="radio">
                                     <use class="off" href="#icon--radio-off" />
                                     <use class="on" href="#icon--radio-on" />
                                 </svg>
                             </view-action>
-                            <view-action action=":options" topic=":${topic}:${id}" stoppropagation class="item--options">
+                            <view-action action=":options" topic=":${escapeHTML(topic)}:${escapeHTML(id)}" stoppropagation class="item--options">
                                 <svg class="control--btn--icon">
                                     <use href="#icon--options" />
                                 </svg>
@@ -328,7 +328,7 @@ function listItemTemplate(
                     <div class="details expandable">${details}</div>
                 </div>
                 <div>
-                    <view-action action=":remove" topic=":${topic}:${id}" class="optional--actions">
+                    <view-action action=":remove" topic=":${escapeHTML(topic)}:${escapeHTML(id)}" class="optional--actions">
                         <span class="remove">Delete</span>
                     </view-action>
                 </div>

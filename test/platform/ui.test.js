@@ -20,7 +20,7 @@
 import { launchPlatform } from '../../src/platform/ui.js';
 import { xf } from '../../src/functions.js';
 import { db } from '../../src/db.js';
-import { serverRequest } from '../../src/server/client.js';
+import intervals from '../../src/models/intervals.js';
 import { coachingData, coachingService } from '../../src/coaching/service.js';
 import { normalizeActivity } from '../../src/coaching/normalizer.js';
 import { models } from '../../src/models/models.js';
@@ -41,7 +41,11 @@ jest.mock('../../src/db.js', () => ({db: {
     workouts: [{id: 'ride', meta: {name: 'Session', duration: 120, category: 'Endurance',
         description: '<script>not executable</script>'}, intervals: [{duration: 120, steps: [{duration: 120, power: .8}]}]}],
 }}));
-jest.mock('../../src/server/client.js', () => ({serverAccount: {}, serverRequest: jest.fn()}));
+jest.mock('../../src/models/intervals.js', () => ({__esModule: true, default: {
+    status: jest.fn(() => ({configured: true, connected: false, status: 'disconnected'})),
+    connect: jest.fn(),
+    sync: jest.fn(),
+}}));
 jest.mock('../../src/coaching/service.js', () => ({
     coachingData: jest.fn(), coachingService: jest.fn(() => ({data: {}, revision: 1})),
 }));
@@ -75,9 +79,6 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     calendar.loadPlannedMonth = jest.fn().mockResolvedValue();
     const root = document.querySelector('#platform');
     coachingData.mockReturnValue({activities: [], plan: null, profile: null});
-    serverRequest.mockImplementation(path => Promise.resolve(path === 'health'
-        ? {available: true, version: 'build-42.1', revision: '0123456789abcdef'}
-        : {configured: true, connected: false, status: 'disconnected'}));
     await launchPlatform(root, {email: 'rider@example.com'});
     await settle();
     expect(document.body.classList.contains('mobile-app')).toBe(false);
@@ -85,10 +86,8 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(versions).not.toBeNull();
     expect(root.querySelector('#main-content .app-versions')).toBeNull();
     expect(versions.querySelector('[data-frontend-version]').textContent).toBe('development');
-    expect(versions.querySelector('[data-backend-version]').textContent).toBe('build-42.1');
-    expect(versions.querySelector('[data-backend-version]').title).toBe('build-42.1 / 0123456789abcdef');
+    expect(versions.querySelector('[data-backend-version]')).toBeNull();
     expect(versions.querySelector('[data-refresh-version]')).toBeNull();
-    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(1);
     expect(root.textContent).toContain('Your next ride starts here.');
     expect(root.querySelector('[aria-current="page"]').textContent).toBe('Overview');
     expect(root.querySelector('.skip-link')).not.toBeNull();
@@ -112,7 +111,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(document.querySelector('.wrapper').hidden).toBe(false);
     expect(calendar.loadPlannedMonth).toHaveBeenCalled();
     await go('coach');
-    expect(root.textContent).toContain('private Coach');
+    expect(root.textContent).toContain('on-device Coach');
     await go('devices');
     expect(root.textContent).toContain('BLE / ANT+ engine');
     await go('editor');
@@ -325,9 +324,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     xf.dispatch('ble:controllable:disconnected');
     expect(root.querySelector('#platform-message').textContent).toContain('disconnected');
     expect(root.querySelector('[data-sensor="controllable"]').textContent).toBe('Disconnected');
-    root.querySelector('[data-action="logout"]').click();
-    await settle();
-    expect(root.querySelector('#platform-message').textContent).toContain('Finish your current ride');
+    expect(root.querySelector('[data-action="logout"]')).toBeNull();
     models.activity.pendingRecording = {id: 'failed'};
     xf.dispatch('activity:save:fail');
     expect(root.querySelector('#ride-unsaved').hidden).toBe(false);
@@ -347,14 +344,13 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await go('settings');
     await settle();
     const form = root.querySelector('#intervals-connect');
-    form.elements.apiKey.value = 'server-only-key';
+    form.elements.apiKey.value = 'local-only-key';
     form.elements.oldest.value = '2026-01-01';
-    serverRequest.mockResolvedValueOnce({configured: true, connected: true, status: 'connected', lastSuccess: null});
+    intervals.connect.mockResolvedValueOnce({configured: true, connected: true, status: 'connected', lastSuccess: null});
     form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
     await settle();
-    expect(serverRequest).toHaveBeenCalledWith('integrations/intervals', {method: 'PUT',
-        body: {apiKey: 'server-only-key', oldest: '2026-01-01'}});
-    expect(root.innerHTML).not.toContain('server-only-key');
+    expect(intervals.connect).toHaveBeenCalledWith({apiKey: 'local-only-key', oldest: '2026-01-01'});
+    expect(root.innerHTML).not.toContain('local-only-key');
     expect(root.textContent).toContain('Import history');
     const profile = root.querySelector('#profile-form');
     profile.elements.ftp.value = '270';
@@ -379,7 +375,7 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     expect(dispatch).toHaveBeenCalledWith('ui:weight-set', 73);
     db.activity = [{id: 'pending', name: 'Local recording', duration: 60, pendingSync: true}];
     await go('activities');
-    expect(root.textContent).toContain('Awaiting server synchronization');
+    expect(root.textContent).toContain('Awaiting local coaching update');
     expect(root.querySelector('[data-action="retry-rides"]')).not.toBeNull();
     expect(root.querySelector('[data-download="pending"]')).not.toBeNull();
     expect(root.querySelector('[data-delete-ride="pending"]')).not.toBeNull();
@@ -450,37 +446,32 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await settle();
     expect(root.querySelector('[aria-label="Current training load"]')).toBeNull();
 
-    jest.useFakeTimers();
-    try {
-        let syncing = true;
-        let failRefresh = true;
-        serverRequest.mockImplementation(path => {
-            if(path === 'coaching' && failRefresh) {
-                failRefresh = false;
-                return Promise.reject(new Error('Connection interrupted'));
-            }
-            return Promise.resolve(path === 'coaching'
-                ? {data: {activities: [], profile: null, plan: null}, revision: 3}
-                : {configured: true, connected: true, status: syncing ? 'queued' : 'connected'});
-        });
-        await go('settings');
-        expect(root.querySelector('[data-action="sync"]').disabled).toBe(true);
-        await go('coach');
-        syncing = false;
-        dispatch.mockClear();
-        await jest.advanceTimersByTimeAsync(2500);
-        expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
-        expect(root.querySelector('#platform-message').textContent).toBe('Connection interrupted');
-        await jest.advanceTimersByTimeAsync(2500);
-        expect(serverRequest).toHaveBeenCalledWith('coaching');
-        expect(dispatch).toHaveBeenCalledWith('coaching:changed');
-        expect(document.body.dataset.route).toBe('coach');
-        expect(root.querySelector('#platform-message').textContent).toContain('Coach and training plan are up to date');
-
-        serverRequest.mockResolvedValue({configured: true, connected: true,
-            status: 'error', error: 'Intervals.icu rejected the API key. Reconnect.'});
-        await go('settings');
-        expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
-        expect(root.querySelector('#platform-message').textContent).toContain('Reconnect');
-    } finally { jest.useRealTimers(); }
+    service.advance = jest.fn().mockResolvedValue();
+    intervals.status.mockReturnValue({configured: true, connected: true, status: 'connected'});
+    intervals.sync.mockResolvedValue();
+    await go('settings');
+    root.querySelector('[data-action="sync"]').click();
+    await settle();
+    expect(intervals.sync).toHaveBeenCalledWith(service, expect.any(Function));
+    expect(root.querySelector('#platform-message').textContent).toContain('Local Coach and training plan are up to date');
+    let finishSync;
+    intervals.sync.mockImplementationOnce(() => new Promise(resolve => { finishSync = resolve; }));
+    root.querySelector('[data-action="sync"]').click();
+    await settle();
+    await go('player');
+    db.watchStatus = 'stopped';
+    db.elapsed = 0;
+    dispatch.mockClear();
+    root.querySelector('[data-action="ride-toggle"]').click();
+    await settle();
+    expect(dispatch).toHaveBeenCalledWith('ui:watchStart');
+    expect(dispatch).toHaveBeenCalledWith('ui:workoutStart');
+    finishSync();
+    await settle();
+    await go('settings');
+    intervals.sync.mockRejectedValueOnce(new Error('Intervals.icu rejected the API key. Reconnect.'));
+    root.querySelector('[data-action="sync"]').click();
+    await settle();
+    expect(root.querySelector('#platform-message').getAttribute('role')).toBe('alert');
+    expect(root.querySelector('#platform-message').textContent).toContain('Reconnect');
 });

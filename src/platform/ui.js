@@ -17,7 +17,7 @@
  */
 
 import { xf } from '../functions.js';
-import { serverRequest, serverAccount, SERVER_MODE_KEY } from '../server/client.js';
+import intervals from '../models/intervals.js';
 import { coachingData, coachingService } from '../coaching/service.js';
 import { toAppWorkout } from '../coaching/workouts.js';
 import { addDays } from '../coaching/domain.js';
@@ -61,12 +61,10 @@ const stat = (label, value, unit = '') => `<div class="stat"><span>${label}</spa
  * settings views into the same shell.
  *
  * @param {Element} root - Root DOM element that will receive the platform markup.
- * @param {object|null} account - The current authenticated account or guest fallback.
  * @returns {Promise<void>} Resolves after the platform shell and route plumbing are ready.
  */
-export async function launchPlatform(root, account) {
+export async function launchPlatform(root) {
     root.removeAttribute('role');
-    const authenticated = Boolean(account?.email);
     let mobile = window.innerWidth <= 700;
     document.body.classList.add('platform-app');
     document.body.classList.toggle('mobile-app', mobile);
@@ -82,7 +80,7 @@ export async function launchPlatform(root, account) {
         </aside>
         <main id="main-content" tabindex="-1"><header class="platform-header">
             <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title" tabindex="-1"></h1></div>
-            <div class="account-menu"><span>${escape(account?.email || 'Guest / on-device only')}</span><button class="secondary" data-action="${authenticated ? 'logout' : 'signin'}">${authenticated ? 'Sign out' : 'Sign in / Create account'}</button></div>
+            <div class="account-menu"><span>On-device only</span></div>
         </header><div id="platform-message" role="status" aria-live="polite"></div>
         <div id="platform-content"><p role="status">Loading your training...</p></div>
         <div id="legacy-slot"></div></main>`;
@@ -112,9 +110,7 @@ export async function launchPlatform(root, account) {
     let selectedId = '';
     let integration;
     let integrationLoading = false;
-    let integrationNeedsRefresh = true;
     const activityDataCache = new Map();
-    let syncTimer;
     let busy = false;
     let ready = false;
     const mobileSections = new Map();
@@ -170,15 +166,8 @@ export async function launchPlatform(root, account) {
         finally { busy = false; root.removeAttribute('aria-busy'); }
     };
     const refresh = async () => {
-        if(!authenticated) {
-            await coachingService().advance();
-            xf.dispatch('coaching:changed');
-            return;
-        }
-        const result = await serverRequest('coaching');
-        const service = coachingService();
-        service.data = result.data;
-        service.revision = result.revision;
+        if(coachingService().syncPending) return;
+        await coachingService().advance();
         xf.dispatch('coaching:changed');
     };
     const deviceButtons = () => `<div class="device-buttons">${Object.entries(devices).map(([id, name]) =>
@@ -191,8 +180,8 @@ export async function launchPlatform(root, account) {
         'Set your availability and a dated goal to build a plan around your life.';
 
     function dashboard(data) {
-        if(!data) return card('Training data unavailable', `<p>${escape(coachingError || 'Your server training data has not loaded.')}</p>
-            <button data-action="reload">Reload training data</button><p class="muted">Your local workout library and ride controls remain available while this account is signed in.</p>`);
+        if(!data) return card('Training data unavailable', `<p>${escape(coachingError || 'Your local training data has not loaded.')}</p>
+            <button data-action="reload">Reload training data</button><p class="muted">Your local workout library and ride controls remain available.</p>`);
         const summary = trainingSummary(data);
         const calendar = legacy.querySelector('training-calendar');
         const extras = calendar ? calendar.entriesForDate(today(data)).filter(entry => entry.source !== 'coaching' && entry.workout)
@@ -260,22 +249,22 @@ export async function launchPlatform(root, account) {
         return renderPlan(data, today(data));
     }
     function activities(data) {
-        const lists = activityLists(data, db.activity, authenticated);
+        const lists = activityLists(data, db.activity, false);
         const timeZone = data?.profile?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         return `${lastRide ? card('Ride saved', `<div class="stats">${stat('Duration', time(lastRide.duration))}
             ${stat('Average power', number(lastRide.averagePower), 'W')}${stat('Average HR', number(lastRide.averageHeartRate), 'bpm')}</div>
-            <p>${!authenticated ? 'Saved on this device. No account or upload is required.' : lists.history.some(activity => activity.id === lastRide.id) ? "Saved to this account's server history." : 'Saved on this device. Server synchronization has not been confirmed.'}
+            <p>Saved on this device. No account or upload is required.
             Add session feedback in Coach to inform your next session.</p>${link('coach', 'Add feedback', 'button secondary')}`) : ''}
             ${renderActivityOverview(data, lists, state)}
-            ${lists.pending.length ? card(authenticated ? 'Awaiting server synchronization' : 'Awaiting local coaching update', `<p>Your recordings are safely stored on this device.</p>
+            ${lists.pending.length ? card('Awaiting local coaching update', `<p>Your recordings are safely stored on this device.</p>
                 <ul class="session-list">${lists.pending.map(activity => localActivityRow(activity, timeZone)).join('')}</ul><button data-action="retry-rides">Retry synchronization</button>`) : ''}
-            ${lists.cached.length ? card('Device recordings', `<p>Recordings from earlier guest rides are still available on this device.</p>
+            ${lists.cached.length ? card('Device recordings', `<p>Earlier recordings are still available on this device.</p>
                 <ul class="session-list">${lists.cached.map(activity => localActivityRow(activity, timeZone)).join('')}</ul>`) : ''}
             ${card('Activity history', !lists.historyAvailable ? '<p role="status">Activity history is currently unavailable.</p>' :
                 lists.history.length ? `<div class="table-scroll"><table><thead><tr><th>Activity</th><th>Duration</th><th>Distance</th>
                 <th>Avg power</th><th>Avg HR</th><th>Load / feedback</th><th>Source</th><th>File</th></tr></thead><tbody>${lists.history.map(activity =>
                 historyActivityRow(activity, lists.localById.get(String(activity.id)), integration?.connected)).join('')}</tbody></table></div>` :
-                empty(authenticated ? 'Your activities will appear here after you finish a workout or connect Intervals.icu.' : 'Your rides will appear here after you finish a workout.', authenticated ? 'settings' : 'player', authenticated ? 'Connect an integration' : 'Start a ride'), 'activity-history')}
+                empty('Your activities will appear here after you finish a workout or connect Intervals.icu.', 'settings', 'Connect an integration'), 'activity-history')}
             <p class="muted">Missing measurements are shown as --, not estimated. FIT downloads are retained locally for the most recent seven rides.</p>`;
     }
     function progress(data) {
@@ -328,28 +317,21 @@ export async function launchPlatform(root, account) {
         </section>`;
     }
     function settings() {
-        return `<div class="dashboard-grid">${card('Rider profile', `<p>${authenticated ? 'These settings are private to this account on this device. Coach configuration is stored on the server.' : 'Guest settings, workouts, recordings, calendar and coaching are stored only on this device.'}</p>
+        return `<div class="dashboard-grid">${card('Rider profile', `<p>Settings, workouts, recordings, calendar and coaching are stored only on this device.</p>
             <form id="profile-form"><label>FTP (W)<input name="ftp" type="number" min="1" max="1500" value="${db.ftp}" required></label>
                 <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required></label>
                 <button>Save profile</button></form>${integration?.connected ? '<button class="secondary" data-action="import-profile">Use Intervals.icu FTP / weight</button>' : ''}
                 <p class="muted">After changing FTP, archive and regenerate an active plan before riding it.</p>`)}
-            ${authenticated ? `${card('Intervals.icu', integrationView(), '', true)}
-            ${card('Private device backup', `<p>Back up this account's workout files, recent FIT recordings, settings and manual calendar to the server.</p>
-                <div class="button-row"><button class="secondary" data-action="backup">Save backup</button>
-                <button class="secondary" data-action="restore">Restore backup</button></div>
-                <p class="muted">Restore merges workout/recording files and replaces device settings/calendar. It does not import another account's data.</p>`, '', true)}
-            ${card('Your account', `<p>${escape(account.email)}</p><p>Coach history and imports are automatically saved to this server. Bluetooth pairings and ride recovery stay on this device.</p>
-                <button class="secondary" data-action="export">Export training history</button>
-                <form id="delete-account"><label>Confirm email to permanently delete this account and all server data
-                <input name="confirm" type="email" autocomplete="off" required></label><button class="danger">Delete account</button></form>`, '', true)}` :
-                card('Optional server account', `<p>Ride, connect devices, import workouts, download FIT recordings, use the calendar and run local coaching without an account.
-                    Sign in for account-scoped server coaching, private backups and Intervals.icu integrations. Guest data is kept separately and is never automatically uploaded.</p>
-                    <button data-action="signin">Sign in / Create account</button><button class="secondary" data-action="export">Export local training history</button>`, '', true)}</div>`;
+            ${card('Intervals.icu', integrationView(), '', true)}
+            ${card('Local backup', `<p>Download your coaching history, plans, workout files, recent FIT recordings, settings and calendar. Keep a backup before clearing browser data or changing devices.</p>
+                <div class="button-row"><button class="secondary" data-action="backup">Download backup</button>
+                <label>Restore backup<input id="restore-backup" type="file" accept=".json,application/json"></label></div>
+                <p class="muted">Restore merges workout/recording files and replaces local coaching, settings and calendar. Integration API keys are not included.</p>
+                <button class="secondary" data-action="export">Export local training history</button>`, '', true)}</div>`;
     }
     function integrationView() {
         if(!integration) return '<p role="status">Loading integration status...</p>';
-        if(!integration.configured) return '<p>The server operator must configure the encryption key before connections are available.</p>';
-        if(!integration.connected) return `<p>Import cycling history into your Activities, analytics and Coach. Use a personal API key from Intervals.icu Settings; it is encrypted on this server, never stored in the browser.</p>
+        if(!integration.connected) return `<p>Import history directly from Intervals.icu into your local Activities, analytics and Coach. Your personal API key is stored in this browser and sent only to Intervals.icu. Anyone with access to this browser profile can use it.</p>
             <form id="intervals-connect"><label>Personal API key<input name="apiKey" type="password" required autocomplete="off" maxlength="1024"></label>
                 <label>Import from<input name="oldest" type="date" value="${addDays(today(), -365)}" max="${today()}" required></label>
                 <button>Test & connect</button></form><p class="muted">Personal/self-hosted connections only. Strava-origin data is not available through the Intervals.icu API.</p>`;
@@ -365,39 +347,41 @@ export async function launchPlatform(root, account) {
             <div class="button-row"><button data-action="sync" ${['running', 'queued'].includes(integration.status) ? 'disabled' : ''}>${integration.lastSuccess ? 'Sync now' : 'Import history'}</button>
                 <button class="secondary" data-action="test-connection">Test connection</button>
                 <button class="secondary" data-action="disconnect">Disconnect</button></div>
-            <p class="muted">Disconnect removes credentials and stops imports. Imported history is retained. Each launch syncs new activities and rechecks the last seven days for updates.</p>`;
+            <p class="muted">Your API key is stored in this browser, not on an Athlima server. Disconnect removes it; imported history is retained. Sync runs while this app is open and rechecks the last seven days for updates.</p>`;
     }
     async function loadIntegration() {
-        if(!authenticated) return;
         if(integrationLoading) return;
         integrationLoading = true;
         try {
-            const previous = integration;
-            integration = await serverRequest('integrations/intervals');
-            if(['queued', 'running'].includes(integration.status)) integrationNeedsRefresh = true;
+            integration = intervals.status();
             xf.dispatch('services', {intervals: integration.connected});
             if(route === 'settings' && !root.querySelector('#intervals-connect:focus-within')) render();
-            if(integration.status === 'connected' && integrationNeedsRefresh) {
-                await refresh();
-                integrationNeedsRefresh = false;
-                coachingService().syncPending = false;
-                report('Intervals.icu sync completed. Coach and training plan are up to date.');
-            } else if(integration.error || integration.status === 'error') {
+            if(integration.error || integration.status === 'error') {
                 report(integration.error || 'Intervals.icu sync failed. Retry in Settings > Integrations.', true);
-            } else if(['queued', 'running'].includes(integration.status) && !previous) {
-                report('Syncing latest Intervals.icu activities and updating Coach and training plan...');
             }
-            clearTimeout(syncTimer);
-            if(['queued', 'running'].includes(integration.status)) syncTimer = setTimeout(loadIntegration, 2500);
         } catch(error) {
             report(error.message, true);
-            if(ready && (!integration || ['queued', 'running'].includes(integration.status) ||
-               (integration.status === 'connected' && integrationNeedsRefresh))) {
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(loadIntegration, 2500);
-            }
         }
         finally { integrationLoading = false; }
+    }
+    async function syncIntegration() {
+        if(integration?.status === 'running') return;
+        integration = {...intervals.status(), status: 'running'};
+        if(route === 'settings') render();
+        try {
+            await intervals.sync(coachingService(), current => {
+                integration = current;
+                if(route === 'settings') render();
+                xf.dispatch('coaching:changed');
+            });
+            coachingService().syncPending = false;
+            activityDataCache.clear();
+            await refresh();
+        } finally {
+            integration = intervals.status();
+            render();
+        }
+        report('Intervals.icu sync completed. Local Coach and training plan are up to date.');
     }
     let libraryFilters = initialLibraryFilters();
     let libraryPage = 0;
@@ -419,7 +403,7 @@ export async function launchPlatform(root, account) {
                         : route === 'devices' ? `<p class="muted">Select your trainer and sensors below, then choose which device supplies each measurement.
                             Connections and controls use the existing BLE / ANT+ engine.</p>
                             ${!navigator.bluetooth ? '<p role="alert">Web Bluetooth is unavailable in this browser. Use Chrome/Edge on a supported platform and HTTPS or localhost. ANT+ requires Web Serial or WebUSB.</p>' : ''}`
-                            : route === 'coach' ? `<p class="muted">Your ${authenticated ? 'private' : 'on-device'} Coach plans around your goal, schedule and ride history.</p>` : '';
+                            : route === 'coach' ? `<p class="muted">Your on-device Coach plans around your goal, schedule and ride history.</p>` : '';
         updateMobileSections();
         if(route === 'player') updateRide();
     }
@@ -521,6 +505,17 @@ export async function launchPlatform(root, account) {
             return;
         }
         if(event.target.id === 'ride-mode') xf.dispatch('ui:mode-set', event.target.value);
+        if(event.target.id === 'restore-backup') {
+            const file = event.target.files[0];
+            if(!file) return;
+            void run(async () => {
+                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before restoring data.');
+                if(!confirm('Merge backup files and replace local coaching, settings and calendar?')) return;
+                const {restoreBackup} = await import('../storage/backup.js');
+                await restoreBackup(JSON.parse(await file.text()));
+                window.location.reload();
+            });
+        }
         if(event.target.id === 'platform-upload') {
             const files = Array.from(event.target.files);
             if(!files.length) return;
@@ -539,7 +534,7 @@ export async function launchPlatform(root, account) {
         }
     });
     root.addEventListener('submit', event => {
-        if(!['profile-form', 'intervals-connect', 'delete-account'].includes(event.target.id)) return;
+        if(!['profile-form', 'intervals-connect'].includes(event.target.id)) return;
         event.preventDefault();
         const form = event.target;
         const values = new FormData(form);
@@ -548,18 +543,10 @@ export async function launchPlatform(root, account) {
                 xf.dispatch('ui:ftp-set', Number(values.get('ftp')));
                 xf.dispatch('ui:weight-set', Number(values.get('weight')));
                 report('Device profile saved.');
-            } else if(form.id === 'delete-account') {
-                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before deleting the account.');
-                if(!confirm('Permanently delete this account, all server training data and integrations?')) return;
-                await serverRequest('account', {method: 'DELETE', body: {confirm: values.get('confirm')}});
-                window.localStorage.setItem('athlima-session-change', String(Date.now()));
-                window.localStorage.removeItem(SERVER_MODE_KEY);
-                window.location.reload();
             } else {
                 const apiKey = values.get('apiKey');
                 form.reset();
-                integration = await serverRequest('integrations/intervals', {method: 'PUT',
-                    body: {apiKey, oldest: values.get('oldest')}});
+                integration = await intervals.connect({apiKey, oldest: values.get('oldest')});
                 render();
                 report('Intervals.icu connected. Choose Import history to begin.');
             }
@@ -649,7 +636,7 @@ export async function launchPlatform(root, account) {
                 activityButton.textContent = 'Loading...';
                 try {
                     const data = activityDataCache.get(activityId) ??
-                        await serverRequest(`integrations/intervals/activity-data?${new URLSearchParams({activityId})}`);
+                        await intervals.activityData(activityId);
                     activityDataCache.set(activityId, data);
                     if(!panel.isConnected) return;
                     panel.innerHTML = renderActivityStreamData(data);
@@ -682,22 +669,15 @@ export async function launchPlatform(root, account) {
         }
         const action = event.target.closest('[data-action]')?.dataset.action;
         if(!action) return;
+        if(action === 'sync') {
+            void syncIntegration().catch(error => report(error.message, true));
+            return;
+        }
         void run(async () => {
             if(engineModels.activity?.pendingRecording && !['recover-download', 'recover-save'].includes(action)) {
                 throw new Error('Save or download the unsaved FIT recording before continuing.');
             }
-            if(action === 'signin') {
-                if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing in.');
-                window.location.hash = '/account';
-                window.location.reload();
-            } else if(action === 'logout') {
-                if(db?.watchStatus !== 'stopped') throw new Error('Finish your current ride before signing out.');
-                await serverRequest('logout', {method: 'POST', body: {}});
-                window.localStorage.setItem('athlima-session-change', String(Date.now()));
-                window.localStorage.removeItem(SERVER_MODE_KEY);
-                serverAccount.email = null;
-                window.location.reload();
-            } else if(action === 'start-workout') {
+            if(action === 'start-workout') {
                 if(db.watchStatus !== 'stopped' || db.elapsed > 0 || savingRide) {
                     throw new Error('Finish and save your current ride before starting another workout.');
                 }
@@ -726,32 +706,23 @@ export async function launchPlatform(root, account) {
             } else if(action === 'target-up' || action === 'target-down') {
                 const target = db.mode === 'erg' ? 'power' : db.mode === 'resistance' ? 'resistance' : 'slope';
                 xf.dispatch(`ui:${target}-target-${action === 'target-up' ? 'inc' : 'dec'}`);
-            } else if(action === 'sync') {
-                integration = await serverRequest('integrations/intervals/sync', {method: 'POST', body: {}});
-                render();
-                void loadIntegration();
             } else if(action === 'test-connection') {
-                await serverRequest('integrations/intervals/test', {method: 'POST', body: {}});
+                await intervals.athlete();
                 report('Intervals.icu connection is working.');
             } else if(action === 'disconnect') {
                 if(!confirm('Disconnect Intervals.icu? Imported activities will be kept.')) return;
-                integration = await serverRequest('integrations/intervals', {method: 'DELETE', body: {}});
-                clearTimeout(syncTimer);
+                integration = intervals.disconnect();
+                coachingService().syncPending = false;
+                await refresh();
+                activityDataCache.clear();
                 render();
-            } else if(action === 'backup' || action === 'restore') {
-                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before changing device data.');
-                const {createBackup, restoreBackup} = await import('../server/backup.js');
-                const saved = await serverRequest('backup');
-                if(action === 'backup') {
-                    if(saved.data && !confirm('Replace the existing server backup with this device’s data?')) return;
-                    await serverRequest('backup', {method: 'PUT', body: {revision: saved.revision, data: await createBackup(db.workouts)}});
-                    report('Private device backup saved.');
-                } else {
-                    if(!saved.data) throw new Error('No server backup is available.');
-                    if(!confirm('Merge the backup and replace this device’s settings and manual calendar?')) return;
-                    await restoreBackup(saved.data);
-                    window.location.reload();
-                }
+            } else if(action === 'backup') {
+                if(db.watchStatus !== 'stopped') throw new Error('Finish your current ride before backing up.');
+                const {createBackup} = await import('../storage/backup.js');
+                const {fileHandler} = await import('../file.js');
+                fileHandler.download()(JSON.stringify(await createBackup(db.workouts), null, 2),
+                    'athlima-backup.json', 'application/json');
+                report('Local backup downloaded. Keep this file private.');
             } else if(action === 'export') {
                 const {fileHandler} = await import('../file.js');
                 fileHandler.download()(JSON.stringify(coachingData(), null, 2), 'athlima-training-history.json', 'application/json');
@@ -765,17 +736,16 @@ export async function launchPlatform(root, account) {
             } else if(action === 'reload') window.location.reload();
             else if(action === 'retry-rides') {
                 await refresh();
-                const {syncRecordedRides} = await import('../server/ride-sync.js');
+                const {syncRecordedRides} = await import('../storage/ride-sync.js');
                 await syncRecordedRides(coachingService());
                 await refresh();
                 db.activity = await engineModels.activity.restore();
                 render();
-                report(authenticated ? 'Recorded rides synchronized.' : 'Local coaching history updated.');
+                report('Local coaching history updated.');
             }
         });
     });
     window.addEventListener('hashchange', navigate);
-    window.addEventListener('session:expired', () => { clearTimeout(syncTimer); ready = false; });
     window.addEventListener('pwa:error', event => report(event.detail, true));
     navigator.serviceWorker?.addEventListener('message', event => {
         if(event.data?.type === 'CACHE_ERROR') report('Some app assets could not be cached for offline use. Your active ride is unaffected.', true);
@@ -867,7 +837,11 @@ export async function launchPlatform(root, account) {
         state = estimateState(coachingData().activities, coachingData().profile, today(coachingData()));
     }
     navigate();
-    void loadIntegration();
+    await loadIntegration();
+    if(integration?.connected) {
+        report('Syncing Intervals.icu history into local coaching...');
+        void syncIntegration().catch(error => report(error.message, true));
+    }
     if(db.elapsed > 0) {
         report('A previous ride was recovered. Reconnect your trainer and resume in Ride.');
         window.location.hash = '/player';

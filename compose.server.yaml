@@ -2,8 +2,3 @@ services:
   athlima:
     build: .
     pull_policy: build
-  backend:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
-    pull_policy: build

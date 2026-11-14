@@ -6,17 +6,16 @@ biological state of readiness. It uses no LLM or third-party AI account for
 planning. Calculations reuse pure coaching modules; outcomes are heuristics, not
 validated physiological predictions.
 
-The app can use browser-local coaching storage or the optional self-hosted
-server, depending on the selected mode. The workout player and trainer engine
-run locally in the browser; see the [backend guide](backend.md) for server
-storage and recovery details.
+Coaching, planning, the workout player and trainer engine run locally in the
+browser. No login or backend is required. See the [storage and migration
+guide](backend.md) for local backups and recovery details.
 
 On the Ride screen, choose a library workout before starting. Finishing a ride
 shorter than one minute offers the choice to save or discard it. In Activities,
 delete an Athlima recording to remove its local FIT file and coaching history.
 Previous plan decisions and uploads to external services are not undone;
 an external copy may reappear when that service is synchronized. Existing
-server backups are not changed until you replace them.
+downloaded backup files are not changed until you create new ones.
 
 Consumer power meters, heart-rate sensors and other wearable data can be
 incomplete, noisy or inaccurate. Missing data is not evidence of rest or
@@ -87,7 +86,8 @@ failed or low-quality work does not earn progression. Day to day:
 - Submit post-ride feedback, mark unsuccessful sessions **Not completed**, mark
    missed sessions, or choose **Make upcoming training easier**. Overdue sessions are reviewed
    when the app opens, after a recording, or with **Review missed sessions**.
-   The server's Intervals.icu import worker can continue while the browser is closed.
+   Direct Intervals.icu sync runs only while the app is open; its progress is
+   saved locally for retry.
 
 The first implementation supports one athlete and one active goal at a time,
 over a 1-366 day horizon. Archive a plan before reconfiguring or generating a
@@ -435,13 +435,12 @@ seven-ride FIT cache and does not inherit localStorage's small quota.
 Transactions resolve only after commit; a failed write preserves the previous
 in-memory revision and reports an error. Concurrent-tab writes are rejected
 instead of silently overwriting history. The UI can export the complete bundle
-as JSON for inspection/backup; raw JSON rides can be imported, but restoring an
-entire exported bundle through the UI is not implemented.
+as JSON for inspection; raw JSON rides can be imported. Settings > Local backup
+downloads and restores the entire coaching bundle together with device data.
 
-Local-mode storage is browser-local and browser quotas/eviction still apply.
-Export a backup before clearing site data. Server mode uses the selected
-self-hosted coaching service; do not assume local and server records are
-automatically synchronized.
+Storage is browser-local and browser quotas/eviction still apply.
+Export a backup before clearing site data. There is no automatic synchronization
+between browsers, devices or old server accounts.
 
 ## Adding a workout template
 
@@ -548,7 +547,6 @@ stop for pain. Coaching support does not diagnose illness or injury.
 ```sh
 npm test -- --runInBand test/coaching test/views/training-calendar.test.js
 npm test -- --runInBand   # full suite, including IndexedDB, service-worker and backup tests
-npm run test:server
 npm run build
 ```
 

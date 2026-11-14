@@ -1377,8 +1377,7 @@ class NavigationStack extends HTMLElement {
             return;
         }
         if(action === 'settings:profile') {
-            this.switch('profile', this.tabs.settings.children);
-            models.api.auth.loadTurnstile();
+            window.location.hash = '/settings';
             return;
         }
 
@@ -1556,9 +1555,7 @@ class OAuth extends HTMLElement {
 
         let service = action.split(':')[1];
 
-        if(service === 'strava' ||
-           service === 'intervals' ||
-           service === 'trainingPeaks') {
+        if(service === 'intervals') {
 
             console.log(this.services[service]);
             if(this.services[service]) {
@@ -1614,9 +1611,6 @@ class ModalError extends HTMLElement {
         this.$dialog.close();
     }
     message(msg) {
-        if(msg === DialogMsg.noAuth) {
-            return `Your session is over. You need to login again.`;
-        };
         return exists(msg) ? String(msg) : 'Something went wrong.';
     }
 }

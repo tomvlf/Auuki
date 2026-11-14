@@ -661,9 +661,7 @@ class Activity extends Model {
     async upload(service, id) {
         let record = await idb.get('activity', id);
 
-        if(service === 'strava' ||
-           service === 'intervals' ||
-           service === 'trainingPeaks') {
+        if(service === 'intervals') {
 
             const res = await this.api[service].uploadWorkout(record);
             record = await idb.get('activity', id);
@@ -802,18 +800,6 @@ class Workout extends Model {
     download(db) {
         fileHandler.download()(this.encode(db), this.fileName(), fileHandler.Type.OctetStream);
     }
-    send(db) {
-        // TODO: remove the whole method
-        const name = this.fileName();
-        const blob = fileHandler.toBlob(this.encode(db));
-
-        this.api.strava.uploadWorkout(blob);
-
-        return {
-            name,
-            blob,
-        };
-    }
 }
 
 // TODO:
@@ -930,13 +916,6 @@ class Planned {
 
         this.data = this.storage.restore();
 
-        if(yesterdayOrOlder(this.data.modified.intervals)) {
-            console.log(`:planned :outdated :calling :wod 'intervals'`);
-            this.getAthlete('intervals');
-            this.wod('intervals');
-            return;
-        }
-
         console.log(`:planned :up-to-date`);
         xf.dispatch(`action:planned`, ':data');
     }
@@ -969,7 +948,16 @@ class Planned {
     }
     async getIntervals(oldest, newest) {
         const response = await this.api.intervals.wod(oldest, newest);
-        return this.workoutModel.fromIntervalsResponse(response);
+        const workouts = this.workoutModel.fromIntervalsResponse(response);
+        const retained = this.data.workouts.filter(workout => {
+            const day = workout.meta.startDateLocal?.slice(0, 10);
+            return !day || day < oldest || day > newest;
+        });
+        const next = {...this.data, workouts: [...retained, ...workouts]};
+        this.storage.set(next);
+        this.data = next;
+        xf.dispatch('action:planned', ':data');
+        return workouts;
     }
     async getAthlete(service) {
         const self = this;

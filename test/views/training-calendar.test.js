@@ -466,7 +466,9 @@ describe('training calendar', () => {
         });
 
         try {
-            setAccountScope('rider@example.com');
+            localStorage.setItem('athlima-intervals-v1', JSON.stringify({
+                apiKey: 'test-key', athleteId: '123', oldest: '2026-01-01',
+            }));
             const calendar = createCalendar();
             calendar.displayMonth = new Date(2026, 11, 1);
             calendar.selectedDate = futureDate;
@@ -488,6 +490,8 @@ describe('training calendar', () => {
             window.removeEventListener('workout', listener);
             expect(startedWorkouts).toHaveLength(1);
             expect(startedWorkouts[0].intervals).toHaveLength(1);
+            const storedPlans = JSON.parse(localStorage.getItem('planned'));
+            expect(storedPlans.workouts.some(workout => workout.intervals_id === 123)).toBe(true);
         } finally {
             setAccountScope(null);
             global.fetch = originalFetch;

@@ -1,5 +1,5 @@
 /*
- * backup.js: front-end client module.
+ * backup.js: browser-local backup and restore.
  *
  * Why this exists:
  * This file is part of Athlima and is kept separate so the application can be understood
@@ -15,6 +15,9 @@
  * persistence, and outputs. If a change affects the behaviour of this module, update
  * the tests and the surrounding callers in the same review.
  */
+
+import { CoachingService } from '../coaching/service.js';
+import { openCoachingStorage } from '../coaching/storage.js';
 
 const SETTINGS = ['ftp', 'weight', 'theme', 'dockMode', 'measurement', 'volume', 'dataTileSwitch'];
 
@@ -60,30 +63,43 @@ export async function createBackup(library = []) {
             ...record, blob: base64(new Uint8Array(await record.blob.arrayBuffer())),
         })));
         const calendar = JSON.parse(accountStorage.getItem('training-calendar') || '[]');
+        const planned = JSON.parse(accountStorage.getItem('planned') || '{"workouts":[],"modified":{}}');
         if(!Array.isArray(calendar)) throw new Error('Stored training calendar must be an array.');
         // Built-in workout IDs are generated per browser load; retain scheduled copies.
         for(const entry of calendar) {
             const workout = library.find(w => String(w.id) === entry.workoutId);
             if(workout && !workouts.some(w => w.id === workout.id)) workouts.push(workout);
         }
-        return {version: 1, savedAt: new Date().toISOString(), workouts, activities,
+        const storage = await openCoachingStorage(window.indexedDB);
+        let coaching;
+        try { coaching = new CoachingService(storage).data; }
+        finally { storage.close(); }
+        return {version: 2, savedAt: new Date().toISOString(), workouts, activities, coaching,
             settings: Object.fromEntries(SETTINGS.map(key => [key, accountStorage.getItem(key)])),
-            calendar};
+            calendar, planned};
     } finally { database.close(); }
 }
 
 export async function restoreBackup(backup) {
-    if(backup?.version !== 1 || !Array.isArray(backup.workouts) || !Array.isArray(backup.activities) ||
+    if(![1, 2].includes(backup?.version) || !Array.isArray(backup.workouts) || !Array.isArray(backup.activities) ||
        !Array.isArray(backup.calendar) || !backup.settings || typeof backup.settings !== 'object' ||
        Object.entries(backup.settings).some(([key, value]) => !SETTINGS.includes(key) ||
            (value !== null && typeof value !== 'string')) ||
        backup.workouts.some(w => !w?.id || !w.meta || !Array.isArray(w.intervals)) ||
        backup.calendar.some(e => !e?.id || !e.workoutId || !/^\d{4}-\d{2}-\d{2}$/.test(e.date))) {
-        throw new Error('Invalid server backup. No data was restored.');
+        throw new Error('Invalid local backup. No data was restored.');
+    }
+    if(backup.version === 2) {
+        if(!backup.coaching || typeof backup.coaching !== 'object') throw new Error('Invalid coaching backup.');
+        new CoachingService({getItem: () => JSON.stringify(backup.coaching)});
+        if(backup.planned && (!Array.isArray(backup.planned.workouts) ||
+            backup.planned.workouts.some(workout => !workout?.id || !workout.meta || !Array.isArray(workout.intervals)))) {
+            throw new Error('Invalid planned workout backup.');
+        }
     }
     const activities = backup.activities.map(record => {
         if(!record?.id || record.summary?.id !== record.id || typeof record.blob !== 'string') {
-            throw new Error('Invalid activity in server backup.');
+            throw new Error('Invalid activity in local backup.');
         }
         return {...record, blob: new Blob([Uint8Array.from(atob(record.blob), c => c.charCodeAt(0))],
             {type: 'application/octet-stream'})};
@@ -107,6 +123,14 @@ export async function restoreBackup(backup) {
             else accountStorage.setItem(key, value);
         }
         accountStorage.setItem('training-calendar', JSON.stringify(backup.calendar));
+        if(backup.planned) accountStorage.setItem('planned', JSON.stringify(backup.planned));
+        if(backup.version === 2) {
+            const storage = await openCoachingStorage(window.indexedDB);
+            try { await storage.setItem('athlima-coaching-v1', JSON.stringify(backup.coaching)); }
+            catch(error) {
+                throw new Error(`Files and settings were restored, but coaching could not be restored. Retry: ${error.message}`);
+            } finally { storage.close(); }
+        }
     } finally { database.close(); }
 }
 import { accountDatabase, accountStorage } from '../storage/account.js';

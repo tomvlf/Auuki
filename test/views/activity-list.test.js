@@ -80,6 +80,26 @@ test('renders a recorded wattage profile on an activity card', () => {
     expect(markup).toContain('class="power-profile--recorded"');
 });
 
+test('renders untrusted activity names, IDs, and statuses as inert content', () => {
+    const list = new ActivityList();
+    const attack = '<img src=x onerror=alert(1)>';
+    const id = 'ride-1" onmouseover="alert(1)';
+    const markup = list.template(0, {
+        id,
+        name: attack,
+        timestamp: Date.UTC(2026, 0, 1),
+        duration: 3600,
+        status: {intervals: 'none" onmouseover="alert(1)'},
+    });
+    const container = document.createElement('div');
+    container.innerHTML = markup;
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[onerror], [onmouseover]')).toBeNull();
+    expect(container.querySelector('.activity--name').textContent.trim()).toBe(attack);
+    expect(container.querySelector('activity-item').dataset.id).toBe(id);
+});
+
 test('omits unavailable current training-state values instead of rendering NaN', () => {
     coachingData.mockReturnValue({
         profile: {timeZone: 'UTC'},

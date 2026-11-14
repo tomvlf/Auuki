@@ -2,9 +2,9 @@
 
 # Athlima
 
-Athlima is a browser-based indoor cycling platform for structured workouts, trainer control, activity recording, and coaching. It is intentionally local-first: the workout engine, device controls, FIT recording, and most ride logic run in the browser, while optional server features are available when you sign in and configure the backend.
+Athlima is a browser-based indoor cycling platform for structured workouts, trainer control, activity recording, and coaching. All application logic and training data stay in your browser. There is no login, application backend or cloud account.
 
-The app is built around a single idea: training should work without friction, while still supporting private accounts, backups, history import, and provider integrations when you want them.
+The app supports local backups and optional direct Intervals.icu history import and FIT upload using your personal API key.
 
 ## What Athlima does
 
@@ -20,7 +20,8 @@ The app is built around a single idea: training should work without friction, wh
 - uploads new FIT recordings back to Intervals.icu
 - includes an adaptive coaching engine for goal-based planning and ride review
 - automatically switches between mobile and desktop layouts as the window width changes
-- keeps guest-mode data separate from server-backed account data
+- saves coaching, plans, workouts, recordings and calendar on this device
+- downloads and restores local backup files without including integration credentials
 
 ## Ride screen
 
@@ -28,7 +29,7 @@ Both `/` and `/mobile` automatically use the mobile layout at widths of 700px
 or less and the desktop layout above that. Resizing or rotating switches layouts
 without reloading, changing the current page, clearing forms, or interrupting a ride.
 Mobile screens use compact cards and expandable secondary information: library
-filters, workout notes and intervals, monthly activity totals, backup/account
+filters, workout notes and intervals, monthly activity totals, local backup
 settings, additional sensors, the month calendar overview, and the plan timeline. Open sections retain their
 state while navigating during the session; desktop shows this information expanded.
 The mobile library shows six workouts per page with Previous/Next controls.
@@ -55,12 +56,12 @@ your natural cadence if a drill causes discomfort or bouncing.
 
 ## Current repo status
 
-This repository is the browser app plus a self-hosted account backend. The main flow is:
+This repository is a standalone browser app. The main flow is:
 
-- guest mode works without a server
-- account mode enables server-side coaching, private backups, and provider integrations
-- Intervals.icu integration is server-side and uses the current rider's encrypted API key
-- the backend stores account-scoped state in SQLite and keeps the app contract explicit rather than silently falling back to guest mode
+- open the app and train without signing in
+- run the complete Coach locally using IndexedDB
+- connect Intervals.icu directly from Settings using a browser-stored API key
+- export a backup before clearing browser data or switching devices
 
 
 ## Quick start
@@ -72,8 +73,6 @@ Requirements:
 
 ```bash
 npm install
-ATHLIMA_INSECURE_COOKIES=1 npm run server
-# in a second terminal
 npm start
 ```
 
@@ -96,10 +95,10 @@ This expects local cert files in `dev_cert/cert.pem` and `dev_cert/key.pem`.
 
 ### Docker Compose
 
-The default Compose setup runs the frontend and backend together for local testing and self-hosted use.
+The default Compose setup serves only static frontend files. No backend or database service is needed.
 
 ```bash
-ATHLIMA_INSECURE_COOKIES=1 docker compose up -d
+docker compose up -d
 ```
 
 Then open:
@@ -115,47 +114,40 @@ docker compose down
 To build from a local checkout instead of using published images:
 
 ```bash
-ATHLIMA_INSECURE_COOKIES=1 docker compose -f compose.yaml -f compose.server.yaml up --build -d
+docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
 
 ### Deployed versions
 
-The desktop app shows separate frontend and backend versions at the bottom of the
-left-hand menu; the mobile layout omits them. The sign-in screen also shows
-the versions. Published images display the GitHub Actions build number and
-attempt. The sign-in screen also shows the first 12 characters of the Git
-revision; hover over a version for the full revision. An older backend may show
-“Not reported”, while an unreachable backend shows “Unavailable”.
+The desktop app shows the frontend version at the bottom of the left-hand menu;
+the mobile layout omits it. Published images display the GitHub Actions build
+number and attempt. Hover over the version for the full Git revision.
 
 Local development and local image builds show `development` unless build metadata
 is supplied. The frontend label identifies the code currently loaded in the
 browser, so reload the app after deploying a new frontend.
 
-## Self-hosted accounts and integrations
+## Local data and integrations
 
-The app is usable without an account for workouts, device control, recovery, local training calendar work, and on-device coaching.
+The Coach, activity history, calendar, workout library and ride recovery use browser storage. Data is not synchronized between browsers or devices. Clearing site data or browser eviction can remove it; use Settings > Local backup regularly.
 
-Account features are opt-in and include:
+Intervals.icu is optional and requires internet access. In Settings, enter your
+personal API key and import start date. The key is saved in this browser's local
+storage and sent only to `https://intervals.icu`. It is not encrypted against
+someone with access to your browser profile. Disconnect removes the key but
+keeps imported history. There is no Athlima server or intermediary.
+Strava and TrainingPeaks server-based OAuth connections have been removed;
+use FIT file downloads for manual upload to other providers.
 
-- server-side coaching and adaptive planning
-- private encrypted backups
-- Intervals.icu API-key connections
-- per-user account isolation for saved data and history
-- server-side sync for imported ride history and uploads
-
-If you are self-hosting, see:
+For details, see:
 
 - [doc/backend.md](doc/backend.md)
 - [doc/intervals-guide.md](doc/intervals-guide.md)
 - [doc/coaching.md](doc/coaching.md)
 
-For Intervals.icu, the app expects a configured server-side encryption key:
-
-```bash
-openssl rand -base64 32
-```
-
-Store the result in `ATHLIMA_INTEGRATION_KEY` as a secret environment variable. Do not commit it to the repo.
+Older account-scoped browser data and server volumes are not deleted or silently
+merged. Export data from the previous version before upgrading; see the migration
+notes in the backend guide.
 
 ## Browser and device support
 
@@ -194,17 +186,13 @@ Athlima supports the industry-standard trainer and sensor protocols used by indo
 - Wahoo CPS
 - ANT+ FE-C via a compatible USB ANT+ adapter
 
-## Server safety and deployment notes
+## Static hosting
 
-The backend enforces trusted browser origins and must be configured to match the real public URL used by the browser.
-
-Key variables:
-
-- `ATHLIMA_ORIGIN` — exact public browser origin to allow
-- `ATHLIMA_ADDITIONAL_ORIGINS` — extra trusted origins when needed
-- `ATHLIMA_INSECURE_COOKIES` — only for localhost HTTP development; do not use this in production
-
-The backend is meant to be used behind a secure public deployment, not just as a local dev convenience.
+Serve the built `dist/` directory over HTTPS, or use localhost for development.
+The Compose HTTPS variant adds Caddy in front of the static frontend only.
+No authentication cookie, server encryption key or server-origin configuration
+is required. Training and coaching work offline once app assets are cached;
+Intervals.icu requests require a connection and browser CORS access.
 
 ## Documentation
 

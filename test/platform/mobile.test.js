@@ -20,7 +20,6 @@
 import { launchPlatform } from '../../src/platform/ui.js';
 import { xf } from '../../src/functions.js';
 import { db } from '../../src/db.js';
-import { serverRequest } from '../../src/server/client.js';
 
 jest.mock('../../src/index.js', () => {
     queueMicrotask(() => globalThis.window.dispatchEvent(new CustomEvent('app:ready')));
@@ -32,11 +31,6 @@ jest.mock('../../src/db.js', () => ({db: {
     mode: 'erg', watchStatus: 'paused', activity: [], workouts: [],
     workout: {meta: {name: 'Recovered ride', duration: 600}, intervals: [{steps: [{duration: 600, power: .8}]}]},
 }}));
-jest.mock('../../src/server/client.js', () => ({
-    serverAccount: {}, serverRequest: jest.fn(path => Promise.resolve(path === 'health'
-        ? {available: true, version: 'build-42.1', revision: '0123456789abcdef'}
-        : {configured: false, connected: false})),
-}));
 jest.mock('../../src/coaching/service.js', () => ({
     coachingData: () => ({activities: [], profile: null, plan: null}), coachingService: () => ({data: {}, revision: 0}),
 }));
@@ -65,7 +59,6 @@ test('mobile has a dedicated ride-first navigation, recovered ride controls, gla
     expect(document.body.classList.contains('mobile-app')).toBe(true);
     expect(root.querySelector('.app-versions')).toBeNull();
     expect(root.querySelector('.sidebar .app-versions')).toBeNull();
-    expect(serverRequest.mock.calls.filter(([path]) => path === 'health')).toHaveLength(0);
     expect(root.querySelector('nav').textContent).not.toContain('Progress');
     expect(root.querySelector('nav').textContent).not.toContain('Training calendar');
     expect(root.querySelector('nav').querySelectorAll('a')).toHaveLength(5);

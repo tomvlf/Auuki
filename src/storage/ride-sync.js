@@ -1,5 +1,5 @@
 /*
- * ride-sync.js: front-end client module.
+ * ride-sync.js: updates local coaching from persisted recordings.
  *
  * Why this exists:
  * This file is part of Athlima and is kept separate so the application can be understood

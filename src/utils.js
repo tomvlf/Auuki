@@ -18,6 +18,16 @@
 
 import { exists, existance, first, last, equals, isObject, isFunction, isArray } from './functions.js';
 
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[character]);
+}
+
 // format
 function formatTime(args = {}) {
     const defaults = {
@@ -357,6 +367,7 @@ function typeToAccessor(basetype, method = 'set') {
 
 export {
     // format
+    escapeHTML,
     formatTime,
     dateToDashString,
     isoDate,
