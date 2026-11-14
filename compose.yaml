@@ -2,6 +2,15 @@ services:
   athlima:
     image: ghcr.io/tomvlf/athlima:latest
     ports:
-      - "8080:80"
+      - "8080:8080"
+    user: "101:101"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    pids_limit: 64
     restart: unless-stopped
     pull_policy: always

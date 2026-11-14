@@ -26,6 +26,18 @@ adds Caddy. The historically named `compose.server.yaml` is now only a local
 frontend build override. No server database, authentication cookies, integration
 encryption key or trusted-origin environment variables are required.
 
+The hardened frontend container listens on port 8080 as UID/GID 101. Compose
+enforces a read-only filesystem, drops all capabilities, prevents privilege
+escalation and mounts only bounded temporary storage. The build uses a lockfile
+and digest-pinned base images; update these deliberately for upstream patches.
+HTTP responses include a build-specific CSP that allows the generated import map,
+local scripts/workers and direct Intervals.icu access, but no arbitrary inline
+scripts, framing or plugins. Inline styles are retained for the dynamic UI.
+The HTTPS variant adds HSTS and restricts the Caddy container while retaining
+writable TLS volumes and its low-port binding capability.
+Older published frontend images use port 80; rebuild/publish before deploying
+the updated port-8080 Compose configuration.
+
 ## Storage and backups
 
 - IndexedDB `store` contains workouts, recent FIT recordings and ride recovery.

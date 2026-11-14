@@ -95,6 +95,9 @@ This expects local cert files in `dev_cert/cert.pem` and `dev_cert/key.pem`.
 ### Docker Compose
 
 The default Compose setup serves only static frontend files. No backend or database service is needed.
+The frontend runs as UID/GID 101 on container port 8080, with a read-only
+filesystem, no Linux capabilities, no privilege escalation and a bounded
+temporary filesystem. The container includes a health check.
 
 ```bash
 docker compose up -d
@@ -115,6 +118,29 @@ To build from a local checkout instead of using published images:
 ```bash
 docker compose -f compose.yaml -f compose.server.yaml up --build -d
 ```
+
+For public HTTPS hosting, replace `app.example.com` in `Caddyfile` with your
+hostname and run:
+
+```bash
+docker compose -f compose.https.yaml up -d
+```
+
+To build the HTTPS frontend locally instead:
+
+```bash
+docker compose -f compose.https.yaml -f compose.server.yaml up --build -d
+```
+
+Caddy manages TLS certificates, sets HSTS and keeps certificate/configuration
+state in its named volumes. Its root process retains only the capability needed
+to bind ports 80/443; the frontend is non-root and has no capabilities.
+
+The build and server base images are pinned by digest, and `npm ci` uses the
+committed lockfile. Refresh these pins and the lockfile regularly for security
+updates; pinning does not automatically apply upstream patches.
+Rebuild/publish before using these Compose files with a published image:
+older frontend images listen on port 80 rather than 8080.
 
 ### Deployed versions
 
@@ -192,6 +218,14 @@ The Compose HTTPS variant adds Caddy in front of the static frontend only.
 No authentication cookie, server encryption key or server-origin configuration
 is required. Training and coaching work offline once app assets are cached;
 Intervals.icu requests require a connection and browser CORS access.
+
+The Docker build generates a Content Security Policy from the exact built HTML,
+including hashes for Parcel's inline import map. Scripts cannot use arbitrary
+inline code or `eval`; connections are limited to this origin and Intervals.icu.
+Inline styles remain allowed for the existing dynamic UI. Anti-framing,
+MIME-sniffing, referrer and device-permission headers also apply to error pages.
+Other static hosts must configure equivalent headers themselves. Do not reuse
+the generated CSP after replacing assets without rebuilding its import-map hashes.
 
 ## Documentation
 

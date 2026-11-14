@@ -1,4 +1,8 @@
 app.example.com {
-    reverse_proxy athlima:80
+    reverse_proxy athlima:8080
     encode gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
 }
