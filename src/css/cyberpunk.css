@@ -1,0 +1,97 @@
+:root {
+    --platform-bg: #080c16;
+    --platform-panel: #121a2b;
+    --platform-surface: #101827;
+    --platform-border: #304052;
+    --platform-text: #edf4fb;
+    --platform-muted: #b1bfd0;
+    --platform-accent: #70eadc;
+}
+
+body.platform-app {
+    background-color: var(--platform-bg);
+    background-image: linear-gradient(110deg, rgba(8, 12, 22, .92), rgba(8, 12, 22, .62)),
+        url('../images/cyberpunk-city.webp');
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+.platform-app .sidebar {
+    background: linear-gradient(180deg, #11192a, #0c1422);
+    border-color: #304052;
+    box-shadow: 8px 0 30px rgba(0, 0, 0, .15);
+}
+
+#platform .brand {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 28px;
+    letter-spacing: -.05em;
+    text-shadow: 2px 0 rgba(243, 116, 196, .25), -2px 0 rgba(112, 234, 220, .2);
+}
+
+#platform .brand span { font-family: system-ui, sans-serif; white-space: nowrap; text-shadow: none; }
+#platform .sidebar nav a { border-radius: 5px; }
+#platform .sidebar nav a[aria-current="page"] {
+    background: #15313b;
+    box-shadow: inset 3px 0 var(--platform-accent);
+}
+
+.platform-app .platform-header { position: relative; }
+.platform-app .platform-header::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 -14px;
+    height: 1px;
+    background: linear-gradient(90deg, #70eadc, #ce76b3 55%, transparent 90%);
+    pointer-events: none;
+}
+
+.platform-app .panel, .platform-app .workout-card {
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12);
+}
+
+.platform-app .hero {
+    background: linear-gradient(105deg, #142331 20%, rgba(20, 35, 49, .94) 65%, rgba(20, 35, 49, .5)),
+        url('../images/cyberpunk-city.webp') center 55% / cover;
+    border-color: #3d666c;
+}
+
+#platform button, #platform .button { border-radius: 5px; }
+#platform button:not(.secondary):not(.danger), #platform .button:not(.secondary) {
+    color: #09111b;
+    box-shadow: inset 0 1px rgba(255, 255, 255, .2);
+}
+#platform button.secondary, #platform .button.secondary {
+    background: #1b293b;
+    border-color: #45576e;
+}
+#platform input, #platform textarea, #platform select {
+    border-radius: 5px;
+    background: #0c1422;
+    border-color: #56677e;
+}
+#platform input:disabled { color: var(--platform-muted); }
+#platform :focus-visible { outline-color: #a8fff2; }
+#platform .library-import:focus-within { outline-color: #a8fff2; }
+
+body.platform-app[data-route="player"] {
+    background-image: none;
+}
+body.platform-app[data-route="player"] .platform-header::after { display: none; }
+.platform-app .ride-panel { box-shadow: none; }
+.platform-app .ride-metric strong { text-shadow: none; }
+
+@media (max-width: 700px) {
+    body.platform-app { background-attachment: scroll; }
+    .platform-app .sidebar { box-shadow: none; }
+    .platform-app .hero { background: #142331; }
+    .platform-app .platform-header::after { opacity: .5; }
+}
+
+@media (forced-colors: active) {
+    body.platform-app, .platform-app .hero, .platform-app .sidebar { background-image: none; }
+    .platform-app .platform-header::after { display: none; }
+    #platform .brand { text-shadow: none; }
+}

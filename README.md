@@ -24,6 +24,13 @@ The app supports local backups and optional direct Intervals.icu history import 
 
 ## Ride screen
 
+The application's default cyberpunk theme uses a locally bundled city backdrop,
+dark panels and restrained cyan/magenta accents. The ride screen removes
+decorative imagery and header accents to keep metrics and controls
+distraction-free. The theme is included in production builds and Docker images,
+with no external image or font requests. Styling lives in `src/css/cyberpunk.css`;
+the original city artwork is retained in `src/images/cyberpunk-city.svg`.
+
 Both `/` and `/mobile` automatically use the mobile layout at widths of 700px
 or less and the desktop layout above that. Resizing or rotating switches layouts
 without reloading, changing the current page, clearing forms, or interrupting a ride.
