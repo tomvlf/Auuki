@@ -10,7 +10,7 @@ remain in browser storage; Intervals.icu itself is an external online service.
 2. Open Athlima Settings and enter the key and history start date.
 3. Choose **Test & connect**. Athlima resolves your athlete ID from `/athlete/0`
    and uses that ID for subsequent profile, workout and upload requests.
-4. Choose **Import history**.
+4. FTP and body mass are synced automatically. Choose **Import history**.
 
 The key is stored in local storage in this browser profile. Requests use HTTPS
 Basic authentication with username `API_KEY`; the key never appears in a URL
@@ -39,7 +39,13 @@ leave existing history intact and show an error; choose **Sync now** to retry.
 
 - The calendar fetches planned workouts directly for its visible date range and
   saves fetched workouts locally so they remain available after reload or offline.
-- **Use Intervals.icu FTP / weight** imports available rider settings.
+- FTP and body mass refresh before the app becomes usable on every launch.
+  While connected, profile inputs in Settings and the device controls are
+  read-only; change these values in Intervals.icu instead. **Refresh Intervals.icu
+  profile** or **Sync now** fetches them again without restarting.
+  A failed or invalid profile response retains both cached values and shows an
+  error, without enabling local overrides. Update an active plan after a provider
+  FTP change by archiving and regenerating it.
 - **Route & data** fetches full-resolution measurement streams and route
   geometry on demand. These are held in browser memory, with CSV export.
 - Uploading a recorded ride sends its FIT file as multipart form data to the
@@ -56,7 +62,8 @@ Intervals.icu or a network connection. Sync, planned-workout refresh and uploads
 require internet access and Intervals.icu browser CORS support.
 
 **Disconnect** removes the locally stored key and connection settings but retains
-imported coaching history. Reconnect separately on another browser or device;
+imported coaching history and re-enables local FTP/body-mass editing.
+Reconnect separately on another browser or device;
 backup files intentionally do not include API keys.
 
 Authentication, rate-limit, network and malformed-response failures are shown

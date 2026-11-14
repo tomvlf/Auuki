@@ -45,6 +45,7 @@ jest.mock('../../src/models/intervals.js', () => ({__esModule: true, default: {
     status: jest.fn(() => ({configured: true, connected: false, status: 'disconnected'})),
     connect: jest.fn(),
     sync: jest.fn(),
+    syncProfile: jest.fn().mockResolvedValue({ftp: 280, weight: 73}),
 }}));
 jest.mock('../../src/coaching/service.js', () => ({
     coachingData: jest.fn(), coachingService: jest.fn(() => ({data: {}, revision: 1})),
@@ -343,15 +344,6 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
 
     await go('settings');
     await settle();
-    const form = root.querySelector('#intervals-connect');
-    form.elements.apiKey.value = 'local-only-key';
-    form.elements.oldest.value = '2026-01-01';
-    intervals.connect.mockResolvedValueOnce({configured: true, connected: true, status: 'connected', lastSuccess: null});
-    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
-    await settle();
-    expect(intervals.connect).toHaveBeenCalledWith({apiKey: 'local-only-key', oldest: '2026-01-01'});
-    expect(root.innerHTML).not.toContain('local-only-key');
-    expect(root.textContent).toContain('Import history');
     const profile = root.querySelector('#profile-form');
     profile.elements.ftp.value = '270';
     profile.elements.weight.value = '74';
@@ -367,12 +359,33 @@ test('desktop shell wires every screen to real data, workout commands, accessibl
     await settle();
     expect(dispatch).toHaveBeenCalledWith('ui:ftp-set', 270);
     expect(dispatch).toHaveBeenCalledWith('ui:weight-set', 74);
+    const form = root.querySelector('#intervals-connect');
+    form.elements.apiKey.value = 'local-only-key';
+    form.elements.oldest.value = '2026-01-01';
+    const connectionStatus = {configured: true, connected: true, status: 'connected', lastSuccess: null};
+    intervals.connect.mockResolvedValueOnce(connectionStatus);
+    intervals.status.mockReturnValue(connectionStatus);
+    form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+    await settle();
+    expect(intervals.connect).toHaveBeenCalledWith({apiKey: 'local-only-key', oldest: '2026-01-01'});
+    expect(intervals.syncProfile).toHaveBeenCalledTimes(1);
+    expect(root.innerHTML).not.toContain('local-only-key');
+    expect(root.textContent).toContain('Import history');
+    const lockedProfile = root.querySelector('#profile-form');
+    expect(lockedProfile.elements.ftp.disabled).toBe(true);
+    expect(lockedProfile.elements.weight.disabled).toBe(true);
+    expect(lockedProfile.querySelector('button').disabled).toBe(true);
+    dispatch.mockClear();
+    lockedProfile.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+    await settle();
+    expect(dispatch).not.toHaveBeenCalledWith('ui:ftp-set', expect.anything());
+    expect(dispatch).not.toHaveBeenCalledWith('ui:weight-set', expect.anything());
+    expect(root.querySelector('#platform-message').textContent).toContain('managed by Intervals.icu');
     db.watchStatus = 'stopped';
-    models.api.intervals.getAthlete.mockResolvedValueOnce({ftp: 280, weight: 73});
+    intervals.syncProfile.mockClear();
     root.querySelector('[data-action="import-profile"]').click();
     await settle();
-    expect(dispatch).toHaveBeenCalledWith('ui:ftp-set', 280);
-    expect(dispatch).toHaveBeenCalledWith('ui:weight-set', 73);
+    expect(intervals.syncProfile).toHaveBeenCalledTimes(1);
     db.activity = [{id: 'pending', name: 'Local recording', duration: 60, pendingSync: true}];
     await go('activities');
     expect(root.textContent).toContain('Awaiting local coaching update');

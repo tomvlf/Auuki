@@ -80,7 +80,6 @@ export async function launchPlatform(root) {
         </aside>
         <main id="main-content" tabindex="-1"><header class="platform-header">
             <div><p class="eyebrow" id="route-subtitle"></p><h1 id="route-title" tabindex="-1"></h1></div>
-            <div class="account-menu"><span>On-device only</span></div>
         </header><div id="platform-message" role="status" aria-live="polite"></div>
         <div id="platform-content"><p role="status">Loading your training...</p></div>
         <div id="legacy-slot"></div></main>`;
@@ -145,6 +144,7 @@ export async function launchPlatform(root) {
         if(ready && ['dashboard', 'library'].includes(route)) render();
     });
     let coachingError = '';
+    let profileSyncError = '';
     let lastRide;
     let savingRide = false;
     let timeline;
@@ -317,10 +317,11 @@ export async function launchPlatform(root) {
         </section>`;
     }
     function settings() {
+        const locked = integration?.connected;
         return `<div class="dashboard-grid">${card('Rider profile', `<p>Settings, workouts, recordings, calendar and coaching are stored only on this device.</p>
-            <form id="profile-form"><label>FTP (W)<input name="ftp" type="number" min="1" max="1500" value="${db.ftp}" required></label>
-                <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required></label>
-                <button>Save profile</button></form>${integration?.connected ? '<button class="secondary" data-action="import-profile">Use Intervals.icu FTP / weight</button>' : ''}
+            <form id="profile-form"><label>FTP (W)<input name="ftp" type="number" min="1" max="1500" value="${db.ftp}" required ${locked ? 'disabled' : ''}></label>
+                <label>Body mass (kg)<input name="weight" type="number" min="1" max="500" step="0.1" value="${db.weight}" required ${locked ? 'disabled' : ''}></label>
+                <button ${locked ? 'disabled' : ''}>Save profile</button></form>${locked ? '<p class="muted">FTP and body mass are managed by Intervals.icu and refreshed each time this app opens. Change them in Intervals.icu, or disconnect to edit locally.</p><button class="secondary" data-action="import-profile">Refresh Intervals.icu profile</button>' : ''}
                 <p class="muted">After changing FTP, archive and regenerate an active plan before riding it.</p>`)}
             ${card('Intervals.icu', integrationView(), '', true)}
             ${card('Local backup', `<p>Download your coaching history, plans, workout files, recent FIT recordings, settings and calendar. Keep a backup before clearing browser data or changing devices.</p>
@@ -364,11 +365,16 @@ export async function launchPlatform(root) {
         }
         finally { integrationLoading = false; }
     }
-    async function syncIntegration() {
+    async function syncIntegration({profileSynced = false} = {}) {
         if(integration?.status === 'running') return;
         integration = {...intervals.status(), status: 'running'};
         if(route === 'settings') render();
         try {
+            if(!profileSynced) {
+                await intervals.syncProfile();
+                profileSyncError = '';
+                if(route === 'settings') render();
+            }
             await intervals.sync(coachingService(), current => {
                 integration = current;
                 if(route === 'settings') render();
@@ -412,7 +418,7 @@ export async function launchPlatform(root) {
         route = Object.hasOwn(routes, name) || name === 'editor' ? name : 'dashboard';
         try { selectedId = decodeURIComponent(id || ''); }
         catch { selectedId = ''; }
-        report(coachingError, Boolean(coachingError));
+        report(profileSyncError || coachingError, Boolean(profileSyncError || coachingError));
         render();
         if(route === 'settings') void loadIntegration();
         if(route === 'calendar') void legacy.querySelector('training-calendar').loadPlannedMonth();
@@ -540,6 +546,7 @@ export async function launchPlatform(root) {
         const values = new FormData(form);
         void run(async () => {
             if(form.id === 'profile-form') {
+                if(intervals.status().connected) throw new Error('FTP and body mass are managed by Intervals.icu. Change them there, or disconnect first.');
                 xf.dispatch('ui:ftp-set', Number(values.get('ftp')));
                 xf.dispatch('ui:weight-set', Number(values.get('weight')));
                 report('Device profile saved.');
@@ -547,6 +554,9 @@ export async function launchPlatform(root) {
                 const apiKey = values.get('apiKey');
                 form.reset();
                 integration = await intervals.connect({apiKey, oldest: values.get('oldest')});
+                render();
+                await intervals.syncProfile();
+                profileSyncError = '';
                 render();
                 report('Intervals.icu connected. Choose Import history to begin.');
             }
@@ -712,6 +722,7 @@ export async function launchPlatform(root) {
             } else if(action === 'disconnect') {
                 if(!confirm('Disconnect Intervals.icu? Imported activities will be kept.')) return;
                 integration = intervals.disconnect();
+                profileSyncError = '';
                 coachingService().syncPending = false;
                 await refresh();
                 activityDataCache.clear();
@@ -727,12 +738,10 @@ export async function launchPlatform(root) {
                 const {fileHandler} = await import('../file.js');
                 fileHandler.download()(JSON.stringify(coachingData(), null, 2), 'athlima-training-history.json', 'application/json');
             } else if(action === 'import-profile') {
-                const {models} = await import('../models/models.js');
-                const settings = await models.api.intervals.getAthlete();
-                if(settings.ftp > 0) xf.dispatch('ui:ftp-set', settings.ftp);
-                if(settings.weight > 0) xf.dispatch('ui:weight-set', settings.weight);
+                await intervals.syncProfile();
+                profileSyncError = '';
                 render();
-                report('Available FTP and body mass imported. Regenerate an active plan if FTP changed.');
+                report('FTP and body mass synced from Intervals.icu. Regenerate an active plan if FTP changed.');
             } else if(action === 'reload') window.location.reload();
             else if(action === 'retry-rides') {
                 await refresh();
@@ -814,6 +823,17 @@ export async function launchPlatform(root) {
     for(const key of ['elapsed', 'lapTime', 'power1s', 'powerTarget', 'cadence', 'cadenceTarget', 'heartRate', 'watchStatus',
         'workoutStatus', 'intervalIndex', 'stepIndex', 'workoutTextEvent', 'mode', 'resistanceTarget', 'slopeTarget', 'sources']) xf.sub(`db:${key}`, updateRide);
     for(const key of ['workout', 'ftp']) xf.sub(`db:${key}`, () => { if(ready && route === 'player') render(); });
+    const updateProfileLock = () => {
+        let locked = true;
+        try { locked = intervals.status().connected; }
+        catch(error) { profileSyncError = error.message; report(error.message, true); }
+        legacy.querySelectorAll('[effect="ftp-set"], [effect="weight-set"]').forEach(control => { control.disabled = locked; });
+    };
+    xf.sub('services', updateProfileLock);
+    window.addEventListener('storage', () => {
+        updateProfileLock();
+        if(ready && route === 'settings') void loadIntegration();
+    });
     const started = new Promise((resolve, reject) => {
         window.addEventListener('app:ready', resolve, {once: true});
         window.addEventListener('app:error', event => reject(new Error(event.detail.data)), {once: true});
@@ -822,6 +842,15 @@ export async function launchPlatform(root) {
     ({db} = await import('../db.js'));
     ({models: engineModels} = await import('../models/models.js'));
     await started;
+    try {
+        if(intervals.status().connected) {
+            content.innerHTML = '<p role="status">Syncing FTP and body mass from Intervals.icu...</p>';
+            await intervals.syncProfile();
+        }
+    } catch(error) {
+        profileSyncError = `${error.message} Cached FTP and body mass are retained; local editing stays disabled while connected.`;
+    }
+    updateProfileLock();
     ready = true;
     legacy.querySelectorAll('connection-switch, protocol-switch, tab-btn, source-switch').forEach(element => {
         element.setAttribute('role', 'button');
@@ -838,10 +867,11 @@ export async function launchPlatform(root) {
     }
     navigate();
     await loadIntegration();
-    if(integration?.connected) {
+    if(integration?.connected && !profileSyncError) {
         report('Syncing Intervals.icu history into local coaching...');
-        void syncIntegration().catch(error => report(error.message, true));
+        void syncIntegration({profileSynced: true}).catch(error => report(error.message, true));
     }
+    if(profileSyncError) report(profileSyncError, true);
     if(db.elapsed > 0) {
         report('A previous ride was recovered. Reconnect your trainer and resume in Ride.');
         window.location.hash = '/player';

@@ -32,7 +32,6 @@ body.platform-app, body:has(.auth-screen) { margin: 0; background: var(--platfor
 .sidebar-bottom { margin-top: auto; display: grid; gap: 10px; font-size: 12px; color: var(--platform-muted); padding: 20px 10px 0; }
 #main-content { margin-left: 230px; max-width: 1800px; padding: 38px 44px 70px; }
 .platform-header { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 36px; }
-.account-menu { display: flex; gap: 16px; align-items: center; color: var(--platform-muted); font-size: 12px; }
 #platform .app-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 24px; color: var(--platform-muted); font-size: 12px; overflow-wrap: anywhere; }
 #platform .app-versions strong { color: var(--platform-text); font-weight: 600; }
 #platform .sidebar .app-versions { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 0 6px; margin: 10px 5px 0; padding-top: 8px; border-top: 1px solid var(--platform-border); font-size: 11px; line-height: 1.3; }
@@ -370,7 +369,6 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
 .mobile-app #main-content { margin: 0 auto; max-width: 900px; padding: 20px 16px 100px; }
 .mobile-app .platform-header { margin-bottom: 8px; }
 .mobile-app #platform .app-versions { margin-bottom: 14px; }
-.mobile-app .account-menu span { display: none; }
 .mobile-app .platform-header .eyebrow { display: none; }
 .mobile-app .panel { padding: 22px; }
 .mobile-app .dashboard-grid { display: block; }
@@ -489,7 +487,6 @@ body[data-route="player"] #graph-workout { margin-top: 24px; }
     .dashboard-grid { grid-template-columns: 1fr; }
     .activity-period-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #main-content { padding: 28px; }
-    .account-menu span { display: none; }
 }
 @media (max-width: 850px) {
     .library-layout { grid-template-columns: 1fr; }

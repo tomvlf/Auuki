@@ -1,5 +1,6 @@
 import intervals from '../../src/models/intervals.js';
 import { CoachingService } from '../../src/coaching/service.js';
+import { xf } from '../../src/functions.js';
 
 const KEY = 'athlima-intervals-v1';
 const response = (data, status = 200) => ({ok: status === 200, status,
@@ -51,6 +52,27 @@ test('profile import and FIT upload work directly without an app account', async
     expect(new URL(url).searchParams.get('external_id')).toBe('athlima:ride');
     expect(options.method).toBe('POST');
     expect(options.body.get('file').name).toBe('ride.fit');
+});
+
+test('profile sync validates both values and rejects results from a disconnected account', async () => {
+    seed();
+    const received = jest.fn();
+    const handler = xf.sub('intervals:profile', received);
+    try {
+        fetch.mockResolvedValueOnce(response({weight: 73.5, sportSettings: [{types: ['VirtualRide'], indoor_ftp: 600}]}));
+        expect(await intervals.syncProfile()).toEqual({ftp: 600, weight: 73.5});
+        expect(received).toHaveBeenCalledWith({ftp: 600, weight: 73.5});
+        received.mockClear();
+        fetch.mockResolvedValueOnce(response({weight: null, sportSettings: [{types: ['Ride'], ftp: 280}]}));
+        await expect(intervals.syncProfile()).rejects.toThrow('valid cycling FTP and body mass');
+        expect(received).not.toHaveBeenCalled();
+        fetch.mockImplementationOnce(async () => {
+            localStorage.removeItem(KEY);
+            return response({weight: 75, sportSettings: [{types: ['Ride'], ftp: 280}]});
+        });
+        await expect(intervals.syncProfile()).rejects.toThrow('connection changed');
+        expect(received).not.toHaveBeenCalled();
+    } finally { xf.unsub('intervals:profile', handler); }
 });
 
 test('history imports all sports into local coaching and resumes a failed date batch', async () => {

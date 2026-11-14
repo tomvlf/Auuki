@@ -147,6 +147,22 @@ async function getAthlete() {
     }
 }
 
+async function syncProfile() {
+    const connection = saved();
+    if(!connection) throw new Error('Connect Intervals.icu in Settings first.');
+    const profile = await getAthlete();
+    if(!Number.isInteger(profile.ftp) || profile.ftp < 1 || profile.ftp > 1500 ||
+        !Number.isFinite(profile.weight) || profile.weight < 1 || profile.weight > 500) {
+        throw new Error('Set a valid cycling FTP and body mass in Intervals.icu, then retry profile sync.');
+    }
+    const current = saved();
+    if(current?.apiKey !== connection.apiKey || current?.athleteId !== connection.athleteId) {
+        throw new Error('The Intervals.icu connection changed while syncing your profile. Retry.');
+    }
+    xf.dispatch('intervals:profile', profile);
+    return profile;
+}
+
 async function sync(service, onProgress = () => {}) {
     if(syncing) throw new Error('An Intervals.icu import is already running.');
     const connection = saved();
@@ -274,4 +290,4 @@ async function activityData(activityId) {
 }
 
 export default Object.freeze({connect, disconnect, status, sync, athlete, activityData,
-    wod, uploadWorkout, getAthlete, athleteToSettings, update() {}});
+    wod, uploadWorkout, getAthlete, syncProfile, athleteToSettings, update() {}});

@@ -316,12 +316,30 @@ xf.reg(`ui:slope-target-dec`, (_, db) => {
 });
 
 // Profile
+function canEditProfile() {
+    try {
+        if(!intervals.status().connected) return true;
+    } catch(error) {
+        xf.dispatch('ui:modal:error:open', error.message);
+        return false;
+    }
+    xf.dispatch('ui:modal:error:open', 'FTP and body mass are managed by Intervals.icu. Change them there, or disconnect first.');
+    return false;
+}
 xf.reg('ui:ftp-set', (ftp, db) => {
+    if(!canEditProfile()) return;
     db.ftp = models.ftp.set(ftp);
     models.ftp.backup(db.ftp);
 });
 xf.reg('ui:weight-set', (weight, db) => {
+    if(!canEditProfile()) return;
     db.weight = models.weight.set(weight);
+    models.weight.backup(db.weight);
+});
+xf.reg('intervals:profile', (profile, db) => {
+    db.ftp = models.ftp.set(profile.ftp);
+    db.weight = models.weight.set(profile.weight);
+    models.ftp.backup(db.ftp);
     models.weight.backup(db.weight);
 });
 xf.reg('ui:theme-switch', (_, db) => {

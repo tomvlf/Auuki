@@ -64,7 +64,8 @@ test('mobile guests can ride and use local features without a backend version di
     await launchPlatform(root, null);
     await settle();
     expect(root.querySelector('.app-versions')).toBeNull();
-    expect(root.textContent).toContain('On-device only');
+    expect(root.textContent).not.toContain('On-device only');
+    expect(root.querySelector('.account-menu')).toBeNull();
     expect(root.querySelector('[data-action="signin"]')).toBeNull();
     expect(root.querySelector('#platform-content a[href="#/library"]')).not.toBeNull();
     await go('library');

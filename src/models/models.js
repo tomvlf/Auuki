@@ -364,7 +364,7 @@ class FTP extends Model {
         };
         self.state       = self.default;
         self.min         = existance(args.min, 0);
-        self.max         = existance(args.max, 500);
+        self.max         = existance(args.max, 1500);
         self.storage     = args.storage(storageModel);
         self.zones       = existance(args.zones, self.defaultZones());
         self.percentages = existance(args.percentages, self.defaultPercentages());
@@ -960,16 +960,8 @@ class Planned {
         return workouts;
     }
     async getAthlete(service) {
-        const self = this;
         if(service === 'intervals') {
-            const response = await api.intervals.getAthlete();
-            console.log(response);
-            if(response.weight > 0) {
-                xf.dispatch('ui:weight-set', response.weight);
-            }
-            if(response.ftp > 0) {
-                xf.dispatch('ui:ftp-set', response.ftp);
-            }
+            await api.intervals.syncProfile();
         }
     }
 }
